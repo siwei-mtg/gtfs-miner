@@ -8,8 +8,18 @@ GTFS 业务生成模块 (gtfs_generator.py)
 
 依赖：gtfs_utils, gtfs_norm
 与整体流程的关系：
-规范化数据 -> [gtfs_generator] -> 业务报表 DataFrame
+```plaintext
+规范化数据 -> [gtfs_generator] -> 生成行程 (itineraire_generate)
+                                 -> 班次聚合 (course_generate)
+                                 -> 生成 Arc (itiarc_generate)
+                                 -> 计算其它业务指标
+                                 -> 业务报表 DataFrame
+```
 """
+
+# 常量定义
+DEFAULT_DIRECTION_ID = 999
+DEFAULT_TRIP_HEADSIGN = '999'
 
 import numpy as np
 import pandas as pd
@@ -19,7 +29,11 @@ from gtfs_utils import str_time_hms_hour, str_time_hms, getDistHaversine
 def itineraire_generate(stop_times: pd.DataFrame, AP: pd.DataFrame, trips: pd.DataFrame) -> pd.DataFrame:
     """
     生成行程序列。
-    Input Schema: stop_times, AP ([id_ap_num, id_ag_num]), trips ([id_course_num, id_ligne_num, id_service_num])
+    Input Schema:
+        stop_times: [id_ap, arrival_time, departure_time, ...]
+        AP: [id_ap, id_ap_num, id_ag_num, ...]
+        trips: [id_course_num, id_ligne_num, id_service_num, direction_id, trip_headsign, ...]
+    Output Schema: [id_course_num, id_ligne_num, id_service_num, direction_id, stop_sequence, id_ap_num, id_ag_num, arrival_time, departure_time, TH, trip_headsign, ...]
     """
     st = stop_times.copy().rename(columns={'stop_id': 'id_ap'})
     st['TH'] = st['arrival_time'].apply(str_time_hms_hour)
@@ -35,7 +49,7 @@ def itineraire_generate(stop_times: pd.DataFrame, AP: pd.DataFrame, trips: pd.Da
     itineraire = itnry_2[cols].copy()
     itineraire['stop_sequence'] = itineraire.groupby(['id_course_num']).cumcount() + 1
     
-    itineraire.fillna({'direction_id': 999, 'trip_headsign': '999'}, inplace=True)
+    itineraire.fillna({'direction_id': DEFAULT_DIRECTION_ID, 'trip_headsign': DEFAULT_TRIP_HEADSIGN}, inplace=True)
     return itineraire
 
 def service_date_generate(calendar: Optional[pd.DataFrame], 
@@ -43,7 +57,13 @@ def service_date_generate(calendar: Optional[pd.DataFrame],
                           Dates: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
     """
     生成服务日期矩阵。
-    Input Schema: calendar, calendar_dates, Dates (Internal custom calendar table)
+    Input Schema: 
+        calendar: [service_id, ...]
+        calendar_dates: [date, exception_type, ...]
+        Dates: [Date_GTFS, ...]
+    Output Schema (Tuple): 
+        cal_final: [id_service_num, Date_GTFS, Type_Jour, Semaine, Mois, Annee, ...]
+        msg_date: str
     """
     cal_cols = ['id_service_num', 'Date_GTFS', 'Type_Jour', 'Semaine', 'Mois', 'Annee']
     
@@ -62,6 +82,8 @@ def service_date_generate(calendar: Optional[pd.DataFrame],
 def course_generate(itineraire: pd.DataFrame) -> pd.DataFrame:
     """
     汇总班次统计 (起点、终点、首发时间、到达终点时间)。
+    Input Schema: [id_ligne_num, id_service_num, id_course_num, direction_id, trip_headsign, arrival_time, departure_time, id_ap_num, id_ag_num, stop_sequence, ...]
+    Output Schema: [id_ligne_num, id_service_num, id_course_num, direction_id, trip_headsign, heure_depart, heure_arrive, id_ap_num_debut, id_ap_num_terminus, id_ag_num_debut, id_ag_num_terminus, nb_arrets, sous_ligne, ...]
     """
     course = itineraire.groupby(['id_ligne_num', 'id_service_num', 'id_course_num', 'direction_id', 'trip_headsign'], as_index=False).agg({
         'arrival_time': 'min',
@@ -95,6 +117,10 @@ def course_generate(itineraire: pd.DataFrame) -> pd.DataFrame:
 def itiarc_generate(itineraire: pd.DataFrame, AG: pd.DataFrame) -> pd.DataFrame:
     """
     生成相邻站点之间的运行段 (Arcs)。
+    Input Schema:
+        itineraire: [id_course_num, stop_sequence, id_ag_num, ...]
+        AG: [id_ag_num, stop_lat, stop_lon, ...]
+    Output Schema: [id_course_num, ordre_a, ordre_b, id_ag_num_a, id_ag_num_b, stop_lat_src, stop_lon_src, stop_lat_dst, stop_lon_dst, DIST_Vol_Oiseau, ...]
     """
     R = itineraire.copy().drop(['departure_time', 'id_service_num', 'id_ligne_num'], axis=1)
     L = itineraire.copy().drop(['arrival_time'], axis=1)

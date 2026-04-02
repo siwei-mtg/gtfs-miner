@@ -7,7 +7,11 @@ GTFS 结果导出模块 (gtfs_export.py)
 
 依赖：gtfs_utils, gtfs_norm
 与整体流程的关系：
-业务结果 -> [gtfs_export] -> 最终呈现 CSV/表格
+```plaintext
+业务结果 -> [gtfs_export] -> 格式化聚合
+                            -> 重构列名与格式
+                            -> 最终呈现 CSV/表格 DataFrame
+```
 """
 
 import numpy as np
@@ -18,7 +22,11 @@ from gtfs_utils import heure_from_xsltime
 def MEF_ligne(lignes: pd.DataFrame, courses: pd.DataFrame, AG: pd.DataFrame) -> pd.DataFrame:
     """
     格式化线路统计输出。
-    Input Schema: [id_ligne_num, route_short_name, ...], courses (OD context), AG
+    Input Schema: 
+        lignes: [id_ligne_num, route_short_name, ...]
+        courses: [direction_id, id_ligne_num, id_ag_num_debut, id_ag_num_terminus, id_course_num, ...]
+        AG: [id_ag_num, stop_name, ...]
+    Output Schema: [id_ligne_num, route_short_name, Origin, Destination, ...]
     """
     # 提取线路的主要起点与终点 (OD)
     crs_1dir = courses[courses['direction_id'] == 0]
@@ -41,6 +49,10 @@ def MEF_ligne(lignes: pd.DataFrame, courses: pd.DataFrame, AG: pd.DataFrame) -> 
 def MEF_course(courses: pd.DataFrame, trip_id_coor: pd.DataFrame) -> pd.DataFrame:
     """
     格式化班次属性导出。
+    Input Schema: 
+        courses: [id_course_num, id_ligne_num, sous_ligne, id_service_num, direction_id, heure_depart, heure_arrive, id_ap_num_debut, id_ap_num_terminus, id_ag_num_debut, id_ag_num_terminus, nb_arrets, ...]
+        trip_id_coor: [id_course_num, trip_id, ...]
+    Output Schema: [trip_id, id_course_num, id_ligne_num, sous_ligne, id_service_num, direction_id, heure_depart, heure_arrive, id_ap_num_debut, id_ap_num_terminus, id_ag_num_debut, id_ag_num_terminus, nb_arrets]
     """
     export_cols = ['trip_id', 'id_course_num', 'id_ligne_num', 'sous_ligne', 'id_service_num', 
                    'direction_id', 'heure_depart', 'heure_arrive', 'id_ap_num_debut', 
@@ -58,6 +70,10 @@ def MEF_course(courses: pd.DataFrame, trip_id_coor: pd.DataFrame) -> pd.DataFram
 def MEF_iti(itineraire: pd.DataFrame, courses: pd.DataFrame) -> pd.DataFrame:
     """
     格式化完整的停靠时间点详细。
+    Input Schema: 
+        itineraire: [id_course_num, stop_sequence, arrival_time, departure_time, ...]
+        courses: [id_course_num, sous_ligne, ...]
+    Output Schema: [id_course_num, sous_ligne, ordre, h_dep_num, h_arr_num, heure_depart, heure_arrive, ...]
     """
     iti = itineraire.drop(['trip_headsign'], axis=1, errors='ignore').rename(columns={
         'stop_sequence': 'ordre',
@@ -72,7 +88,13 @@ def MEF_iti(itineraire: pd.DataFrame, courses: pd.DataFrame) -> pd.DataFrame:
     return crs_sl.merge(iti, on='id_course_num', how='right')
 
 def MEF_iti_arc(itineraire_arc: pd.DataFrame, courses: pd.DataFrame) -> pd.DataFrame:
-    """格式化运行段导出。"""
+    """
+    格式化运行段导出。
+    Input Schema: 
+        itineraire_arc: [id_course_num, id_ligne_num, id_service_num, direction_id, ordre_a, heure_depart, heure_arrive, id_ap_num_a, id_ag_num_a, TH_a, ordre_b, id_ap_num_b, id_ag_num_b, TH_b, DIST_Vol_Oiseau, ...]
+        courses: [id_course_num, sous_ligne, ...]
+    Output Schema: [id_course_num, sous_ligne, id_ligne_num, id_service_num, direction_id, ordre_a, h_dep_num, h_arr_num, heure_depart, heure_arrive, id_ap_num_a, id_ag_num_a, TH_a, ordre_b, id_ap_num_b, id_ag_num_b, TH_b, DIST_Vol_Oiseau, ...]
+    """
     itiarc_cols = ['id_course_num', 'id_ligne_num', 'id_service_num', 'direction_id',
                     'ordre_a', 'heure_depart', 'h_dep_num', 'heure_arrive', 'h_arr_num', 
                     'id_ap_num_a', 'id_ag_num_a', 'TH_a', 'ordre_b', 'id_ap_num_b', 

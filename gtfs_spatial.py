@@ -6,7 +6,12 @@ GTFS 空间分析模块 (gtfs_spatial.py)
 2. 停车点与父站点 (AG/AP) 的重构与生成。
 
 与整体流程的关系：
-输入规范化的 Stops -> [gtfs_spatial] -> 包含 AG/AP 映射的 DataFrame
+```plaintext
+规范化 Stops 数据 -> 判断 Parent Station 覆盖度
+                  -> [包含足够 Parent Station] -> 按层级生成 AG/AP (asit算法)
+                  -> [缺少 Parent Station] -> 层级聚类/Kmeans 生成 AG/AP
+                  -> 包含聚类归属与重构 ID 的 DataFrame
+```
 """
 
 import numpy as np
@@ -19,7 +24,10 @@ from gtfs_utils import distmatrice, getDistHaversine
 def ag_ap_generate_hcluster(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     通过层次聚类生成父站点 (AG/AP)。
-    Input Schema: [stop_id, stop_name, stop_lat, stop_lon, location_type]
+    Input Schema: [stop_id, stop_name, stop_lat, stop_lon, location_type, ...]
+    Output Schema (Tuple):
+        AP: [id_ap, id_ag, id_ag_num, id_ap_num, stop_name, stop_lat, stop_lon, ...]
+        AG: [id_ag, id_ag_num, stop_name, stop_lat, stop_lon, ...]
     """
     AP = raw_stops.loc[raw_stops.location_type == 0, :].reset_index(drop=True)
     if AP.empty:
@@ -49,7 +57,10 @@ def ag_ap_generate_hcluster(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.D
 def ag_ap_generate_asit(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     根据原始 parent_station 生成 AG/AP。
-    Input Schema: [stop_id, stop_name, stop_lat, stop_lon, location_type, parent_station]
+    Input Schema: [stop_id, stop_name, stop_lat, stop_lon, location_type, parent_station, ...]
+    Output Schema (Tuple):
+        AP: [id_ap, id_ag, id_ap_num, id_ag_num, stop_name, stop_lat, stop_lon, ...]
+        AG: [id_ag, id_ag_num, stop_name, stop_lat, stop_lon, ...]
     """
     # 提取所有 AG (location_type=1)
     AG = raw_stops.loc[raw_stops.location_type == 1].copy()
@@ -76,6 +87,11 @@ def ag_ap_generate_reshape(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Da
     """
     自适应重构 AG/AP。
     逻辑：若无 ParentStation 则聚类；若有则根据数量决定聚类算法。
+    Input Schema: [stop_id, stop_name, stop_lat, stop_lon, location_type, parent_station, ...]
+    Output Schema (Tuple):
+        AP: [id_ap, ...]
+        AG: [id_ag, ...]
+        marker: str (cluster_method/original_parent_station)
     """
     nb_types = len(raw_stops.location_type.unique())
     ap_no_parent = raw_stops[raw_stops['location_type'] == 0]['parent_station'].isnull().sum()

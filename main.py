@@ -10,7 +10,7 @@ from gtfs_spatial import ag_ap_generate_reshape
 from gtfs_generator import itineraire_generate, course_generate
 from gtfs_export import MEF_course, MEF_iti
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Run GTFS Miner pipeline without QGIS.")
     parser.add_argument("--input", required=True, help="Path to the GTFS .zip file or directory containing .txt files.")
     parser.add_argument("--output", default="output", help="Directory to save the processed output CSV files.")

@@ -11,6 +11,7 @@ import math
 import numpy as np
 import pandas as pd
 import chardet
+from pathlib import Path
 from typing import List, Union, Optional
 from scipy.spatial.distance import pdist
 
@@ -19,6 +20,8 @@ from scipy.spatial.distance import pdist
 def norm_upper_str(pd_series: pd.Series) -> pd.Series:
     """
     将 Series 转换为大写并去除重音符号。
+    Input Schema: pd.Series(str)
+    Output Schema: pd.Series(str)
     """
     return pd_series.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8').str.upper()
 
@@ -92,11 +95,11 @@ def nan_in_col_workaround(pd_serie: pd.Series) -> pd.Series:
     # 尝试转换为数字，如果失败则按字符串处理
     return pd_serie.astype(str).replace(['nan', 'NaN', 'None', '-1', '-1.0'], np.nan)
 
-def encoding_guess(acces: str) -> dict:
+def encoding_guess(acces: Path) -> dict:
     """
     自动检测文件编码。
     """
-    with open(acces, 'rb') as rawdata:
+    with acces.open('rb') as rawdata:
         return chardet.detect(rawdata.read(10000))
 
 if __name__ == '__main__':

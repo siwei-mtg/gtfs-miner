@@ -6,7 +6,12 @@ GTFS 标准化模块 (gtfs_norm.py)
 2. 核心 Schema 校验与列重命名。
 
 与整体流程的关系：
-输入原始字典 -> [gtfs_norm] -> 规范化字典
+```plaintext
+输入 GTFS ZIP / txt 目录 -> [读取/清洗 rawgtfs] 
+                       -> [agency/stops/routes/trips 分离规范化] 
+                       -> ID 映射绑定 
+                       -> 规范化字典集 (normed)
+```
 """
 
 import numpy as np
@@ -18,9 +23,14 @@ from typing import Dict, Any, Tuple, Optional, List, Union
 from scipy.cluster.vq import kmeans2
 from gtfs_utils import norm_upper_str, nan_in_col_workaround, encoding_guess
 
+# 常量定义
+DEFAULT_ROUTE_TYPE = 3
+DEFAULT_LOCATION_TYPE = 0
+
 def agency_norm(raw_agency: pd.DataFrame) -> pd.DataFrame:
     """
     Input Schema: [agency_name, agency_url, ...]
+    Output Schema: [agency_id, agency_name, agency_url, agency_timezone, agency_lang, agency_phone, agency_fare_url, agency_email, ...]
     """
     agency_v = pd.DataFrame(columns=['agency_id', 'agency_name', 'agency_url', 'agency_timezone',
                                       'agency_lang', 'agency_phone', 'agency_fare_url', 'agency_email'])
@@ -31,7 +41,8 @@ def agency_norm(raw_agency: pd.DataFrame) -> pd.DataFrame:
 def stops_norm(raw_stops: pd.DataFrame) -> pd.DataFrame:
     """
     规范化停车点数据。
-    Input Schema: [stop_id, stop_name, stop_lat, stop_lon, location_type, parent_station]
+    Input Schema: [stop_id, stop_name, stop_lat, stop_lon, location_type, parent_station, ...]
+    Output Schema: [stop_id, stop_lat, stop_lon, stop_name, location_type, parent_station]
     """
     stops_v = pd.DataFrame(columns=['stop_id', 'stop_code', 'stop_name', 'stop_desc',
                                      'stop_lat', 'stop_lon', 'zone_id', 'stop_url','location_type', 
@@ -46,7 +57,7 @@ def stops_norm(raw_stops: pd.DataFrame) -> pd.DataFrame:
         stops[col] = pd.to_numeric(stops[col].astype(str).str.strip(), errors='coerce').fillna(0).astype(np.float32)
     
     stops.stop_name = norm_upper_str(stops.stop_name)
-    stops.location_type = stops.location_type.fillna(0).astype(np.int8)
+    stops.location_type = stops.location_type.fillna(DEFAULT_LOCATION_TYPE).astype(np.int8)
     stops.parent_station = nan_in_col_workaround(stops.parent_station)
     
     essentials = ['stop_id','stop_lat','stop_lon','stop_name','location_type','parent_station']
@@ -55,6 +66,7 @@ def stops_norm(raw_stops: pd.DataFrame) -> pd.DataFrame:
 def routes_norm(raw_routes: pd.DataFrame) -> pd.DataFrame:
     """
     Input Schema: [route_id, route_type, ...]
+    Output Schema: [route_id, agency_id, route_short_name, route_long_name, route_desc, route_type, route_color, route_text_color, id_ligne_num, ...]
     """
     routes_v = pd.DataFrame(columns=['route_id', 'agency_id', 'route_short_name', 'route_long_name',
                                       'route_desc', 'route_type', 'route_url', 'route_color',
@@ -63,13 +75,15 @@ def routes_norm(raw_routes: pd.DataFrame) -> pd.DataFrame:
     routes.drop(['route_url', 'route_sort_order'], axis=1, errors='ignore', inplace=True)
     routes.dropna(axis=1, how='all', inplace=True)
     routes.route_id = routes.route_id.astype(str)
-    routes.route_type = pd.to_numeric(routes.route_type, errors='coerce').fillna(3).astype(np.int8) # Default BUS
+    routes.route_type = pd.to_numeric(routes.route_type, errors='coerce').fillna(DEFAULT_ROUTE_TYPE).astype(np.int8) # Default BUS
     routes['id_ligne_num'] = np.arange(1, len(routes) + 1)
     return routes
 
 def ligne_generate(raw_routes: pd.DataFrame) -> pd.DataFrame:
     """
     解析线路类型 (公交, 地铁, 火车等)。
+    Input Schema: [route_type, ...]
+    Output Schema: [route_type, mode, ...]
     """
     types_map = pd.DataFrame({
         'route_type': [0, 1, 2, 3, 4, 5, 6, 7, 11, 12],
@@ -79,7 +93,8 @@ def ligne_generate(raw_routes: pd.DataFrame) -> pd.DataFrame:
 
 def trips_norm(raw_trips: pd.DataFrame) -> pd.DataFrame:
     """
-    Input Schema: [route_id, service_id, trip_id]
+    Input Schema: [route_id, service_id, trip_id, ...]
+    Output Schema: [route_id, service_id, trip_id, trip_headsign, direction_id, shape_id, id_course_num, ...]
     """
     trips_v = pd.DataFrame(columns=['route_id', 'service_id', 'trip_id', 'trip_headsign', 
                                      'direction_id', 'shape_id'])
@@ -93,6 +108,8 @@ def trips_norm(raw_trips: pd.DataFrame) -> pd.DataFrame:
 def stop_times_norm(raw_stoptimes: pd.DataFrame) -> Tuple[pd.DataFrame, str, int]:
     """
     规范化停靠时间并处理缺失值。
+    Input Schema: [trip_id, arrival_time, departure_time, stop_id, stop_sequence, timepoint, ...]
+    Output Schema: [trip_id, arrival_time, departure_time, stop_id, stop_sequence, timepoint, ...]
     Return: (DataFrame, NA_Summary_String, NA_Count_in_Time_Cols)
     """
     stop_times_v = pd.DataFrame(columns=['trip_id', 'arrival_time', 'departure_time','stop_id', 
@@ -136,8 +153,12 @@ def rawgtfs_from_zip(zippath: Union[str, Path]) -> Dict[str, pd.DataFrame]:
                 result[stem] = df
     return result
 
-def read_date(plugin_path: Union[str, Path]) -> pd.DataFrame:
-    """读取预定义的日历信息 (Calendrier.txt)。"""
+def read_date(plugin_path: Path) -> pd.DataFrame:
+    """
+    读取预定义的日历信息 (Calendrier.txt)。
+    Input Schema: N/A
+    Output Schema: [Date_GTFS, Type_Jour, Semaine, Mois, Annee, ...]
+    """
     p = Path(plugin_path) / "Resources" / "Calendrier.txt"
     dates = pd.read_csv(p, encoding="utf-8", sep="\t", parse_dates=['Date_Num'])
     drop_cols = ['Date_Num', 'Date_Opendata', 'Ferie', 'Vacances_A', 'Vacances_B', 'Vacances_C',
@@ -146,14 +167,20 @@ def read_date(plugin_path: Union[str, Path]) -> pd.DataFrame:
     dates.drop(columns=drop_cols, errors='ignore', inplace=True)
     return dates
 
-def read_validite(plugin_path: Union[str, Path]) -> pd.DataFrame:
-    """读取有效期对应关系 (Correspondance_Validite.txt)。"""
+def read_validite(plugin_path: Path) -> pd.DataFrame:
+    """
+    读取有效期对应关系 (Correspondance_Validite.txt)。
+    Input Schema: N/A
+    Output Schema: [valid_01, valid, ...]
+    """
     p = Path(plugin_path) / "Resources" / "Correspondance_Validite.txt"
     return pd.read_csv(p, sep=';', dtype={'valid_01': str, 'valid': 'int32'})
 
-def read_input(dirpath: Union[str, Path], plugin_path: Union[str, Path]) -> Tuple[Dict[str, Any], pd.DataFrame, pd.DataFrame]:
+def read_input(dirpath: Union[str, Path], plugin_path: Path) -> Tuple[Dict[str, Any], pd.DataFrame, pd.DataFrame]:
     """
     一键读取 GTFS 目录及辅助资源表。
+    Input Schema: N/A
+    Output Schema (Tuple): (Normed_Dict, Dates_DataFrame, Validite_DataFrame)
     """
     # 模拟 rawgtfs 逻辑
     raw_dict = {}
@@ -169,6 +196,10 @@ def read_input(dirpath: Union[str, Path], plugin_path: Union[str, Path]) -> Tupl
 def ag_ap_generate_bigvolume(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     针对大数据量的 K-Means 聚类生成逻辑。
+    Input Schema: [stop_id, stop_name, stop_lat, stop_lon, location_type, ...]
+    Output Schema (Tuple):
+        AP: [id_ap_num, id_ag_num, id_ag, kmean_id, ...]
+        AG: [id_ag, id_ag_num, stop_name, stop_lat, stop_lon, ...]
     """
     AP = raw_stops.loc[raw_stops.location_type == 0, :].reset_index(drop=True)
     if AP.empty: return AP, pd.DataFrame()
@@ -193,6 +224,8 @@ def ag_ap_generate_bigvolume(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.
 def gtfs_normalize(raw_dict: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
     """
     规范化流程总控制器。
+    Input Schema (Dict): {"agency": df, "routes": df, "stops": df, "trips": df, "stop_times": df}
+    Output Schema (Dict): {"agency": df, "routes": df, "stops": df, "trips": df, "stop_times": df, "route_id_coor": df, "trip_id_coor": df, "ser_id_coor": df, "initial_na": str, "final_na_time_col": int}
     """
     agency = agency_norm(raw_dict.get('agency', pd.DataFrame()))
     routes = routes_norm(raw_dict.get('routes', pd.DataFrame()))
