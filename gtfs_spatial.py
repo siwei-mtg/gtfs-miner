@@ -14,7 +14,7 @@ import pandas as pd
 from scipy.cluster.hierarchy import linkage, cut_tree
 from scipy.cluster.vq import kmeans2
 from typing import Tuple, Dict
-from gtfs_utils import distmatrice, getDistanceByHaversine
+from gtfs_utils import distmatrice, getDistHaversine
 
 def ag_ap_generate_hcluster(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -35,6 +35,8 @@ def ag_ap_generate_hcluster(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.D
     AP['id_ag'] = (cut + 1).astype(str)
     AP['id_ag_num'] = cut.flatten() + 10000
     AP['id_ap_num'] = np.arange(1, len(AP) + 1) + 100000
+    
+    AP = AP.rename(columns={'stop_id': 'id_ap'})
 
     AG = AP.groupby(['id_ag', 'id_ag_num'], as_index=False).agg({
         'stop_name': 'first',

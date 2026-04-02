@@ -70,8 +70,15 @@ def distmatrice(nparray: np.ndarray) -> np.ndarray:
     计算坐标矩阵的点对点距离矩阵。
     nparray: [[lon, lat], ...]
     """
-    # 注意：pdist 内部调用 lambda，此处 u, v 为 [lon, lat]
-    return pdist(nparray, lambda u, v: getDistHaversine(u[1], u[0], v[1], v[0]))
+    from scipy.spatial.distance import squareform
+    lon = nparray[:, 0]
+    lat = nparray[:, 1]
+    lon1, lon2 = np.meshgrid(lon, lon)
+    lat1, lat2 = np.meshgrid(lat, lat)
+    dist_mat = getDistHaversine(lat1, lon1, lat2, lon2)
+    # squareform doesn't accept diagonal with slightly non-zero elements, so fill 0s
+    np.fill_diagonal(dist_mat, 0)
+    return squareform(dist_mat, checks=False)
 
 # --- 数据清洗 ---
 

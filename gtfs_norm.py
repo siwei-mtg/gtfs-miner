@@ -206,6 +206,12 @@ def gtfs_normalize(raw_dict: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
     
     # 关联映射
     trips = trips.merge(route_coor, on='route_id').drop('route_id', axis=1)
+    
+    # Generate service mapping
+    ser_id_coor = pd.DataFrame({'service_id': trips.dropna(subset=['service_id'])['service_id'].unique()})
+    ser_id_coor['id_service_num'] = np.arange(1, len(ser_id_coor) + 1)
+    trips = trips.merge(ser_id_coor, on='service_id', how='left')
+    
     st_processed = st_processed.merge(trip_coor, on='trip_id').drop('trip_id', axis=1)
     
     return {
@@ -216,6 +222,7 @@ def gtfs_normalize(raw_dict: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
         'stop_times': st_processed,
         'route_id_coor': route_coor,
         'trip_id_coor': trip_coor,
+        'ser_id_coor': ser_id_coor,
         'initial_na': st_msg,
         'final_na_time_col': st_na
     }
