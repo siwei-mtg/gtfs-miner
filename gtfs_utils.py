@@ -77,9 +77,13 @@ def distmatrice(nparray: np.ndarray) -> np.ndarray:
 
 def nan_in_col_workaround(pd_serie: pd.Series) -> pd.Series:
     """
-    处理包含 NaN 的整数 ID 列，将其安全转换为字符串。
+    处理包含 NaN 的 ID 列，将其安全转换为字符串。
+    如果是整型则去除 .0，如果是字符串则保持原样，NaN 转为 np.nan。
     """
-    return pd_serie.astype('float64').fillna(-1).astype(np.int64).astype(str).replace('-1', np.nan)
+    if pd_serie.empty: return pd_serie
+    
+    # 尝试转换为数字，如果失败则按字符串处理
+    return pd_serie.astype(str).replace(['nan', 'NaN', 'None', '-1', '-1.0'], np.nan)
 
 def encoding_guess(acces: str) -> dict:
     """

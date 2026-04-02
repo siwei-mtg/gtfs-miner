@@ -11,9 +11,11 @@ GTFS 标准化模块 (gtfs_norm.py)
 
 import numpy as np
 import pandas as pd
+import chardet
 from zipfile import ZipFile
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional, List
+from typing import Dict, Any, Tuple, Optional, List, Union
+from scipy.cluster.vq import kmeans2
 from gtfs_utils import norm_upper_str, nan_in_col_workaround, encoding_guess
 
 def agency_norm(raw_agency: pd.DataFrame) -> pd.DataFrame:
@@ -36,7 +38,8 @@ def stops_norm(raw_stops: pd.DataFrame) -> pd.DataFrame:
                                      'parent_station', 'stop_timezone','wheelchair_boarding',
                                      'level_id','platform_code'])
     stops = pd.concat([stops_v, raw_stops], ignore_index=True)
-    stops.stop_id = stops.stop_id.astype(str)
+    stops.stop_name = norm_upper_str(stops.stop_name)
+    stops.stop_id = nan_in_col_workaround(stops.stop_id)
     
     # 坐标转换与容错
     for col in ['stop_lat', 'stop_lon']:
@@ -120,8 +123,17 @@ def rawgtfs_from_zip(zippath: Union[str, Path]) -> Dict[str, pd.DataFrame]:
     with ZipFile(zippath, "r") as zfile:
         for name in zfile.namelist():
             if name.endswith('.txt'):
-                df = pd.read_csv(zfile.open(name))
-                result[Path(name).stem] = df
+                basename = Path(name).name
+                stem = Path(name).stem
+                # 尝试 utf-8, 否则 fallback 到 latin-1
+                try:
+                    with zfile.open(name) as f:
+                        df = pd.read_csv(f, encoding='utf-8', low_memory=False)
+                except (UnicodeDecodeError, pd.errors.ParserError):
+                    with zfile.open(name) as f:
+                        df = pd.read_csv(f, encoding='latin-1', low_memory=False)
+                
+                result[stem] = df
     return result
 
 def read_date(plugin_path: Union[str, Path]) -> pd.DataFrame:
