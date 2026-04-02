@@ -13,8 +13,7 @@ import numpy as np
 import pandas as pd
 from zipfile import ZipFile
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional, List, Union
-from scipy.cluster.vq import kmeans2
+from typing import Dict, Any, Tuple, Optional, List
 from gtfs_utils import norm_upper_str, nan_in_col_workaround, encoding_guess
 
 def agency_norm(raw_agency: pd.DataFrame) -> pd.DataFrame:
@@ -148,14 +147,7 @@ def read_input(dirpath: Union[str, Path], plugin_path: Union[str, Path]) -> Tupl
     raw_dict = {}
     p = Path(dirpath)
     for f in p.glob('*.txt'):
-        guessed = encoding_guess(str(f))
-        enc = guessed.get('encoding', 'utf-8')
-        if enc is None or enc.lower() == 'ascii':
-            enc = 'utf-8'
-        try:
-            raw_dict[f.stem] = pd.read_csv(f, encoding=enc, low_memory=False)
-        except UnicodeDecodeError:
-            raw_dict[f.stem] = pd.read_csv(f, encoding='latin1', low_memory=False)
+        raw_dict[f.stem] = pd.read_csv(f)
     
     normed = gtfs_normalize(raw_dict)
     dates = read_date(plugin_path)
