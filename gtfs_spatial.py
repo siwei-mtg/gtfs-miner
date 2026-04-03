@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import linkage, cut_tree
 from scipy.cluster.vq import kmeans2
+from sklearn.cluster import DBSCAN
 from typing import Tuple, Dict
 from gtfs_utils import distmatrice, getDistHaversine
 
@@ -77,15 +78,11 @@ def ag_ap_generate_hcluster(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.D
     if AP.empty:
         return AP, pd.DataFrame()
         
-    AP_coor = AP[['stop_lon', 'stop_lat']].to_numpy()
-    dist_mat = distmatrice(AP_coor)
+    coords_rad = np.radians(AP[['stop_lat', 'stop_lon']].to_numpy())
+    labels = DBSCAN(eps=100/6371000, min_samples=1, metric='haversine', algorithm='ball_tree', n_jobs=-1).fit_predict(coords_rad)
     
-    # 层次聚类，高度 100 对应约 100 米
-    Z = linkage(dist_mat, method='complete')
-    cut = cut_tree(Z, height=100)
-    
-    AP['id_ag'] = (cut + 1).astype(str)
-    AP['id_ag_num'] = cut.flatten() + 10000
+    AP['id_ag'] = (labels + 1).astype(str)
+    AP['id_ag_num'] = labels + 10000
     AP['id_ap_num'] = np.arange(1, len(AP) + 1) + 100000
     
     AP = AP.rename(columns={'stop_id': 'id_ap'})

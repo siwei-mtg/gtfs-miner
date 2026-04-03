@@ -36,11 +36,15 @@ def itineraire_generate(stop_times: pd.DataFrame, AP: pd.DataFrame, trips: pd.Da
     Output Schema: [id_course_num, id_ligne_num, id_service_num, direction_id, stop_sequence, id_ap_num, id_ag_num, arrival_time, departure_time, TH, trip_headsign, ...]
     """
     st = stop_times.copy().rename(columns={'stop_id': 'id_ap'})
-    st['TH'] = st['arrival_time'].apply(str_time_hms_hour)
-    # Recalage des heures ≥ 24 (trajets de nuit GTFS, ex. 25:30:00 → 1)
+    st['TH'] = pd.to_numeric(st['arrival_time'].str.split(':').str[0], errors='coerce').fillna(0).astype(int)
+    # Recalage des heures >= 24 (trajets de nuit GTFS, ex. 25:30:00 -> 1)
     st['TH'] = np.where(st['TH'] >= 24, st['TH'] - 24, st['TH'])
-    st['arrival_time'] = st['arrival_time'].apply(str_time_hms)
-    st['departure_time'] = st['departure_time'].apply(str_time_hms)
+    
+    arr_parts = st['arrival_time'].str.split(':', expand=True).astype(float)
+    st['arrival_time'] = arr_parts[0] / 24.0 + arr_parts[1] / 1440.0 + arr_parts[2] / 86400.0
+    
+    dep_parts = st['departure_time'].str.split(':', expand=True).astype(float)
+    st['departure_time'] = dep_parts[0] / 24.0 + dep_parts[1] / 1440.0 + dep_parts[2] / 86400.0
     
     itnry_1 = st.merge(AP[['id_ap', 'id_ap_num', 'id_ag_num']], on='id_ap', how='left')
     itnry_2 = itnry_1.merge(trips[['id_course_num', 'id_ligne_num', 'id_service_num', 'direction_id', 'trip_headsign']], 

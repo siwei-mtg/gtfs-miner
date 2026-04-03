@@ -5,7 +5,7 @@ import traceback
 
 from gtfs_norm import rawgtfs_from_zip, gtfs_normalize
 from gtfs_spatial import ag_ap_generate_reshape
-from gtfs_generator import itineraire_generate, course_generate
+from gtfs_generator import itineraire_generate, itiarc_generate, course_generate
 from gtfs_export import MEF_ligne, MEF_course, MEF_iti
 
 def test_pipeline():
@@ -57,7 +57,8 @@ def test_pipeline():
             if normed['stop_times'].empty:
                 raise ValueError("stop_times data is empty")
             itineraire = itineraire_generate(normed['stop_times'], AP, normed['trips'])
-            courses = course_generate(itineraire)
+            itineraire_arc = itiarc_generate(itineraire, AG)
+            courses = course_generate(itineraire, itineraire_arc)
             res["generator"]["status"] = "Success"
             res["metrics"]["itineraire"] = len(itineraire)
             res["metrics"]["courses"] = len(courses)

@@ -12,6 +12,7 @@
 | gtfs-tan.zip | ✅ Success | ✅ Success | ✅ Success | ✅ Success |
 | gtfs.zip | ✅ Success | ✅ Success | ✅ Success | ✅ Success |
 | gtfs5.zip | ✅ Success | ✅ Success | ✅ Success | ✅ Success |
+| IDFM-gtfs.zip | ✅ Success | ✅ Success | ✅ Success | ✅ Success |
 | mamp-rtm.gtfs.zip | ✅ Success | ✅ Success | ✅ Success | ✅ Success |
 | SEM-GTFS(2).zip | ✅ Success | ✅ Success | ✅ Success | ✅ Success |
 | SOLEA.GTFS_current.zip | ✅ Success | ✅ Success | ✅ Success | ✅ Success |
