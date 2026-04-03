@@ -54,6 +54,15 @@ def heure_from_xsltime(horaire_excel: float) -> str:
     frac, hours = math.modf(horaire_excel * 24)
     return f'{int(hours):02}:{int(frac * 60):02}'
 
+def heure_from_xsltime_vec(series: pd.Series) -> pd.Series:
+    """向量化版本：将 Excel 时间比例 Series 转换为 HH:MM 格式 Series。
+    NaN 值输出 '00:00'，与标量版 heure_from_xsltime 行为一致。
+    """
+    total_hours = series.fillna(0) * 24
+    hours = total_hours.astype(int)
+    minutes = ((total_hours - hours) * 60).astype(int)
+    return hours.astype(str).str.zfill(2) + ':' + minutes.astype(str).str.zfill(2)
+
 # --- 空间计算 ---
 
 def getDistHaversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

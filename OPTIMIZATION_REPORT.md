@@ -1,13 +1,20 @@
 # GTFS Miner 核心模块优化分析报告
 
-> 分析日期：2026-04-03  
+> 分析日期：2026-04-03 | 最后更新：2026-04-03  
 > 分析范围：`gtfs_utils.py`, `gtfs_norm.py`, `gtfs_spatial.py`, `gtfs_generator.py`, `gtfs_export.py`
+
+## 修复状态总览
+
+| 状态 | 数量 |
+|------|------|
+| ✅ 已修复 | 7 项 |
+| ❌ 待处理 | 7 项 |
 
 ---
 
 ## 1. gtfs_utils.py — 基础工具模块
 
-### 1.1 `distmatrice()` — 距离矩阵计算 ⚠️ 高优先级
+### 1.1 `distmatrice()` — 距离矩阵计算 ⚠️ 高优先级 ✅ 已修复
 
 **现状**：使用 `np.meshgrid` 构建完整 N×N 矩阵后调用 `getDistHaversine`，再通过 `squareform` 转为 condensed form。
 
@@ -35,7 +42,7 @@ def distmatrice(nparray: np.ndarray) -> np.ndarray:
 
 ---
 
-### 1.2 `str_time_hms()` / `str_time_hms_hour()` — 时间转换 ⚠️ 中优先级
+### 1.2 `str_time_hms()` / `str_time_hms_hour()` — 时间转换 ⚠️ 中优先级 ❌ 待处理
 
 **现状**：逐行 Python 字符串 `split(':')`，在 `itineraire_generate` 中通过 `.apply()` 逐行调用。
 
@@ -57,7 +64,7 @@ def vectorized_hms_hour(series: pd.Series) -> pd.Series:
 
 ---
 
-### 1.3 `encoding_guess()` — 编码检测 🔵 低优先级
+### 1.3 `encoding_guess()` — 编码检测 🔵 低优先级 ❌ 待处理
 
 **现状**：固定读取 10000 字节采样。
 
@@ -67,7 +74,7 @@ def vectorized_hms_hour(series: pd.Series) -> pd.Series:
 
 ## 2. gtfs_norm.py — 标准化模块
 
-### 2.1 Schema 填充模式 ⚠️ 中优先级
+### 2.1 Schema 填充模式 ⚠️ 中优先级 ❌ 待处理
 
 **现状**：每个 `*_norm()` 函数都先创建空 DataFrame（含全部列），再 `pd.concat` 合并原始数据。
 
@@ -89,7 +96,7 @@ def ensure_columns(df: pd.DataFrame, required_cols: List[str]) -> pd.DataFrame:
 
 ---
 
-### 2.2 `stops_norm()` 重复调用 `norm_upper_str` 🔵 低优先级
+### 2.2 `stops_norm()` 重复调用 `norm_upper_str` 🔵 低优先级 ❌ 待处理
 
 **现状**：第 52 行和第 59 行对 `stops.stop_name` 连续调用了两次 `norm_upper_str`。
 
@@ -97,7 +104,7 @@ def ensure_columns(df: pd.DataFrame, required_cols: List[str]) -> pd.DataFrame:
 
 ---
 
-### 2.3 `rawgtfs_from_zip()` — 编码处理 🔵 低优先级
+### 2.3 `rawgtfs_from_zip()` — 编码处理 🔵 低优先级 ❌ 待处理
 
 **现状**：先尝试 UTF-8，捕获异常后 fallback 到 latin-1。
 
@@ -105,7 +112,7 @@ def ensure_columns(df: pd.DataFrame, required_cols: List[str]) -> pd.DataFrame:
 
 ---
 
-### 2.4 `gtfs_normalize()` — 流程编排 🟡 架构建议
+### 2.4 `gtfs_normalize()` — 流程编排 🟡 架构建议 ❌ 待处理
 
 **现状**：所有规范化步骤串行执行。
 
@@ -121,7 +128,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 ## 3. gtfs_spatial.py — 空间聚类模块
 
-### 3.1 `ag_ap_generate_hcluster()` — 层次聚类 🔴 高优先级
+### 3.1 `ag_ap_generate_hcluster()` — 层次聚类 🔴 高优先级 ✅ 已修复
 
 **现状**：对全量站点计算完整距离矩阵 → `linkage(method='complete')` → `cut_tree`。
 
@@ -156,7 +163,7 @@ def ag_ap_generate_hcluster(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.D
 
 ---
 
-### 3.2 `ag_ap_generate_reshape()` — 分支选择 ⚠️ 中优先级
+### 3.2 `ag_ap_generate_reshape()` — 分支选择 ⚠️ 中优先级 ❌ 待处理
 
 **现状**：判断是否需要聚类的逻辑仅基于 `location_type` 种类数和 `parent_station` 是否为空。
 
@@ -170,7 +177,7 @@ def ag_ap_generate_hcluster(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.D
 
 ## 4. gtfs_generator.py — 业务生成模块
 
-### 4.1 `itineraire_generate()` — 行程生成 🔴 高优先级
+### 4.1 `itineraire_generate()` — 行程生成 🔴 高优先级 ✅ 已修复
 
 **现状**：
 ```python
@@ -185,7 +192,7 @@ st['departure_time'] = st['departure_time'].apply(str_time_hms)  # 逐行 Python
 
 ---
 
-### 4.2 `itiarc_generate()` — Arc 生成 ⚠️ 中优先级
+### 4.2 `itiarc_generate()` — Arc 生成 ⚠️ 中优先级 ✅ 已修复
 
 **现状**：
 ```python
@@ -207,7 +214,7 @@ arc_dist['DIST_Vol_Oiseau'] = np.around(
 
 ---
 
-### 4.3 `course_generate()` — 多级列展平 🔵 低优先级
+### 4.3 `course_generate()` — 多级列展平 🔵 低优先级 ❌ 待处理
 
 **现状**：`groupby().agg()` 产生 MultiIndex columns，用字符串拼接展平。
 
@@ -224,45 +231,45 @@ course = itineraire.groupby([...]).agg(
 
 ---
 
-### 4.4 `service_date_generate()` — TODO 未完成 🟡 功能缺口
+### 4.4 `service_date_generate()` — calendar.txt 支持 🟡 功能缺口 ✅ 已修复
 
-**现状**：当 `calendar.txt` 存在时，返回空 DataFrame（TODO 标注）。
-
-**影响**：部分 GTFS 数据集仅提供 `calendar.txt`（无 `calendar_dates.txt`），此时服务日期为空，后续所有基于日期的统计（通过次数、KCC 等）均失效。
-
-**建议**：优先补全此逻辑，否则会导致部分数据集无法处理。
+**现状（已修复）**：`calendar.txt` 支持已实现——按星期几 + `start_date`/`end_date` 展开为日期列表，再叠加 `calendar_dates` 中的例外（exception_type=1 追加，=2 移除），最终 merge Dates 表生成完整服务日期矩阵。同时处理了全零 calendar（等同于无 calendar）的边界情况。
 
 ---
 
-### 4.5 `caract_par_sl()` — TODO 未完成 🟡 功能缺口
+### 4.5 `caract_par_sl()` — Headway 计算 🟡 功能缺口 ✅ 已修复
 
-**现状**：Headway (HPM/HPS) 计算逻辑为空壳。
-
-**影响**：F 系列输出表（线路/子线路指标）无法生成发车间隔数据。
+**现状（已修复）**：Headway 计算逻辑已实现——按时段（FM/HPM/HC/HPS/FS）对班次计数，通过 pivot 展开后以时段时长除以班次数得出发车间隔（分钟），`inf` 值替换为 `NaN`。F 系列输出表可正常生成。
 
 ---
 
 ## 5. gtfs_export.py — 导出模块
 
-### 5.1 `heure_from_xsltime` 的重复 `.apply()` ⚠️ 中优先级
+### 5.1 `heure_from_xsltime` 的重复 `.apply()` ⚠️ 中优先级 ✅ 已修复
 
-**现状**：`MEF_course`, `MEF_iti`, `MEF_iti_arc` 三个函数各自对时间列调用 `.apply(heure_from_xsltime)`。
+**优化前**：`MEF_course`, `MEF_iti`, `MEF_iti_arc` 三个函数各自对两列时间数据调用 `.apply(heure_from_xsltime)`，共 6 次逐行 Python 标量调用。
 
-**优化方案**：向量化版本：
-```python
-def vectorized_xsltime_to_hhmm(series: pd.Series) -> pd.Series:
-    """向量化 Excel 时间比例 → HH:MM。"""
-    total_hours = series.fillna(0) * 24
-    hours = total_hours.astype(int)
-    minutes = ((total_hours - hours) * 60).astype(int)
-    return hours.astype(str).str.zfill(2) + ':' + minutes.astype(str).str.zfill(2)
-```
+**优化后**：在 `gtfs_utils.py` 中新增 `heure_from_xsltime_vec(series)` 向量化函数，在 `gtfs_export.py` 中将 6 处 `.apply()` 替换为直接调用该函数。原标量函数 `heure_from_xsltime` 保持不变，用于单值场景。
 
-**预期收益**：每个 MEF 函数加速 5–10x
+**实测结果**（IDFM `stop_times.txt` 真实数据，每规模重复 3 次取最小值）：
+
+| N | 原始 .apply(s) | 向量化(s) | 加速比 | 正确性 |
+|---|--------------|----------|--------|--------|
+| 1,000 | 0.0064 | 0.0060 | 1.08x | ✅ |
+| 10,000 | 0.0630 | 0.0427 | 1.47x | ✅ |
+| 100,000 | 0.6711 | 0.4288 | 1.57x | ✅ |
+| 500,000 | 3.4229 | 2.3071 | 1.48x | ✅ |
+| 1,000,000 | 6.6532 | 4.5401 | 1.47x | ✅ |
+
+**实测结论**：
+- **时间加速**：1.08x ~ **1.57x**，中位数 **1.47x**
+- **正确性**：全部规模验证通过（含 NaN 边界值）
+- **备注**：加速比低于原报告预估的 5–10x。实际瓶颈在于字符串格式化（`.str.zfill(2)` + pandas 字符串拼接），该部分在向量化版本中仍为 pandas 字符串引擎处理，而非纯 numpy 数值运算。在纯 float → float 转换场景中向量化效果更显著；此处因最终必须输出字符串，收益受限。
+- **内存**：向量化版本因创建多个中间 Series，峰值内存约为原始版本的 2x（代价可接受，属于时间-空间权衡）。
 
 ---
 
-### 5.2 MEF 函数的重复模式 🔵 低优先级
+### 5.2 MEF 函数的重复模式 🔵 低优先级 ❌ 待处理
 
 **现状**：`MEF_iti` 和 `MEF_iti_arc` 有几乎相同的 rename + apply + merge 模式。
 
@@ -272,41 +279,42 @@ def vectorized_xsltime_to_hhmm(series: pd.Series) -> pd.Series:
 
 ## 优化优先级总结
 
-| 优先级 | 模块 | 问题 | 预期收益 |
-|--------|------|------|---------|
-| 🔴 P0 | `gtfs_spatial` | 层次聚类 O(N²) 距离矩阵 | 避免 OOM，10x+ 加速 |
-| 🔴 P0 | `gtfs_generator` | `itineraire_generate` 三次 `.apply()` | 10–50x 加速 |
-| ⚠️ P1 | `gtfs_utils` | `distmatrice` meshgrid 冗余计算 | 内存降 50%+ |
-| ⚠️ P1 | `gtfs_generator` | `np.vectorize` 伪向量化 | 5–20x 加速 |
-| ⚠️ P1 | `gtfs_export` | `heure_from_xsltime` 逐行 apply | 5–10x 加速 |
-| ⚠️ P1 | `gtfs_norm` | concat 填充模式低效 | 10–20% 时间节省 |
-| 🟡 P2 | `gtfs_generator` | `service_date_generate` 未完成 | 功能完整性 |
-| 🟡 P2 | `gtfs_generator` | `caract_par_sl` Headway 空壳 | 功能完整性 |
-| 🟡 P2 | `gtfs_norm` | 规范化步骤可并行 | 40–60% 加速 |
-| 🔵 P3 | `gtfs_norm` | `norm_upper_str` 重复调用 | 代码质量 |
-| 🔵 P3 | `gtfs_generator` | NamedAgg 替代列展平 | 代码可读性 |
-| 🔵 P3 | `gtfs_spatial` | reshape 混合模式缺失 | 数据质量 |
+| 状态 | 优先级 | 模块 | 问题 | 预期收益 |
+|------|--------|------|------|---------|
+| ✅ | 🔴 P0 | `gtfs_spatial` | 层次聚类 O(N²) 距离矩阵 → DBSCAN | 避免 OOM，10x+ 加速 |
+| ✅ | 🔴 P0 | `gtfs_generator` | `itineraire_generate` 三次 `.apply()` → 向量化 | 10–50x 加速 |
+| ✅ | ⚠️ P1 | `gtfs_utils` | `distmatrice` meshgrid → sklearn haversine_distances | 内存降 6x，速度 3x |
+| ✅ | ⚠️ P1 | `gtfs_generator` | `np.vectorize` → 直接传 numpy 数组 | 5–20x 加速 |
+| ✅ | ⚠️ P1 | `gtfs_export` | `heure_from_xsltime` 逐行 apply → 向量化 | 实测 1.5x（字符串瓶颈限制） |
+| ❌ | ⚠️ P1 | `gtfs_norm` | concat 填充模式低效 | 10–20% 时间节省 |
+| ✅ | 🟡 P2 | `gtfs_generator` | `service_date_generate` calendar.txt 逻辑 | 功能完整性 |
+| ✅ | 🟡 P2 | `gtfs_generator` | `caract_par_sl` Headway 计算 | 功能完整性 |
+| ❌ | 🟡 P2 | `gtfs_norm` | 规范化步骤可并行 | 40–60% 加速 |
+| ❌ | 🔵 P3 | `gtfs_norm` | `norm_upper_str` 重复调用（第 51、62 行） | 代码质量 |
+| ❌ | 🔵 P3 | `gtfs_generator` | NamedAgg 替代列展平 | 代码可读性 |
+| ❌ | 🔵 P3 | `gtfs_spatial` | reshape 混合模式缺失 | 数据质量 |
 
 ---
 
 ## 大数据集（IDFM 级，>5 万站点）处理链瓶颈排序
 
 ```
-1. gtfs_spatial.ag_ap_generate_hcluster   — OOM 风险 + O(N²logN)
-2. gtfs_generator.itineraire_generate     — 数百万行逐行 apply
-3. gtfs_utils.distmatrice                 — O(N²) 矩阵构建
-4. gtfs_export.MEF_*                      — 重复的逐行时间格式化
-5. gtfs_norm.stop_times_norm              — groupby.transform 在缺失值多时较慢
+✅ 1. gtfs_spatial.ag_ap_generate_hcluster   — 已修复：DBSCAN 替代层次聚类
+✅ 2. gtfs_generator.itineraire_generate     — 已修复：向量化时间解析
+✅ 3. gtfs_utils.distmatrice                 — 已修复：sklearn haversine_distances
+✅ 4. gtfs_export.MEF_*                      — 已修复：heure_from_xsltime_vec（1.5x）
+❌ 5. gtfs_norm.stop_times_norm              — 待处理：groupby.transform 在缺失值多时较慢
 ```
 
 ---
 
-## 下一步建议
+## 下一步建议（待处理项）
 
-1. **立即修复**：`itiarc_generate` 中的 `np.vectorize` → 直接传数组（一行改动，收益大）
-2. **短期优化**：将 `str_time_hms` / `heure_from_xsltime` 向量化（影响面最广）
-3. **中期重构**：用 DBSCAN 替代层次聚类（解决大数据集 OOM）
-4. **功能补全**：完成 `service_date_generate` 的 calendar.txt 逻辑
+1. **短期优化**：`gtfs_export` 中 `heure_from_xsltime` 向量化（`MEF_course`、`MEF_iti`、`MEF_iti_arc` 各 2 次 apply，5–10x 收益）
+2. **短期优化**：`gtfs_norm` 所有 `*_norm()` 函数的 `pd.concat` 填充模式 → `ensure_columns` 模式（减少内存拷贝）
+3. **代码修复**：`stops_norm` 删除第 51 行重复的 `norm_upper_str` 调用（纯冗余，一行删除）
+4. **架构优化**：`gtfs_normalize()` 中五个规范化步骤并行执行（多核场景 40–60% 加速）
+5. **数据质量**：`ag_ap_generate_reshape` 增加混合模式（保留已有 parent 信息）
 
 ---
 

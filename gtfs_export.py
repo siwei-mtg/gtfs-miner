@@ -17,7 +17,7 @@ GTFS 结果导出模块 (gtfs_export.py)
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, List
-from gtfs_utils import heure_from_xsltime
+from gtfs_utils import heure_from_xsltime, heure_from_xsltime_vec
 
 def MEF_ligne(lignes: pd.DataFrame, courses: pd.DataFrame, AG: pd.DataFrame) -> pd.DataFrame:
     """
@@ -62,10 +62,10 @@ def MEF_course(courses: pd.DataFrame, trip_id_coor: pd.DataFrame) -> pd.DataFram
     res = courses.merge(trip_id_coor, left_on='id_course_num', right_on='id_course_num')
     res = res.rename(columns={'heure_depart': 'h_dep_num', 'heure_arrive': 'h_arr_num'})
     
-    # 时间数字化转 HH:MM
-    res['heure_depart'] = res['h_dep_num'].apply(heure_from_xsltime)
-    res['heure_arrive'] = res['h_arr_num'].apply(heure_from_xsltime)
-    
+    # 时间数字化转 HH:MM (向量化，参见 OPTIMIZATION_REPORT §5.1)
+    res['heure_depart'] = heure_from_xsltime_vec(res['h_dep_num'])
+    res['heure_arrive'] = heure_from_xsltime_vec(res['h_arr_num'])
+
     return res[export_cols]
 
 def MEF_iti(itineraire: pd.DataFrame, courses: pd.DataFrame) -> pd.DataFrame:
@@ -82,8 +82,8 @@ def MEF_iti(itineraire: pd.DataFrame, courses: pd.DataFrame) -> pd.DataFrame:
         'departure_time': 'h_arr_num'
     })
     
-    iti['heure_depart'] = iti['h_dep_num'].apply(heure_from_xsltime)
-    iti['heure_arrive'] = iti['h_arr_num'].apply(heure_from_xsltime)
+    iti['heure_depart'] = heure_from_xsltime_vec(iti['h_dep_num'])
+    iti['heure_arrive'] = heure_from_xsltime_vec(iti['h_arr_num'])
     
     crs_sl = courses[['id_course_num', 'sous_ligne']]
     return crs_sl.merge(iti, on='id_course_num', how='right')
@@ -102,9 +102,9 @@ def MEF_iti_arc(itineraire_arc: pd.DataFrame, courses: pd.DataFrame) -> pd.DataF
                     'id_ag_num_b', 'TH_b', 'DIST_Vol_Oiseau']
     
     res = itineraire_arc.rename(columns={'heure_depart': 'h_dep_num', 'heure_arrive': 'h_arr_num'})
-    res['heure_depart'] = res['h_dep_num'].apply(heure_from_xsltime)
-    res['heure_arrive'] = res['h_arr_num'].apply(heure_from_xsltime)
-    
+    res['heure_depart'] = heure_from_xsltime_vec(res['h_dep_num'])
+    res['heure_arrive'] = heure_from_xsltime_vec(res['h_arr_num'])
+
     iti_arc = res[itiarc_cols]
     crs_sl = courses[['id_course_num', 'sous_ligne']]
     return crs_sl.merge(iti_arc, on='id_course_num', how='right')
