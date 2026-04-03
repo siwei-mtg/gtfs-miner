@@ -17,6 +17,7 @@ GTFS 标准化模块 (gtfs_norm.py)
 import numpy as np
 import pandas as pd
 import chardet
+from concurrent.futures import ThreadPoolExecutor
 from zipfile import ZipFile
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional, List, Union
@@ -26,14 +27,25 @@ from gtfs_utils import norm_upper_str, nan_in_col_workaround, encoding_guess
 DEFAULT_ROUTE_TYPE = 3
 DEFAULT_LOCATION_TYPE = 0
 
+def ensure_columns(df: pd.DataFrame, required_cols: List[str]) -> pd.DataFrame:
+    """确保 DataFrame 包含所有必要列，缺失列填充 NaN。
+    返回新 DataFrame（已 reset_index），不修改原始数据。
+    替代 pd.concat([empty_schema_df, raw_df], ignore_index=True) 模式。
+    """
+    result = df.copy()
+    result.reset_index(drop=True, inplace=True)
+    for col in required_cols:
+        if col not in result.columns:
+            result[col] = np.nan
+    return result
+
 def agency_norm(raw_agency: pd.DataFrame) -> pd.DataFrame:
     """
     Input Schema: [agency_name, agency_url, ...]
     Output Schema: [agency_id, agency_name, agency_url, agency_timezone, agency_lang, agency_phone, agency_fare_url, agency_email, ...]
     """
-    agency_v = pd.DataFrame(columns=['agency_id', 'agency_name', 'agency_url', 'agency_timezone',
-                                      'agency_lang', 'agency_phone', 'agency_fare_url', 'agency_email'])
-    agency = pd.concat([agency_v, raw_agency], ignore_index=True)
+    agency = ensure_columns(raw_agency, ['agency_id', 'agency_name', 'agency_url', 'agency_timezone',
+                                          'agency_lang', 'agency_phone', 'agency_fare_url', 'agency_email'])
     agency.dropna(axis=1, how='all', inplace=True)
     return agency
 
@@ -43,11 +55,10 @@ def stops_norm(raw_stops: pd.DataFrame) -> pd.DataFrame:
     Input Schema: [stop_id, stop_name, stop_lat, stop_lon, location_type, parent_station, ...]
     Output Schema: [stop_id, stop_lat, stop_lon, stop_name, location_type, parent_station]
     """
-    stops_v = pd.DataFrame(columns=['stop_id', 'stop_code', 'stop_name', 'stop_desc',
-                                     'stop_lat', 'stop_lon', 'zone_id', 'stop_url','location_type', 
-                                     'parent_station', 'stop_timezone','wheelchair_boarding',
-                                     'level_id','platform_code'])
-    stops = pd.concat([stops_v, raw_stops], ignore_index=True)
+    stops = ensure_columns(raw_stops, ['stop_id', 'stop_code', 'stop_name', 'stop_desc',
+                                       'stop_lat', 'stop_lon', 'zone_id', 'stop_url', 'location_type',
+                                       'parent_station', 'stop_timezone', 'wheelchair_boarding',
+                                       'level_id', 'platform_code'])
     stops.stop_name = norm_upper_str(stops.stop_name)
     stops.stop_id = nan_in_col_workaround(stops.stop_id)
     
@@ -71,10 +82,9 @@ def routes_norm(raw_routes: pd.DataFrame) -> pd.DataFrame:
     Input Schema: [route_id, route_type, ...]
     Output Schema: [route_id, agency_id, route_short_name, route_long_name, route_desc, route_type, route_color, route_text_color, id_ligne_num, ...]
     """
-    routes_v = pd.DataFrame(columns=['route_id', 'agency_id', 'route_short_name', 'route_long_name',
-                                      'route_desc', 'route_type', 'route_url', 'route_color',
-                                      'route_text_color', 'route_sort_order'])
-    routes = pd.concat([routes_v, raw_routes], ignore_index=True)
+    routes = ensure_columns(raw_routes, ['route_id', 'agency_id', 'route_short_name', 'route_long_name',
+                                          'route_desc', 'route_type', 'route_url', 'route_color',
+                                          'route_text_color', 'route_sort_order'])
     routes.drop(['route_url', 'route_sort_order'], axis=1, errors='ignore', inplace=True)
     routes.dropna(axis=1, how='all', inplace=True)
     routes.route_id = routes.route_id.astype(str)
@@ -99,9 +109,8 @@ def trips_norm(raw_trips: pd.DataFrame) -> pd.DataFrame:
     Input Schema: [route_id, service_id, trip_id, ...]
     Output Schema: [route_id, service_id, trip_id, trip_headsign, direction_id, shape_id, id_course_num, ...]
     """
-    trips_v = pd.DataFrame(columns=['route_id', 'service_id', 'trip_id', 'trip_headsign', 
-                                     'direction_id', 'shape_id'])
-    trips = pd.concat([trips_v, raw_trips], ignore_index=True)
+    trips = ensure_columns(raw_trips, ['route_id', 'service_id', 'trip_id', 'trip_headsign',
+                                       'direction_id', 'shape_id'])
     cols = ['route_id', 'service_id', 'trip_id']
     trips[cols] = trips[cols].astype(str)
     if not trips.empty:
@@ -117,11 +126,16 @@ def stop_times_norm(raw_stoptimes: pd.DataFrame) -> Tuple[pd.DataFrame, str, int
     Output Schema: [trip_id, arrival_time, departure_time, stop_id, stop_sequence, timepoint, ...]
     Return: (DataFrame, NA_Summary_String, NA_Count_in_Time_Cols)
     """
-    stop_times_v = pd.DataFrame(columns=['trip_id', 'arrival_time', 'departure_time', 'stop_id',
-                                          'stop_sequence', 'timepoint'])
-    stop_times = pd.concat([stop_times_v, raw_stoptimes], ignore_index=True)
+    stop_times = ensure_columns(raw_stoptimes, ['trip_id', 'arrival_time', 'departure_time',
+                                                 'stop_id', 'stop_sequence', 'timepoint'])
 
-    # 统计缺失值
+    # 早期列裁剪：仅保留下游实际使用的列，避免对宽 DataFrame 做全列 NA 扫描（参见 OPTIMIZATION_REPORT §2.5）
+    _keep = ['trip_id', 'arrival_time', 'departure_time', 'stop_id', 'stop_sequence', 'timepoint']
+    if 'shape_dist_traveled' in stop_times.columns:
+        _keep.append('shape_dist_traveled')
+    stop_times = stop_times[_keep]
+
+    # 统计缺失值（仅报告裁剪后的必要列）
     na_summary = f"Total: {len(stop_times)}. NAs: {stop_times.isna().sum().to_dict()}"
 
     time_cols = ['arrival_time', 'departure_time']
@@ -149,8 +163,7 @@ def stop_times_norm(raw_stoptimes: pd.DataFrame) -> Tuple[pd.DataFrame, str, int
         stop_times['shape_dist_traveled'] = pd.to_numeric(
             stop_times['shape_dist_traveled'], errors='coerce').astype(np.float32)
 
-    stop_times.dropna(how='all', axis=1, inplace=True)
-
+    # dropna(axis=1) 已由早期列裁剪替代，无需再扫描全列
     return stop_times, na_summary, int(stop_times[time_cols].isna().sum().sum())
 
 def calendar_norm(raw_cal: pd.DataFrame) -> pd.DataFrame:
@@ -159,10 +172,9 @@ def calendar_norm(raw_cal: pd.DataFrame) -> pd.DataFrame:
     Input Schema: [service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, start_date, end_date]
     Output Schema: [service_id, monday, ..., start_date, end_date]
     """
-    cal_v = pd.DataFrame(columns=['service_id', 'monday', 'tuesday', 'wednesday',
-                                   'thursday', 'friday', 'saturday', 'sunday',
-                                   'start_date', 'end_date'])
-    calendar = pd.concat([cal_v, raw_cal], ignore_index=True)
+    calendar = ensure_columns(raw_cal, ['service_id', 'monday', 'tuesday', 'wednesday',
+                                        'thursday', 'friday', 'saturday', 'sunday',
+                                        'start_date', 'end_date'])
     calendar['service_id'] = calendar['service_id'].astype(str)
     week_cols = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
     calendar[week_cols] = calendar[week_cols].fillna(0).astype(np.int8)
@@ -176,8 +188,7 @@ def cal_dates_norm(raw_caldates: pd.DataFrame) -> pd.DataFrame:
     Input Schema: [service_id, date, exception_type]
     Output Schema: [service_id, date, exception_type]
     """
-    cal_dates_v = pd.DataFrame(columns=['service_id', 'date', 'exception_type'])
-    calendar_dates = pd.concat([cal_dates_v, raw_caldates], ignore_index=True)
+    calendar_dates = ensure_columns(raw_caldates, ['service_id', 'date', 'exception_type'])
     calendar_dates['service_id'] = calendar_dates['service_id'].astype(str)
     calendar_dates['date'] = pd.to_numeric(calendar_dates['date'], errors='coerce').fillna(0).astype(np.int32)
     calendar_dates['exception_type'] = pd.to_numeric(calendar_dates['exception_type'], errors='coerce').fillna(0).astype(np.int8)
@@ -262,16 +273,37 @@ def gtfs_normalize(raw_dict: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
                            "calendar": df|None, "calendar_dates": df,
                            "route_id_coor": df, "trip_id_coor": df, "ser_id_coor": df,
                            "initial_na": str, "final_na_time_col": int}
-    """
-    agency = agency_norm(raw_dict.get('agency', pd.DataFrame()))
-    routes = routes_norm(raw_dict.get('routes', pd.DataFrame()))
-    stops = stops_norm(raw_dict.get('stops', pd.DataFrame()))
-    trips = trips_norm(raw_dict.get('trips', pd.DataFrame()))
-    st_processed, st_msg, st_na = stop_times_norm(raw_dict.get('stop_times', pd.DataFrame()))
 
+    处理流程：
+    ```
+    Phase 1 (并行): agency/routes/stops/trips/stop_times/calendar/cal_dates — 互相独立
+         ↓
+    Phase 2 (顺序): route_coor → ser_id_coor → trips/stop_times/calendar 关联映射
+    ```
+    """
+    # ── Phase 1: 并行规范化（7 个函数互相独立，各自操作独立副本）───────────────
+    _empty = pd.DataFrame()
+    with ThreadPoolExecutor(max_workers=7) as pool:
+        f_agency     = pool.submit(agency_norm,     raw_dict.get('agency',          _empty))
+        f_routes     = pool.submit(routes_norm,     raw_dict.get('routes',          _empty))
+        f_stops      = pool.submit(stops_norm,      raw_dict.get('stops',           _empty))
+        f_trips      = pool.submit(trips_norm,      raw_dict.get('trips',           _empty))
+        f_stop_times = pool.submit(stop_times_norm, raw_dict.get('stop_times',      _empty))
+        f_cal        = pool.submit(calendar_norm,   raw_dict.get('calendar',        _empty))
+        f_cal_dates  = pool.submit(cal_dates_norm,  raw_dict.get('calendar_dates',  _empty))
+
+    agency                      = f_agency.result()
+    routes                      = f_routes.result()
+    stops                       = f_stops.result()
+    trips                       = f_trips.result()
+    st_processed, st_msg, st_na = f_stop_times.result()
+    cal_normed                  = f_cal.result()
+    cal_dates_normed            = f_cal_dates.result()
+
+    # ── Phase 2: 顺序合并（有严格依赖关系，不可并行）────────────────────────────
     # ID 映射准备
     route_coor = routes[['route_id', 'id_ligne_num']]
-    trip_coor = trips[['trip_id', 'id_course_num']]
+    trip_coor  = trips[['trip_id', 'id_course_num']]
 
     # 关联映射
     trips = trips.merge(route_coor, on='route_id').drop('route_id', axis=1)
@@ -283,26 +315,23 @@ def gtfs_normalize(raw_dict: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
 
     st_processed = st_processed.merge(trip_coor, on='trip_id').drop('trip_id', axis=1)
 
-    # Calendar 规范化 (try/except，空表 → None，参见 legacy 352-358)
+    # Calendar 合并 ser_id_coor (try/except，空表 → None，参见 legacy 352-358)
     try:
-        raw_cal = raw_dict.get('calendar', pd.DataFrame())
-        if raw_cal.empty:
+        raw_cal_empty = raw_dict.get('calendar', _empty).empty
+        if raw_cal_empty or cal_normed.empty:
             calendar = None
         else:
-            calendar = calendar_norm(raw_cal)
-            calendar = calendar.merge(ser_id_coor, on='service_id').drop(columns=['service_id'])
+            calendar = cal_normed.merge(ser_id_coor, on='service_id').drop(columns=['service_id'])
             if calendar.empty:
                 calendar = None
     except Exception:
         calendar = None
 
-    # Calendar dates 规范化
-    raw_caldates = raw_dict.get('calendar_dates', pd.DataFrame())
-    if raw_caldates.empty:
+    # Calendar dates 合并 ser_id_coor
+    if raw_dict.get('calendar_dates', _empty).empty or cal_dates_normed.empty:
         calendar_dates = pd.DataFrame(columns=['service_id', 'date', 'exception_type', 'id_service_num'])
     else:
-        calendar_dates = cal_dates_norm(raw_caldates)
-        calendar_dates = calendar_dates.merge(ser_id_coor, on='service_id', how='left')
+        calendar_dates = cal_dates_normed.merge(ser_id_coor, on='service_id', how='left')
 
     # Shapes (optionnel, transmis tel quel pour corr_sl_shape / kcc, 参见 legacy 362-378)
     shapes = raw_dict.get('shapes', None)
@@ -310,18 +339,18 @@ def gtfs_normalize(raw_dict: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
         shapes = None
 
     return {
-        'agency': agency,
-        'routes': routes,
-        'stops': stops,
-        'trips': trips,
-        'stop_times': st_processed,
-        'calendar': calendar,
-        'calendar_dates': calendar_dates,
-        'shapes': shapes,
-        'route_id_coor': route_coor,
-        'trip_id_coor': trip_coor,
-        'ser_id_coor': ser_id_coor,
-        'initial_na': st_msg,
+        'agency':            agency,
+        'routes':            routes,
+        'stops':             stops,
+        'trips':             trips,
+        'stop_times':        st_processed,
+        'calendar':          calendar,
+        'calendar_dates':    calendar_dates,
+        'shapes':            shapes,
+        'route_id_coor':     route_coor,
+        'trip_id_coor':      trip_coor,
+        'ser_id_coor':       ser_id_coor,
+        'initial_na':        st_msg,
         'final_na_time_col': st_na
     }
 

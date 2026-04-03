@@ -9,7 +9,11 @@
       "Bash(rm:*)",
       "Bash(python tmp/benchmark_heure_xsltime.py)",
       "Bash(python -X utf8 tmp/benchmark_heure_xsltime.py)",
-      "Bash(python -X utf8 -m pytest test_gtfs_core.py -v -k \"time\")"
+      "Bash(python -X utf8 -m pytest test_gtfs_core.py -v -k \"time\")",
+      "Bash(python -X utf8 tmp/benchmark_ensure_columns.py)",
+      "Bash(python -X utf8 test_gtfs_core.py)",
+      "Bash(python -X utf8 tmp/benchmark_normalize_parallel.py)",
+      "Bash(python -X utf8 -c ':*)"
     ]
   }
 }
