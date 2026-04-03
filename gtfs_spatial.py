@@ -21,6 +21,8 @@ from scipy.cluster.vq import kmeans2
 from sklearn.cluster import DBSCAN
 from typing import Tuple, Dict
 from gtfs_utils import distmatrice, getDistHaversine
+from gtfs_schemas import APSchema, AGSchema
+
 
 def ag_ap_generate_bigvolume(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -64,7 +66,8 @@ def ag_ap_generate_bigvolume(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.
 
     AP = AP.merge(AG[['id_ag', 'id_ag_num']], on='id_ag')
     AP = AP.rename(columns={'stop_id': 'id_ap'})
-    return AP, AG
+    return APSchema.validate(AP), AGSchema.validate(AG)
+
 
 def ag_ap_generate_hcluster(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -93,7 +96,8 @@ def ag_ap_generate_hcluster(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.D
         'stop_lon': 'mean'
     }).reset_index(drop=True)
     
-    return AP, AG
+    return APSchema.validate(AP), AGSchema.validate(AG)
+
 
 def ag_ap_generate_asit(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -122,7 +126,8 @@ def ag_ap_generate_asit(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataF
     AP['id_ap_num'] = np.arange(1, len(AP) + 1) + 100000
     
     AP = AP.merge(AG[['id_ag', 'id_ag_num']], on='id_ag', how='left')
-    return AP, AG
+    return APSchema.validate(AP), AGSchema.validate(AG)
+
 
 def ag_ap_generate_reshape(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, str]:
     """

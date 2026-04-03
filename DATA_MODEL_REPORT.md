@@ -315,3 +315,37 @@ Step 1 + 2（立即）→ Step 3（本迭代）→ Step 4（Web 迁移时）
 | TypedDict 标注 DataFrame 列 | 仅 IDE 提示，无运行时校验 |
 | SQLAlchemy ORM model | 当前阶段无数据库交互，Phase 1 数据库设计时再引入 |
 | 全量输入校验 | 优先校验输出（生产者保证契约），输入校验按需添加 |
+
+---
+
+## 7. 实施记录
+
+| 实施日期 | 状态 | 备注 |
+|----------|------|------|
+| 2026-04-03 | 已完成 | Step 1 + 2 核心计算层 Pandera Schema 实施完毕 |
+
+### 7.1 变更详情
+
+1.  **依赖更新**：在 `backend/requirements.txt` 中添加 `pandera>=0.18`。
+2.  **Schema 定义**：创建 `gtfs_schemas.py`，定义了 6 个核心 DataFrame Schema：
+    -   `APSchema`: 包含 7 列，支持 `coerce=True`。
+    -   `AGSchema`: 包含 5 列。
+    -   `ItineraireSchema`: 包含 11 列。
+    -   `CourseSchema`: 包含 14 列（新增 `trip_headsign` 和 `DIST_Vol_Oiseau` 的校验）。
+    -   `ItiArcSchema`: 扩展至 15 列。
+    -   `ServiceDateSchema`: 包含 6 列。
+3.  **校验注入**：
+    -   `gtfs_spatial.py`: 在 `ag_ap_generate_bigvolume`, `ag_ap_generate_hcluster`, `ag_ap_generate_asit` 的返回处添加校验。
+    -   `gtfs_generator.py`: 在 `itineraire_generate`, `service_date_generate`, `course_generate`, `itiarc_generate` 的返回处添加校验。
+
+### 7.2 技术考量点
+
+-   **Nullable Integer (可空整型)**：所有 ID 和整型列改为使用 `pa.Int64`。这解决了部分脏数据（如 `stop_times` 引用了不存在的站点）导致的 `NaN` 匹配问题。使用 `pa.Int64` 既能允许 `NaN` 存在，又能防止列退化为 `float64`，维持了数据模型的整洁。
+-   **Coerce (自动转换)**：所有 Schema 开启了 `coerce=True`，能自动处理类型转换。
+-   **边界校验**：坚持仅在“生产者”端（函数出口）进行校验，下游“消费者”模块默认接收已满足 Schema 的数据，减少重复校验开销。
+
+
+### 7.3 后续建议
+
+-   **Step 3 (单元测试)**：建议在后续迭代中，将 `test_gtfs_core.py` 中的手写断言替换为 Schema 校验。
+-   **Step 4 (API Models)**：在 Web API 路由开发时，参考此处的 Schema 定义编写对应的 Pydantic 模型。

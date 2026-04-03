@@ -25,6 +25,8 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any, Tuple, Optional, List
 from gtfs_utils import str_time_hms_hour, str_time_hms, getDistHaversine
+from gtfs_schemas import ItineraireSchema, CourseSchema, ItiArcSchema, ServiceDateSchema
+
 
 def itineraire_generate(stop_times: pd.DataFrame, AP: pd.DataFrame, trips: pd.DataFrame) -> pd.DataFrame:
     """
@@ -56,7 +58,8 @@ def itineraire_generate(stop_times: pd.DataFrame, AP: pd.DataFrame, trips: pd.Da
     itineraire['stop_sequence'] = itineraire.groupby(['id_course_num']).cumcount() + 1
     
     itineraire.fillna({'direction_id': DEFAULT_DIRECTION_ID, 'trip_headsign': DEFAULT_TRIP_HEADSIGN}, inplace=True)
-    return itineraire
+    return ItineraireSchema.validate(itineraire)
+
 
 def service_date_generate(calendar: Optional[pd.DataFrame], 
                           calendar_dates: pd.DataFrame, 
@@ -145,7 +148,8 @@ def service_date_generate(calendar: Optional[pd.DataFrame],
         if not cal_final.empty
         else "No valid dates found."
     )
-    return cal_final, msg_date
+    return ServiceDateSchema.validate(cal_final), msg_date
+
 
 def course_generate(itineraire: pd.DataFrame, itineraire_arc: pd.DataFrame) -> pd.DataFrame:
     """
@@ -191,7 +195,8 @@ def course_generate(itineraire: pd.DataFrame, itineraire_arc: pd.DataFrame) -> p
                              course['nb_arrets'].astype(str) + '_' +
                              course['DIST_Vol_Oiseau'].astype(str))
 
-    return course
+    return CourseSchema.validate(course)
+
 
 def itiarc_generate(itineraire: pd.DataFrame, AG: pd.DataFrame) -> pd.DataFrame:
     """
@@ -233,12 +238,14 @@ def itiarc_generate(itineraire: pd.DataFrame, AG: pd.DataFrame) -> pd.DataFrame:
             'stop_sequence_a', 'departure_time', 'id_ap_num_a', 'id_ag_num_a', 'TH_a',
             'stop_sequence_b', 'arrival_time', 'id_ap_num_b', 'id_ag_num_b', 'TH_b',
             'DIST_Vol_Oiseau']
-    return arc_dist[cols].rename(columns={
+    result = arc_dist[cols].rename(columns={
         'stop_sequence_a': 'ordre_a',
         'departure_time':  'heure_depart',
         'stop_sequence_b': 'ordre_b',
         'arrival_time':    'heure_arrive',
     })
+    return ItiArcSchema.validate(result)
+
 
 def caract_par_sl(
     service_jour_type: pd.DataFrame,
