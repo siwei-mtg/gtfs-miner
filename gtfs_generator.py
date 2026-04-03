@@ -37,6 +37,8 @@ def itineraire_generate(stop_times: pd.DataFrame, AP: pd.DataFrame, trips: pd.Da
     """
     st = stop_times.copy().rename(columns={'stop_id': 'id_ap'})
     st['TH'] = st['arrival_time'].apply(str_time_hms_hour)
+    # Recalage des heures ≥ 24 (trajets de nuit GTFS, ex. 25:30:00 → 1)
+    st['TH'] = np.where(st['TH'] >= 24, st['TH'] - 24, st['TH'])
     st['arrival_time'] = st['arrival_time'].apply(str_time_hms)
     st['departure_time'] = st['departure_time'].apply(str_time_hms)
     
@@ -65,91 +67,348 @@ def service_date_generate(calendar: Optional[pd.DataFrame],
         cal_final: [id_service_num, Date_GTFS, Type_Jour, Semaine, Mois, Annee, ...]
         msg_date: str
     """
-    cal_cols = ['id_service_num', 'Date_GTFS', 'Type_Jour', 'Semaine', 'Mois', 'Annee']
-    
-    if calendar is None or calendar.empty:
-        # 仅基于 calendar_dates 处理 (Exception Type 1 为开通)
+    # Inclure les colonnes vacances si présentes dans Dates (参见 legacy 560)
+    _vac_cols = ['Type_Jour_Vacances_A', 'Type_Jour_Vacances_B', 'Type_Jour_Vacances_C']
+    cal_cols = ['id_service_num', 'Date_GTFS', 'Type_Jour', 'Semaine', 'Mois', 'Annee'] + \
+               [c for c in _vac_cols if c in Dates.columns]
+
+    # calendar 全零：所有 weekday 标志为 0，等同于无 calendar
+    calendar_all_zero = (
+        calendar is not None
+        and not calendar.empty
+        and calendar[['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']].sum().sum() == 0
+    )
+
+    if calendar is None or calendar.empty or calendar_all_zero:
+        # 仅基于 calendar_dates 处理 (exception_type=1 为开通日期)
         cal_final = calendar_dates.merge(Dates, left_on='date', right_on='Date_GTFS', how='left')
         cal_final = cal_final[cal_cols].sort_values(['id_service_num', 'Date_GTFS']).reset_index(drop=True)
     else:
-        # TODO: 集成完整的按星期几、有效期和排除日期的合成逻辑 (service_date_generate 原逻辑)
-        # 这里先返回基础映射
-        cal_final = pd.DataFrame(columns=cal_cols)
-        
-    msg_date = f"DataSet Valid: {cal_final['Date_GTFS'].min()} to {cal_final['Date_GTFS'].max()}" if not cal_final.empty else "No valid dates found."
+        # calendar.txt 有效：按星期几 + start_date/end_date 展开，再叠加 calendar_dates 例外
+        # Type_Jour 约定: 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun
+        weekday_map = [
+            ('monday',    1),
+            ('tuesday',   2),
+            ('wednesday', 3),
+            ('thursday',  4),
+            ('friday',    5),
+            ('saturday',  6),
+            ('sunday',    7),
+        ]
+
+        cal_remove = calendar_dates.loc[calendar_dates['exception_type'] == 2]
+        cal_add    = calendar_dates.loc[calendar_dates['exception_type'] == 1]
+        cal_add_dated = Dates.merge(cal_add, how='right', left_on='Date_GTFS', right_on='date')
+
+        chunks: list = []
+        for _, row in calendar.iterrows():
+            for col, type_jour in weekday_map:
+                if row[col] == 1:
+                    mask = (
+                        (Dates['Type_Jour'] == type_jour)
+                        & (Dates['Date_GTFS'] >= row['start_date'])
+                        & (Dates['Date_GTFS'] <= row['end_date'])
+                    )
+                    df_day = Dates.loc[mask, ['Date_GTFS']].copy()
+                    df_day['id_service_num'] = row['id_service_num']
+                    chunks.append(df_day)
+
+        if chunks:
+            search_cal = pd.concat(chunks, ignore_index=True)
+        else:
+            search_cal = pd.DataFrame(columns=['Date_GTFS', 'id_service_num'])
+
+        # Joindre les infos Dates, puis exclure les jours supprimés (exception_type=2)
+        calendar_trait = search_cal.merge(Dates, on='Date_GTFS', how='left')
+        calendar_trait = calendar_trait.merge(
+            cal_remove[['date', 'id_service_num']],
+            left_on=['Date_GTFS', 'id_service_num'],
+            right_on=['date', 'id_service_num'],
+            how='left'
+        )
+        calendar_trait = calendar_trait.loc[calendar_trait['date'].isna()].drop(columns=['date'])
+
+        cal_final = pd.concat([calendar_trait, cal_add_dated], ignore_index=True)
+        cal_final = (
+            cal_final[cal_cols]
+            .drop_duplicates()
+            .sort_values(['id_service_num', 'Date_GTFS'])
+            .reset_index(drop=True)
+        )
+
+    msg_date = (
+        f"DataSet Valid: {cal_final['Date_GTFS'].min()} to {cal_final['Date_GTFS'].max()}"
+        if not cal_final.empty
+        else "No valid dates found."
+    )
     return cal_final, msg_date
 
-def course_generate(itineraire: pd.DataFrame) -> pd.DataFrame:
+def course_generate(itineraire: pd.DataFrame, itineraire_arc: pd.DataFrame) -> pd.DataFrame:
     """
-    汇总班次统计 (起点、终点、首发时间、到达终点时间)。
-    Input Schema: [id_ligne_num, id_service_num, id_course_num, direction_id, trip_headsign, arrival_time, departure_time, id_ap_num, id_ag_num, stop_sequence, ...]
-    Output Schema: [id_ligne_num, id_service_num, id_course_num, direction_id, trip_headsign, heure_depart, heure_arrive, id_ap_num_debut, id_ap_num_terminus, id_ag_num_debut, id_ag_num_terminus, nb_arrets, sous_ligne, ...]
+    汇总班次统计 (起点、终点、首发时间、到达终点时间、总距离)。
+    Input Schema:
+        itineraire: [id_ligne_num, id_service_num, id_course_num, direction_id, trip_headsign, arrival_time, departure_time, id_ap_num, id_ag_num, stop_sequence, ...]
+        itineraire_arc: [id_course_num, DIST_Vol_Oiseau, ...]
+    Output Schema: [id_ligne_num, id_service_num, id_course_num, direction_id, trip_headsign, heure_depart, heure_arrive, id_ap_num_debut, id_ap_num_terminus, id_ag_num_debut, id_ag_num_terminus, nb_arrets, DIST_Vol_Oiseau, sous_ligne, ...]
     """
-    course = itineraire.groupby(['id_ligne_num', 'id_service_num', 'id_course_num', 'direction_id', 'trip_headsign'], as_index=False).agg({
+    course = itineraire.groupby(
+        ['id_ligne_num', 'id_service_num', 'id_course_num', 'direction_id', 'trip_headsign'],
+        as_index=False
+    ).agg({
         'arrival_time': 'min',
         'departure_time': 'max',
         'id_ap_num': ['first', 'last'],
         'id_ag_num': ['first', 'last'],
         'stop_sequence': 'max'
     })
-    
+
     # 扁平化多层列
     course.columns = [''.join(col).strip() for col in course.columns.values]
-    
+
     course.rename(columns={
-        'arrival_timemin': 'heure_depart', 
+        'arrival_timemin': 'heure_depart',
         'departure_timemax': 'heure_arrive',
-        'id_ap_numfirst': 'id_ap_num_debut', 
+        'id_ap_numfirst': 'id_ap_num_debut',
         'id_ap_numlast': 'id_ap_num_terminus',
-        'id_ag_numfirst': 'id_ag_num_debut', 
+        'id_ag_numfirst': 'id_ag_num_debut',
         'id_ag_numlast': 'id_ag_num_terminus',
         'stop_sequencemax': 'nb_arrets'
     }, inplace=True)
-    
-    # 构建子路线键 (用于区分不同的行车路径)
-    course['sous_ligne'] = (course['id_ligne_num'].astype(str) + '_' + 
-                             course['direction_id'].astype(str) + '_' + 
-                             course['id_ag_num_debut'].astype(str) + '_' + 
-                             course['id_ag_num_terminus'].astype(str))
-    
+
+    # Agréger la distance vol d'oiseau depuis les arcs (参见 legacy 537-538)
+    dist = itineraire_arc.groupby('id_course_num', as_index=False)['DIST_Vol_Oiseau'].sum()
+    course = course.merge(dist, on='id_course_num', how='left')
+
+    # Clé sous-ligne incluant la distance (参见 legacy 539)
+    course['sous_ligne'] = (course['id_ligne_num'].astype(str) + '_' +
+                             course['direction_id'].astype(str) + '_' +
+                             course['id_ag_num_debut'].astype(str) + '_' +
+                             course['id_ag_num_terminus'].astype(str) + '_' +
+                             course['nb_arrets'].astype(str) + '_' +
+                             course['DIST_Vol_Oiseau'].astype(str))
+
     return course
 
 def itiarc_generate(itineraire: pd.DataFrame, AG: pd.DataFrame) -> pd.DataFrame:
     """
     生成相邻站点之间的运行段 (Arcs)。
     Input Schema:
-        itineraire: [id_course_num, stop_sequence, id_ag_num, ...]
+        itineraire: [id_course_num, id_ligne_num, id_service_num, direction_id, stop_sequence, id_ap_num, id_ag_num, arrival_time, departure_time, TH, trip_headsign, ...]
         AG: [id_ag_num, stop_lat, stop_lon, ...]
-    Output Schema: [id_course_num, ordre_a, ordre_b, id_ag_num_a, id_ag_num_b, stop_lat_src, stop_lon_src, stop_lat_dst, stop_lon_dst, DIST_Vol_Oiseau, ...]
+    Output Schema: [id_course_num, id_ligne_num, id_service_num, direction_id, ordre_a, heure_depart, id_ap_num_a, id_ag_num_a, TH_a, ordre_b, heure_arrive, id_ap_num_b, id_ag_num_b, TH_b, DIST_Vol_Oiseau]
     """
     R = itineraire.copy().drop(['departure_time', 'id_service_num', 'id_ligne_num'], axis=1)
     L = itineraire.copy().drop(['arrival_time'], axis=1)
     L['ordre_b'] = R['stop_sequence'] + 1
-    
-    # 关联 A 点与 B 点
-    iti_arc = L.merge(R, left_on=['id_course_num', 'ordre_b'], right_on=['id_course_num', 'stop_sequence'], suffixes=('_a', '_b'))
-    iti_arc = iti_arc.dropna(subset=['id_ag_num_b']).reset_index(drop=True)
-    
-    # 计算距离
-    AG_coor = AG[['id_ag_num', 'stop_lon', 'stop_lat']]
-    arc_dist = iti_arc.merge(AG_coor, left_on='id_ag_num_a', right_on='id_ag_num')
-    arc_dist = arc_dist.merge(AG_coor, left_on='id_ag_num_b', right_on='id_ag_num', suffixes=('_src', '_dst'))
-    
-    # 向量化计算大地距离
-    arc_dist['DIST_Vol_Oiseau'] = np.around(np.vectorize(getDistHaversine)(
-        arc_dist.stop_lat_src, arc_dist.stop_lon_src, 
-        arc_dist.stop_lat_dst, arc_dist.stop_lon_dst), 0)
-        
-    return arc_dist
 
-def caract_par_sl(courses: pd.DataFrame, hpm_range: Tuple[float, float], hps_range: Tuple[float, float]) -> pd.DataFrame:
+    # Joindre A et B en incluant direction_id comme clé (参见 legacy 520)
+    iti_arc = L.merge(
+        R,
+        how='left',
+        left_on=['id_course_num', 'ordre_b', 'direction_id'],
+        right_on=['id_course_num', 'stop_sequence', 'direction_id'],
+        suffixes=('_a', '_b')
+    )
+    iti_arc = iti_arc.dropna(subset=['id_ag_num_b']).reset_index(drop=True)
+
+    # Coordonnées des AG pour calcul de distance
+    AG_coor = AG[['id_ag_num', 'stop_lon', 'stop_lat']]
+    arc_dist = iti_arc.merge(AG_coor, left_on='id_ag_num_a', right_on='id_ag_num', how='left') \
+                      .merge(AG_coor, left_on='id_ag_num_b', right_on='id_ag_num', how='left',
+                             suffixes=('_src', '_dst'))
+
+    # Calcul vectorisé (直接传 numpy array，非 np.vectorize，参见 OPTIMIZATION_REPORT §4.2)
+    arc_dist['DIST_Vol_Oiseau'] = np.around(
+        getDistHaversine(
+            arc_dist['stop_lat_src'].values, arc_dist['stop_lon_src'].values,
+            arc_dist['stop_lat_dst'].values, arc_dist['stop_lon_dst'].values
+        ), 0)
+
+    # Sélection et renommage final (参见 legacy 523-525)
+    cols = ['id_course_num', 'id_ligne_num', 'id_service_num', 'direction_id',
+            'stop_sequence_a', 'departure_time', 'id_ap_num_a', 'id_ag_num_a', 'TH_a',
+            'stop_sequence_b', 'arrival_time', 'id_ap_num_b', 'id_ag_num_b', 'TH_b',
+            'DIST_Vol_Oiseau']
+    return arc_dist[cols].rename(columns={
+        'stop_sequence_a': 'ordre_a',
+        'departure_time':  'heure_depart',
+        'stop_sequence_b': 'ordre_b',
+        'arrival_time':    'heure_arrive',
+    })
+
+def caract_par_sl(
+    service_jour_type: pd.DataFrame,
+    courses: pd.DataFrame,
+    hpm_range: Tuple[float, float],
+    hps_range: Tuple[float, float],
+    type_vac: str,
+    sous_ligne: pd.DataFrame
+) -> pd.DataFrame:
     """
-    计算子路线 (SL) 的特征，如发车间隔 (Headway) 和运营周期。
+    计算子路线 (SL) 的特征：首末班、班次数及 5 段发车间隔 (Headway)。
+    Input Schema:
+        service_jour_type: [id_ligne_num, id_service_num, <type_vac>, Date_GTFS]
+        courses: [id_course_num, id_ligne_num, id_service_num, sous_ligne, h_dep_num, h_arr_num, ...]
+        hpm_range: (debut_HPM, fin_HPM) en fraction de jour (ex. 7/24, 9/24)
+        hps_range: (debut_HPS, fin_HPS) en fraction de jour (ex. 17/24, 19/24)
+        type_vac: colonne jour-type (ex. 'Type_Jour', 'Type_Jour_Vacances_A')
+        sous_ligne: [sous_ligne, id_ligne_num, route_short_name, route_long_name]
+    Output Schema: [sous_ligne, id_ligne_num, route_short_name, route_long_name, <type_vac>,
+                    Debut, Fin, Duree, Nb_courses,
+                    Headway_FM, Headway_HPM, Headway_HC, Headway_HPS, Headway_FS]
     """
-    # 这里集成原有的 periode 逻辑
-    res = courses.copy()
-    # TODO: 详细的 Headway (HPM, HPS) 分段统计逻辑
-    return res
+    debut_HPM, fin_HPM = hpm_range
+    debut_HPS, fin_HPS = hps_range
+
+    # Jointure avec le jour-type (参见 legacy 717)
+    courses_jtype = courses.merge(service_jour_type, on=['id_ligne_num', 'id_service_num'])
+
+    # Statistiques globales par sous-ligne / jour-type (参见 legacy 719-722)
+    caract = courses_jtype.groupby(['sous_ligne', type_vac], as_index=False).agg(
+        Debut=('h_dep_num', 'min'),
+        Fin=('h_arr_num', 'max'),
+        Nb_courses=('id_course_num', 'count')
+    )
+    caract['Duree'] = caract['Fin'] - caract['Debut']
+
+    # Affectation des périodes (参见 legacy 725-735)
+    h = courses_jtype['h_dep_num']
+    courses_jtype = courses_jtype.copy()
+    courses_jtype['periode'] = np.select(
+        [
+            h < debut_HPM,
+            (h >= debut_HPM) & (h < fin_HPM),
+            (h >= fin_HPM)   & (h < debut_HPS),
+            (h >= debut_HPS) & (h < fin_HPS),
+            h >= fin_HPS,
+        ],
+        ['FM', 'HPM', 'HC', 'HPS', 'FS'],
+        default='HC'
+    )
+
+    # Nombre de courses par période (参见 legacy 737-738)
+    headway = courses_jtype.groupby([type_vac, 'sous_ligne', 'periode'], as_index=False)['id_course_num'].count() \
+                           .rename(columns={'id_course_num': 'nb_courses'})
+    headway_pv = pd.pivot_table(
+        headway, values='nb_courses',
+        index=['sous_ligne', type_vac], columns='periode',
+        fill_value=0, aggfunc=np.sum
+    ).reset_index()
+    # S'assurer que toutes les colonnes période existent
+    for p in ['FM', 'HPM', 'HC', 'HPS', 'FS']:
+        if p not in headway_pv.columns:
+            headway_pv[p] = 0
+
+    # Durées des plages en minutes (参见 legacy 739-743)
+    h_min = courses_jtype['h_dep_num'].min()
+    h_max = courses_jtype['h_dep_num'].max()
+    duration_FM  = (debut_HPM - h_min)  * 24 * 60
+    duration_HPM = (fin_HPM   - debut_HPM) * 24 * 60
+    duration_HC  = (debut_HPS - fin_HPM)   * 24 * 60
+    duration_HPS = (fin_HPS   - debut_HPS) * 24 * 60
+    duration_FS  = (h_max     - fin_HPS)   * 24 * 60
+
+    # Calcul Headway = durée_plage / nb_courses (参见 legacy 744-749)
+    headway_pv['Headway_FM']  = duration_FM  / headway_pv['FM']
+    headway_pv['Headway_HPM'] = duration_HPM / headway_pv['HPM']
+    headway_pv['Headway_HC']  = duration_HC  / headway_pv['HC']
+    headway_pv['Headway_HPS'] = duration_HPS / headway_pv['HPS']
+    headway_pv['Headway_FS']  = duration_FS  / headway_pv['FS']
+    headway_pv = headway_pv.replace(np.inf, np.nan).drop(columns=['FM', 'HPM', 'HC', 'HPS', 'FS'])
+
+    caract_fin = caract.merge(headway_pv, on=['sous_ligne', type_vac])
+    ligne_names = sous_ligne[['sous_ligne', 'id_ligne_num', 'route_short_name', 'route_long_name']]
+    return ligne_names.merge(caract_fin, on='sous_ligne')
+
+def sl_generate(course: pd.DataFrame, AG: pd.DataFrame, lignes: pd.DataFrame) -> pd.DataFrame:
+    """
+    Génère la table des sous-lignes (B_2) par déduplication des courses.
+    Input Schema:
+        course: [sous_ligne, id_ligne_num, id_ag_num_debut, id_ag_num_terminus, direction_id, nb_arrets, DIST_Vol_Oiseau, id_course_num, ...]
+        AG: [id_ag_num, stop_name, ...]
+        lignes: [id_ligne_num, route_short_name, route_long_name, ...]
+    Output Schema: [sous_ligne, id_ligne_num, route_short_name, route_long_name, id_ag_num_debut, id_ag_num_terminus, direction_id, nb_arrets, DIST_Vol_Oiseau, ag_origin_name, ag_destination_name]
+    """
+    sous_ligne = course.groupby(
+        ['sous_ligne', 'id_ligne_num', 'id_ag_num_debut', 'id_ag_num_terminus',
+         'direction_id', 'nb_arrets', 'DIST_Vol_Oiseau'],
+        as_index=False
+    )['id_course_num'].count().drop(columns=['id_course_num'])
+
+    ag_simple = AG[['id_ag_num', 'stop_name']]
+    sl_merge = sous_ligne.merge(ag_simple, left_on='id_ag_num_debut', right_on='id_ag_num') \
+                         .merge(ag_simple, left_on='id_ag_num_terminus', right_on='id_ag_num',
+                                suffixes=('_origin', '_dest'))
+    sl_merge.drop(columns=['id_ag_num_origin', 'id_ag_num_dest'], inplace=True)
+    sl_merge.rename(columns={'stop_name_origin': 'ag_origin_name',
+                              'stop_name_dest':   'ag_destination_name'}, inplace=True)
+    ligne_names = lignes[['id_ligne_num', 'route_short_name', 'route_long_name']]
+    return ligne_names.merge(sl_merge, on='id_ligne_num')
+
+def service_jour_type_generate(service_date: pd.DataFrame,
+                                course: pd.DataFrame,
+                                type_vacances: str) -> pd.DataFrame:
+    """
+    Génère la matrice jour-type de service (D_2).
+    Pour chaque (id_ligne_num, id_service_num), sélectionne le jour représentatif
+    (le jour où le nombre de courses est le plus fréquent).
+    Input Schema:
+        service_date: [id_service_num, Date_GTFS, <type_vacances>, ...]
+        course: [id_course_num, id_ligne_num, id_service_num, ...]
+        type_vacances: str — colonne jour-type (ex. 'Type_Jour', 'Type_Jour_Vacances_A')
+    Output Schema: [id_ligne_num, id_service_num, <type_vacances>, Date_GTFS]
+    """
+    crs_simple = course[['id_course_num', 'id_ligne_num', 'id_service_num']]
+    crs_dates = crs_simple.merge(service_date, how='left', on='id_service_num')
+
+    # Nombre de courses par jour et type
+    nb_crs = crs_dates.groupby(['Date_GTFS', 'id_ligne_num', type_vacances], as_index=False) \
+                      ['id_course_num'].count().rename(columns={'id_course_num': 'count'})
+
+    # Nombre de jours ayant ce nb de courses
+    nb_jr = nb_crs.groupby(['id_ligne_num', type_vacances, 'count'], as_index=False) \
+                  ['Date_GTFS'].count().rename(columns={'Date_GTFS': 'count_days'})
+
+    max_jr = nb_jr.groupby(['id_ligne_num', type_vacances], as_index=False)['count_days'].max() \
+                  .rename(columns={'count_days': 'max_days'})
+
+    ncours_jtype = nb_jr.merge(max_jr, how='left', on=['id_ligne_num', type_vacances])
+
+    # Jour représentatif = jour le plus fréquent avec le nb de courses max
+    choix = nb_crs.merge(ncours_jtype, how='left', on=['id_ligne_num', type_vacances, 'count'])
+    choix = choix[choix['count_days'] == choix['max_days']] \
+                .groupby(['id_ligne_num', type_vacances], as_index=False) \
+                .agg(Date_GTFS=('Date_GTFS', 'first'), count=('count', 'max'))
+
+    sj_1 = crs_dates.merge(choix, how='left', on=['id_ligne_num', type_vacances, 'Date_GTFS']) \
+                    .dropna(subset=['count']).reset_index(drop=True)
+
+    return sj_1.groupby(['id_ligne_num', 'id_service_num', type_vacances], as_index=False) \
+               .agg(Date_GTFS=('Date_GTFS', 'first'))
+
+def kcc_course_sl(service_jour_type: pd.DataFrame,
+                  courses: pd.DataFrame,
+                  type_vac: str,
+                  sous_ligne: pd.DataFrame,
+                  has_shp: bool) -> pd.DataFrame:
+    """
+    Calcule les kilomètres-course par sous-ligne (F_3/F_4).
+    Input Schema:
+        service_jour_type: [id_ligne_num, id_service_num, <type_vac>, ...]
+        courses: [id_course_num, id_ligne_num, id_service_num, sous_ligne, DIST_Vol_Oiseau | Dist_shape, ...]
+        type_vac: colonne jour-type
+        sous_ligne: [sous_ligne, id_ligne_num, route_short_name, route_long_name, ...]
+        has_shp: True → utiliser 'Dist_shape', False → 'DIST_Vol_Oiseau'
+    Output Schema: [sous_ligne, id_ligne_num, route_short_name, route_long_name, <type_vac>_cols_km...]
+    """
+    dist_col = 'Dist_shape' if has_shp else 'DIST_Vol_Oiseau'
+    crs_tj = courses.merge(service_jour_type, on=['id_ligne_num', 'id_service_num'])
+    dist_sum = crs_tj.groupby(['sous_ligne', type_vac], as_index=False)[dist_col].sum()
+    dist_sum[dist_col] = dist_sum[dist_col] / 1000.0
+    pv = pd.pivot_table(dist_sum, values=dist_col, index='sous_ligne',
+                        columns=type_vac, fill_value=0, aggfunc=np.sum).reset_index()
+    sl_names = sous_ligne[['sous_ligne', 'id_ligne_num', 'route_short_name', 'route_long_name']]
+    return sl_names.merge(pv, on='sous_ligne')
 
 def nb_passage_ag(service_jour_type: pd.DataFrame, itineraire: pd.DataFrame, AG: pd.DataFrame, type_vac: str) -> pd.DataFrame:
     """计算各站点的通过班次数。"""

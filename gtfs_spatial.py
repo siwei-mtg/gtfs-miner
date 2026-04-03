@@ -21,6 +21,50 @@ from scipy.cluster.vq import kmeans2
 from typing import Tuple, Dict
 from gtfs_utils import distmatrice, getDistHaversine
 
+def ag_ap_generate_bigvolume(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    针对大数据量 (>5000 个站点) 的两阶段聚类：K-Means 粗分组 + 组内层次聚类细化。
+    Input Schema: [stop_id, stop_name, stop_lat, stop_lon, location_type, ...]
+    Output Schema (Tuple):
+        AP: [id_ap, id_ag, id_ag_num, id_ap_num, stop_name, stop_lat, stop_lon, ...]
+        AG: [id_ag, id_ag_num, stop_name, stop_lat, stop_lon, ...]
+    """
+    AP = raw_stops.loc[raw_stops.location_type == 0, :].reset_index(drop=True)
+    if AP.empty:
+        return AP, pd.DataFrame()
+
+    # 阶段 1: K-Means 粗分组 (每组约 500 站点)
+    coor = AP[['stop_lon', 'stop_lat']].to_numpy()
+    k = max(1, round(len(coor) / 500))
+    _, labels = kmeans2(coor, k, minit='points')
+    AP['kmean_id'] = labels
+
+    # 阶段 2: 各 K-Means 簇内做层次聚类细化 (100 米截断，参见 legacy 424-429)
+    AP['clust_id'] = 0
+    for i in range(k):
+        cluster_mask = AP['kmean_id'] == i
+        AP_sub = AP.loc[cluster_mask, ['stop_lat', 'stop_lon']]
+        if len(AP_sub) < 2:
+            AP.loc[cluster_mask, 'clust_id'] = 0
+            continue
+        distmat = distmatrice(AP_sub.to_numpy())
+        sub_labels = cut_tree(linkage(distmat, method='complete'), height=100).flatten()
+        AP.loc[cluster_mask, 'clust_id'] = sub_labels
+
+    AP['id_ag'] = AP['kmean_id'].astype(str) + '_' + AP['clust_id'].astype(int).astype(str)
+    AP['id_ap_num'] = np.arange(1, len(AP) + 1) + 100000
+
+    AG = AP.groupby('id_ag', as_index=False).agg(
+        stop_name=('stop_name', 'first'),
+        stop_lat=('stop_lat', 'mean'),
+        stop_lon=('stop_lon', 'mean')
+    )
+    AG['id_ag_num'] = np.arange(1, len(AG) + 1) + 10000
+
+    AP = AP.merge(AG[['id_ag', 'id_ag_num']], on='id_ag')
+    AP = AP.rename(columns={'stop_id': 'id_ap'})
+    return AP, AG
+
 def ag_ap_generate_hcluster(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     通过层次聚类生成父站点 (AG/AP)。
@@ -96,13 +140,24 @@ def ag_ap_generate_reshape(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Da
     nb_types = len(raw_stops.location_type.unique())
     ap_no_parent = raw_stops[raw_stops['location_type'] == 0]['parent_station'].isnull().sum()
     
-    if nb_types == 1 or ap_no_parent > 0:
-        # TODO: 集成 bigvolume (K-Means) 逻辑
-        AP, AG = ag_ap_generate_hcluster(raw_stops)
+    ap_potentiel = len(raw_stops.loc[raw_stops['location_type'] == 0])
+
+    if nb_types == 1:
+        if ap_potentiel >= 5000:
+            AP, AG = ag_ap_generate_bigvolume(raw_stops)
+        else:
+            AP, AG = ag_ap_generate_hcluster(raw_stops)
         marker = 'cluster_method'
-    else:
+    elif ap_no_parent == 0:
         AP, AG = ag_ap_generate_asit(raw_stops)
         marker = 'original_parent_station'
+    else:
+        # Partiellement renseigné : on choisit selon le volume
+        if ap_potentiel >= 5000:
+            AP, AG = ag_ap_generate_bigvolume(raw_stops)
+        else:
+            AP, AG = ag_ap_generate_hcluster(raw_stops)
+        marker = 'cluster_method'
         
     return AP, AG, marker
 

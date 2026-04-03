@@ -20,7 +20,6 @@ import chardet
 from zipfile import ZipFile
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional, List, Union
-from scipy.cluster.vq import kmeans2
 from gtfs_utils import norm_upper_str, nan_in_col_workaround, encoding_guess
 
 # 常量定义
@@ -52,9 +51,13 @@ def stops_norm(raw_stops: pd.DataFrame) -> pd.DataFrame:
     stops.stop_name = norm_upper_str(stops.stop_name)
     stops.stop_id = nan_in_col_workaround(stops.stop_id)
     
-    # 坐标转换与容错
+    # 坐标转换与容错 (try/except 覆盖编码异常，如空格、不可见字符，参见 legacy 223-231)
     for col in ['stop_lat', 'stop_lon']:
-        stops[col] = pd.to_numeric(stops[col].astype(str).str.strip(), errors='coerce').fillna(0).astype(np.float32)
+        try:
+            cleaned = stops[col].astype(str).str.strip().replace('', '0')
+            stops[col] = pd.to_numeric(cleaned, errors='coerce').fillna(0).astype(np.float32)
+        except (ValueError, TypeError):
+            stops[col] = np.float32(0.0)
     
     stops.stop_name = norm_upper_str(stops.stop_name)
     stops.location_type = stops.location_type.fillna(DEFAULT_LOCATION_TYPE).astype(np.int8)
@@ -103,6 +106,8 @@ def trips_norm(raw_trips: pd.DataFrame) -> pd.DataFrame:
     trips[cols] = trips[cols].astype(str)
     if not trips.empty:
         trips['id_course_num'] = np.arange(1, len(trips) + 1)
+        if 'shape_id' in trips.columns and trips['shape_id'].isna().all():
+            trips.drop(columns=['shape_id'], inplace=True)
     return trips
 
 def stop_times_norm(raw_stoptimes: pd.DataFrame) -> Tuple[pd.DataFrame, str, int]:
@@ -112,25 +117,71 @@ def stop_times_norm(raw_stoptimes: pd.DataFrame) -> Tuple[pd.DataFrame, str, int
     Output Schema: [trip_id, arrival_time, departure_time, stop_id, stop_sequence, timepoint, ...]
     Return: (DataFrame, NA_Summary_String, NA_Count_in_Time_Cols)
     """
-    stop_times_v = pd.DataFrame(columns=['trip_id', 'arrival_time', 'departure_time','stop_id', 
+    stop_times_v = pd.DataFrame(columns=['trip_id', 'arrival_time', 'departure_time', 'stop_id',
                                           'stop_sequence', 'timepoint'])
     stop_times = pd.concat([stop_times_v, raw_stoptimes], ignore_index=True)
-    
+
     # 统计缺失值
     na_summary = f"Total: {len(stop_times)}. NAs: {stop_times.isna().sum().to_dict()}"
-    
-    # 时间列清洗逻辑 (简化版，保留原逻辑)
+
     time_cols = ['arrival_time', 'departure_time']
-    time_na_count = stop_times[time_cols].isna().sum().sum()
-    
+    time_na_count = int(stop_times[time_cols].isna().sum().sum())
+
     if time_na_count > 0:
-        # 如果是 timepoint 模式，尝试填充
-        stop_times.loc[:, time_cols] = stop_times.groupby('trip_id')[time_cols].transform(lambda x: x.ffill().bfill())
-        
+        # Si timepoint est renseigné, filtrer les arrêts chronométrés avant interpolation (参见 legacy 295)
+        has_timepoint = ('timepoint' in stop_times.columns
+                         and stop_times['timepoint'].notna().any())
+        if has_timepoint:
+            timed = stop_times.loc[stop_times['timepoint'] == 1].copy()
+            timed[time_cols] = timed.groupby('trip_id')[time_cols].transform(lambda x: x.ffill().bfill())
+            # Retirer les lignes toujours sans heure après interpolation
+            timed = timed.loc[timed[time_cols[0]].notna() | timed[time_cols[1]].notna()]
+            stop_times = timed
+        else:
+            stop_times.loc[:, time_cols] = stop_times.groupby('trip_id')[time_cols].transform(
+                lambda x: x.ffill().bfill())
+
     stop_times[['trip_id', 'stop_id']] = stop_times[['trip_id', 'stop_id']].astype(str)
     stop_times['stop_sequence'] = pd.to_numeric(stop_times['stop_sequence'], errors='coerce').fillna(0).astype(np.int32)
-    
+
+    # Conserver shape_dist_traveled si présent (参见 legacy 309)
+    if 'shape_dist_traveled' in stop_times.columns:
+        stop_times['shape_dist_traveled'] = pd.to_numeric(
+            stop_times['shape_dist_traveled'], errors='coerce').astype(np.float32)
+
+    stop_times.dropna(how='all', axis=1, inplace=True)
+
     return stop_times, na_summary, int(stop_times[time_cols].isna().sum().sum())
+
+def calendar_norm(raw_cal: pd.DataFrame) -> pd.DataFrame:
+    """
+    规范化 calendar.txt。
+    Input Schema: [service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, start_date, end_date]
+    Output Schema: [service_id, monday, ..., start_date, end_date]
+    """
+    cal_v = pd.DataFrame(columns=['service_id', 'monday', 'tuesday', 'wednesday',
+                                   'thursday', 'friday', 'saturday', 'sunday',
+                                   'start_date', 'end_date'])
+    calendar = pd.concat([cal_v, raw_cal], ignore_index=True)
+    calendar['service_id'] = calendar['service_id'].astype(str)
+    week_cols = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+    calendar[week_cols] = calendar[week_cols].fillna(0).astype(np.int8)
+    calendar['start_date'] = pd.to_numeric(calendar['start_date'], errors='coerce').fillna(0).astype(np.int32)
+    calendar['end_date'] = pd.to_numeric(calendar['end_date'], errors='coerce').fillna(0).astype(np.int32)
+    return calendar
+
+def cal_dates_norm(raw_caldates: pd.DataFrame) -> pd.DataFrame:
+    """
+    规范化 calendar_dates.txt。
+    Input Schema: [service_id, date, exception_type]
+    Output Schema: [service_id, date, exception_type]
+    """
+    cal_dates_v = pd.DataFrame(columns=['service_id', 'date', 'exception_type'])
+    calendar_dates = pd.concat([cal_dates_v, raw_caldates], ignore_index=True)
+    calendar_dates['service_id'] = calendar_dates['service_id'].astype(str)
+    calendar_dates['date'] = pd.to_numeric(calendar_dates['date'], errors='coerce').fillna(0).astype(np.int32)
+    calendar_dates['exception_type'] = pd.to_numeric(calendar_dates['exception_type'], errors='coerce').fillna(0).astype(np.int8)
+    return calendar_dates
 
 def rawgtfs_from_zip(zippath: Union[str, Path]) -> Dict[str, pd.DataFrame]:
     """
@@ -151,6 +202,19 @@ def rawgtfs_from_zip(zippath: Union[str, Path]) -> Dict[str, pd.DataFrame]:
                         df = pd.read_csv(f, encoding='latin-1', low_memory=False)
                 
                 result[stem] = df
+    return result
+
+def rawgtfs(dirpath: Union[str, Path]) -> Dict[str, pd.DataFrame]:
+    """
+    从本地目录读取 GTFS 原始 CSV 文件（ZIP 之外的目录输入）。
+    """
+    result = {}
+    for f in Path(dirpath).glob('*.txt'):
+        try:
+            df = pd.read_csv(f, encoding='utf-8', low_memory=False)
+        except UnicodeDecodeError:
+            df = pd.read_csv(f, encoding='latin-1', low_memory=False)
+        result[f.stem] = df
     return result
 
 def read_date(plugin_path: Path) -> pd.DataFrame:
@@ -182,77 +246,78 @@ def read_input(dirpath: Union[str, Path], plugin_path: Path) -> Tuple[Dict[str, 
     Input Schema: N/A
     Output Schema (Tuple): (Normed_Dict, Dates_DataFrame, Validite_DataFrame)
     """
-    # 模拟 rawgtfs 逻辑
-    raw_dict = {}
-    p = Path(dirpath)
-    for f in p.glob('*.txt'):
-        raw_dict[f.stem] = pd.read_csv(f)
+    raw_dict = rawgtfs(dirpath)
     
     normed = gtfs_normalize(raw_dict)
     dates = read_date(plugin_path)
     validite = read_validite(plugin_path)
     return normed, dates, validite
 
-def ag_ap_generate_bigvolume(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    针对大数据量的 K-Means 聚类生成逻辑。
-    Input Schema: [stop_id, stop_name, stop_lat, stop_lon, location_type, ...]
-    Output Schema (Tuple):
-        AP: [id_ap_num, id_ag_num, id_ag, kmean_id, ...]
-        AG: [id_ag, id_ag_num, stop_name, stop_lat, stop_lon, ...]
-    """
-    AP = raw_stops.loc[raw_stops.location_type == 0, :].reset_index(drop=True)
-    if AP.empty: return AP, pd.DataFrame()
-    
-    # 粗聚类
-    coor = AP[['stop_lon', 'stop_lat']].to_numpy()
-    k = max(1, round(len(coor) / 500))
-    _, labels = kmeans2(coor, k, minit='points')
-    AP['kmean_id'] = labels
-    
-    # 子簇细化逻辑在此处省略，目前返回粗聚类结果
-    AP['id_ag'] = AP['kmean_id'].astype(str)
-    AG = AP.groupby('id_ag', as_index=False).agg({
-        'stop_name': 'first', 'stop_lat': 'mean', 'stop_lon': 'mean'
-    })
-    AG['id_ag_num'] = np.arange(1, len(AG) + 1) + 10000
-    AP = AP.merge(AG[['id_ag', 'id_ag_num']], on='id_ag')
-    AP['id_ap_num'] = np.arange(1, len(AP) + 1) + 100000
-    
-    return AP, AG
-
 def gtfs_normalize(raw_dict: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
     """
     规范化流程总控制器。
-    Input Schema (Dict): {"agency": df, "routes": df, "stops": df, "trips": df, "stop_times": df}
-    Output Schema (Dict): {"agency": df, "routes": df, "stops": df, "trips": df, "stop_times": df, "route_id_coor": df, "trip_id_coor": df, "ser_id_coor": df, "initial_na": str, "final_na_time_col": int}
+    Input Schema (Dict): {"agency": df, "routes": df, "stops": df, "trips": df, "stop_times": df,
+                          "calendar": df (optional), "calendar_dates": df (optional)}
+    Output Schema (Dict): {"agency": df, "routes": df, "stops": df, "trips": df, "stop_times": df,
+                           "calendar": df|None, "calendar_dates": df,
+                           "route_id_coor": df, "trip_id_coor": df, "ser_id_coor": df,
+                           "initial_na": str, "final_na_time_col": int}
     """
     agency = agency_norm(raw_dict.get('agency', pd.DataFrame()))
     routes = routes_norm(raw_dict.get('routes', pd.DataFrame()))
     stops = stops_norm(raw_dict.get('stops', pd.DataFrame()))
     trips = trips_norm(raw_dict.get('trips', pd.DataFrame()))
     st_processed, st_msg, st_na = stop_times_norm(raw_dict.get('stop_times', pd.DataFrame()))
-    
+
     # ID 映射准备
     route_coor = routes[['route_id', 'id_ligne_num']]
     trip_coor = trips[['trip_id', 'id_course_num']]
-    
+
     # 关联映射
     trips = trips.merge(route_coor, on='route_id').drop('route_id', axis=1)
-    
-    # Generate service mapping
+
+    # 服务 ID 映射
     ser_id_coor = pd.DataFrame({'service_id': trips.dropna(subset=['service_id'])['service_id'].unique()})
     ser_id_coor['id_service_num'] = np.arange(1, len(ser_id_coor) + 1)
     trips = trips.merge(ser_id_coor, on='service_id', how='left')
-    
+
     st_processed = st_processed.merge(trip_coor, on='trip_id').drop('trip_id', axis=1)
-    
+
+    # Calendar 规范化 (try/except，空表 → None，参见 legacy 352-358)
+    try:
+        raw_cal = raw_dict.get('calendar', pd.DataFrame())
+        if raw_cal.empty:
+            calendar = None
+        else:
+            calendar = calendar_norm(raw_cal)
+            calendar = calendar.merge(ser_id_coor, on='service_id').drop(columns=['service_id'])
+            if calendar.empty:
+                calendar = None
+    except Exception:
+        calendar = None
+
+    # Calendar dates 规范化
+    raw_caldates = raw_dict.get('calendar_dates', pd.DataFrame())
+    if raw_caldates.empty:
+        calendar_dates = pd.DataFrame(columns=['service_id', 'date', 'exception_type', 'id_service_num'])
+    else:
+        calendar_dates = cal_dates_norm(raw_caldates)
+        calendar_dates = calendar_dates.merge(ser_id_coor, on='service_id', how='left')
+
+    # Shapes (optionnel, transmis tel quel pour corr_sl_shape / kcc, 参见 legacy 362-378)
+    shapes = raw_dict.get('shapes', None)
+    if shapes is not None and shapes.empty:
+        shapes = None
+
     return {
         'agency': agency,
         'routes': routes,
         'stops': stops,
         'trips': trips,
         'stop_times': st_processed,
+        'calendar': calendar,
+        'calendar_dates': calendar_dates,
+        'shapes': shapes,
         'route_id_coor': route_coor,
         'trip_id_coor': trip_coor,
         'ser_id_coor': ser_id_coor,

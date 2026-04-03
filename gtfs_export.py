@@ -54,9 +54,10 @@ def MEF_course(courses: pd.DataFrame, trip_id_coor: pd.DataFrame) -> pd.DataFram
         trip_id_coor: [id_course_num, trip_id, ...]
     Output Schema: [trip_id, id_course_num, id_ligne_num, sous_ligne, id_service_num, direction_id, heure_depart, heure_arrive, id_ap_num_debut, id_ap_num_terminus, id_ag_num_debut, id_ag_num_terminus, nb_arrets]
     """
-    export_cols = ['trip_id', 'id_course_num', 'id_ligne_num', 'sous_ligne', 'id_service_num', 
-                   'direction_id', 'heure_depart', 'heure_arrive', 'id_ap_num_debut', 
-                   'id_ap_num_terminus', 'id_ag_num_debut', 'id_ag_num_terminus', 'nb_arrets']
+    export_cols = ['trip_id', 'id_course_num', 'id_ligne_num', 'sous_ligne', 'id_service_num',
+                   'direction_id', 'heure_depart', 'h_dep_num', 'heure_arrive', 'h_arr_num',
+                   'id_ap_num_debut', 'id_ap_num_terminus', 'id_ag_num_debut', 'id_ag_num_terminus',
+                   'nb_arrets', 'DIST_Vol_Oiseau']
     
     res = courses.merge(trip_id_coor, left_on='id_course_num', right_on='id_course_num')
     res = res.rename(columns={'heure_depart': 'h_dep_num', 'heure_arrive': 'h_arr_num'})

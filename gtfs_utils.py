@@ -95,6 +95,14 @@ def nan_in_col_workaround(pd_serie: pd.Series) -> pd.Series:
     # 尝试转换为数字，如果失败则按字符串处理
     return pd_serie.astype(str).replace(['nan', 'NaN', 'None', '-1', '-1.0'], np.nan)
 
+def duree_arc(df: pd.DataFrame) -> float:
+    """
+    Calcule la durée d'un groupe d'arcs (fraction de jour Excel).
+    Input Schema: [heure_arrive, heure_depart]
+    Output: float — max(heure_arrive) - min(heure_depart)
+    """
+    return float(df['heure_arrive'].max() - df['heure_depart'].min())
+
 def encoding_guess(acces: Path) -> dict:
     """
     自动检测文件编码。
