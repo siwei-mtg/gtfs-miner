@@ -1,0 +1,225 @@
+﻿sous_ligne;id_ligne_num;route_short_name;route_long_name;1;2;3;4;5;6;7
+1_0_10255_10767_26_5370.0;1;C1;Grenoble Cité Jean Macé / Montbonnot-Saint-Martin Pré de l'Eau;563.85;563.85;563.85;563.85;563.85;440.34;279.24
+1_0_10526_10767_26_8818.0;1;C1;Grenoble Cité Jean Macé / Montbonnot-Saint-Martin Pré de l'Eau;0.0;0.0;0.0;0.0;0.0;0.0;8.818
+1_1_10155_10255_25_6529.0;1;C1;Grenoble Cité Jean Macé / Montbonnot-Saint-Martin Pré de l'Eau;711.661;711.661;711.661;711.661;711.661;541.907;352.566
+2_0_10631_10708_15_4471.0;2;C2;Grenoble Louise Michel / Claix Pont Rouge;545.462;545.462;545.462;545.462;545.462;406.861;241.434
+2_1_10708_10631_15_4471.0;2;C2;Grenoble Louise Michel / Claix Pont Rouge;549.933;549.933;549.933;549.933;549.933;406.861;245.905
+3_0_10767_10327_12_0.0;3;C3;Échirolles Centre du graphisme / Grenoble Victor Hugo;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+3_0_10767_10333_22_310.0;3;C3;Échirolles Centre du graphisme / Grenoble Victor Hugo;33.79;33.79;33.79;33.79;33.79;25.73;15.81
+3_1_10327_10767_13_0.0;3;C3;Échirolles Centre du graphisme / Grenoble Victor Hugo;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+3_1_10333_10767_22_818.0;3;C3;Échirolles Centre du graphisme / Grenoble Victor Hugo;91.616;91.616;91.616;91.616;91.616;67.894;41.718
+4_0_10241_10767_12_718.0;4;C4;Grenoble Victor Hugo / Eybens Le Verderet;1.436;1.436;1.436;1.436;1.436;0.0;0.0
+4_0_10473_10767_11_322.0;4;C4;Grenoble Victor Hugo / Eybens Le Verderet;1.61;1.61;1.61;1.61;1.61;0.0;0.0
+4_0_10758_10767_17_981.0;4;C4;Grenoble Victor Hugo / Eybens Le Verderet;111.834;111.834;111.834;111.834;111.834;81.423;50.031
+4_1_10767_10241_12_718.0;4;C4;Grenoble Victor Hugo / Eybens Le Verderet;7.898;7.898;7.898;7.898;7.898;0.0;0.0
+4_1_10767_10758_17_1281.0;4;C4;Grenoble Victor Hugo / Eybens Le Verderet;142.191;142.191;142.191;142.191;142.191;106.323;65.331
+5_0_10279_10079_27_2648.0;5;C5;Gières Université - Biologie / Grenoble Palais de Justice - Gare;285.984;285.984;285.984;285.984;285.984;238.32;137.696
+5_1_10079_10279_27_3391.0;5;C5;Gières Université - Biologie / Grenoble Palais de Justice - Gare;356.055;356.055;356.055;356.055;356.055;305.19;172.941
+6_0_10487_10473_31_5439.0;6;C6;Eybens Maisons Neuves / Grenoble Oxford;5.439;5.439;5.439;5.439;5.439;16.317;0.0
+6_0_10548_10327_27_3972.0;6;C6;Eybens Maisons Neuves / Grenoble Oxford;27.804;27.804;27.804;27.804;27.804;27.804;27.804
+6_0_10548_10473_31_5130.0;6;C6;Eybens Maisons Neuves / Grenoble Oxford;405.27;405.27;405.27;405.27;405.27;359.1;220.59
+6_1_10327_10548_26_3972.0;6;C6;Eybens Maisons Neuves / Grenoble Oxford;23.832;23.832;23.832;23.832;23.832;23.832;23.832
+6_1_10473_10548_30_5130.0;6;C6;Eybens Maisons Neuves / Grenoble Oxford;420.66;420.66;420.66;420.66;420.66;384.75;230.85
+7_0_10282_10249_25_2265.0;7;C7;Échirolles Comboire / Saint-Martin-d'Hères Henri Wallon;212.91;212.91;212.91;212.91;199.32;187.995;113.25
+7_1_10207_10282_25_4429.0;7;C7;Échirolles Comboire / Saint-Martin-d'Hères Henri Wallon;429.613;429.613;429.613;429.613;398.61;358.749;221.45
+8_0_10079_10066_36_2864.0;8;C8;Grenoble Victor Hugo - Belgrade / Gières Université - IUT-STAPS;25.776;25.776;25.776;25.776;25.776;117.424;140.336
+8_0_10327_10066_20_206.0;8;C8;Grenoble Victor Hugo - Belgrade / Gières Université - IUT-STAPS;1.236;1.236;1.236;1.236;1.236;0.0;0.0
+8_0_10367_10066_38_3510.0;8;C8;Grenoble Victor Hugo - Belgrade / Gières Université - IUT-STAPS;326.43;326.43;326.43;326.43;326.43;136.89;0.0
+8_1_10066_10079_37_1481.0;8;C8;Grenoble Victor Hugo - Belgrade / Gières Université - IUT-STAPS;10.367;10.367;10.367;10.367;10.367;62.202;74.05
+8_1_10066_10367_39_2127.0;8;C8;Grenoble Victor Hugo - Belgrade / Gières Université - IUT-STAPS;204.192;204.192;204.192;204.192;204.192;82.953;0.0
+8_1_10347_10327_12_268.0;8;C8;Grenoble Victor Hugo - Belgrade / Gières Université - IUT-STAPS;0.268;0.268;0.268;0.268;0.268;0.0;0.0
+8_1_10708_10367_22_1477.0;8;C8;Grenoble Victor Hugo - Belgrade / Gières Université - IUT-STAPS;4.431;4.431;4.431;4.431;4.431;0.0;0.0
+9_0_10600_10194_38_9290.0;9;C10;Bernin Cloyères / Échirolles Marie Curie;380.89;380.89;380.89;380.89;380.89;139.35;0.0
+9_1_10194_10600_37_12767.0;9;C10;Bernin Cloyères / Échirolles Marie Curie;510.68;510.68;510.68;510.68;510.68;178.738;0.0
+10_0_10682_10022_18_20735.0;10;C14;Grenoble Gares / St-Georges-de-Commiers Gare;41.47;41.47;41.47;41.47;41.47;0.0;0.0
+10_0_10682_10022_23_20771.0;10;C14;Grenoble Gares / St-Georges-de-Commiers Gare;353.107;353.107;353.107;353.107;353.107;0.0;0.0
+10_0_10718_10022_11_18940.0;10;C14;Grenoble Gares / St-Georges-de-Commiers Gare;56.82;56.82;56.82;56.82;56.82;0.0;0.0
+10_0_10718_10022_16_18976.0;10;C14;Grenoble Gares / St-Georges-de-Commiers Gare;265.664;265.664;265.664;265.664;265.664;0.0;0.0
+10_0_10749_10022_9_12431.0;10;C14;Grenoble Gares / St-Georges-de-Commiers Gare;49.724;49.724;49.724;49.724;49.724;0.0;0.0
+10_1_10747_10682_23_19741.0;10;C14;Grenoble Gares / St-Georges-de-Commiers Gare;375.079;375.079;375.079;375.079;375.079;0.0;0.0
+10_1_10747_10718_16_17946.0;10;C14;Grenoble Gares / St-Georges-de-Commiers Gare;340.974;340.974;340.974;340.974;340.974;0.0;0.0
+11_0_10643_10759_24_690.0;11;15;Domène Les Arnauds / Domène Chenevières / Grenoble Verdun - Préfecture;24.15;24.15;24.15;24.15;24.15;19.32;8.97
+11_0_10761_10759_25_690.0;11;15;Domène Les Arnauds / Domène Chenevières / Grenoble Verdun - Préfecture;24.15;24.15;24.15;24.15;24.15;20.01;9.66
+11_1_10759_10643_24_1544.0;11;15;Domène Les Arnauds / Domène Chenevières / Grenoble Verdun - Préfecture;52.496;52.496;52.496;52.496;52.496;43.232;20.072
+11_1_10759_10761_25_972.0;11;15;Domène Les Arnauds / Domène Chenevières / Grenoble Verdun - Préfecture;34.992;34.992;34.992;34.992;34.992;28.188;13.608
+12_0_10011_10394_8_491.0;12;16;Le Pont-de-Claix Gendarmerie / Saint-Martin-d'Hères Les Alloves;0.491;0.491;0.491;0.491;0.491;0.0;0.0
+12_0_10242_10394_13_491.0;12;16;Le Pont-de-Claix Gendarmerie / Saint-Martin-d'Hères Les Alloves;0.491;0.491;0.491;0.491;0.491;0.0;0.0
+12_0_10356_10394_36_2110.0;12;16;Le Pont-de-Claix Gendarmerie / Saint-Martin-d'Hères Les Alloves;145.59;145.59;145.59;145.59;145.59;94.95;56.97
+12_1_10394_10020_34_1770.0;12;16;Le Pont-de-Claix Gendarmerie / Saint-Martin-d'Hères Les Alloves;120.36;120.36;120.36;120.36;120.36;79.65;47.79
+13_0_10238_10759_14_0.0;13;17;Grenoble Verdun - Préfecture / Meylan Lycée du Grésivaudan;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+13_0_10465_10759_21_0.0;13;17;Grenoble Verdun - Préfecture / Meylan Lycée du Grésivaudan;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+13_1_10759_10465_20_472.0;13;17;Grenoble Verdun - Préfecture / Meylan Lycée du Grésivaudan;10.384;10.384;10.384;10.384;10.384;4.72;0.0
+13_1_10759_10514_13_472.0;13;17;Grenoble Verdun - Préfecture / Meylan Lycée du Grésivaudan;13.688;13.688;13.688;13.688;13.688;9.912;6.608
+14_0_10033_10759_9_1125.0;14;18;Meylan Lycée du Grésivaudan / Poisat Cimetière Intercommunal;2.25;2.25;0.0;2.25;3.375;0.0;0.0
+14_0_10155_10465_20_2909.0;14;18;Meylan Lycée du Grésivaudan / Poisat Cimetière Intercommunal;2.909;2.909;2.909;2.909;2.909;0.0;0.0
+14_0_10655_10465_35_3231.0;14;18;Meylan Lycée du Grésivaudan / Poisat Cimetière Intercommunal;213.246;213.246;213.246;213.246;213.246;148.626;90.468
+14_1_10465_10430_34_3085.0;14;18;Meylan Lycée du Grésivaudan / Poisat Cimetière Intercommunal;203.61;203.61;203.61;203.61;203.61;135.74;86.38
+14_1_10759_10430_17_1125.0;14;18;Meylan Lycée du Grésivaudan / Poisat Cimetière Intercommunal;2.25;2.25;1.125;2.25;3.375;0.0;0.0
+15_0_10349_10547_28_3940.0;15;19;Sassenage L'Ovalie / Seyssins Garlettes;185.18;185.18;185.18;185.18;185.18;114.26;74.86
+15_1_10547_10349_28_5206.0;15;19;Sassenage L'Ovalie / Seyssins Garlettes;244.682;244.682;244.682;244.682;244.682;156.18;98.914
+16_0_10692_10150_13_2698.0;16;20;Veurey-Voroize La Rive / Seyssinet-Pariset Hôtel de Ville;86.336;86.336;86.336;86.336;86.336;0.0;0.0
+16_0_10692_10766_24_2896.0;16;20;Veurey-Voroize La Rive / Seyssinet-Pariset Hôtel de Ville;101.36;101.36;101.36;101.36;101.36;89.776;52.128
+16_1_10150_10692_14_2967.0;16;20;Veurey-Voroize La Rive / Seyssinet-Pariset Hôtel de Ville;94.944;94.944;94.944;94.944;94.944;2.967;0.0
+16_1_10766_10403_19_0.0;16;20;Veurey-Voroize La Rive / Seyssinet-Pariset Hôtel de Ville;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+16_1_10766_10692_25_2967.0;16;20;Veurey-Voroize La Rive / Seyssinet-Pariset Hôtel de Ville;106.812;106.812;106.812;106.812;106.812;89.01;53.406
+17_0_10631_10626_17_4482.0;17;21;Seyssins Le Prisme / Claix Pont Rouge;183.762;183.762;183.762;183.762;183.762;129.978;62.748
+17_1_10626_10631_16_3960.0;17;21;Seyssins Le Prisme / Claix Pont Rouge;166.32;166.32;166.32;166.32;166.32;114.84;55.44
+18_0_10271_10548_19_6504.0;18;22;Grenoble Oxford / Saint-Égrève Gare;292.68;292.68;292.68;292.68;292.68;188.616;84.552
+18_1_10548_10271_20_4682.0;18;22;Grenoble Oxford / Saint-Égrève Gare;210.69;210.69;210.69;210.69;210.69;140.46;65.548
+19_0_10565_10077_30_16573.0;19;23;Saint-Martin-d'Hères Université - Bibliothèques / Vizille Le Péage;629.774;629.774;629.774;629.774;629.774;265.168;215.449
+19_1_10079_10565_30_16267.0;19;23;Saint-Martin-d'Hères Université - Bibliothèques / Vizille Le Péage;618.146;618.146;618.146;618.146;618.146;260.272;211.471
+20_0_10759_10376_15_0.0;20;24;Gières Gare - Chamandier / Grenoble Verdun - Préfecture;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+20_1_10376_10759_15_0.0;20;24;Gières Gare - Chamandier / Grenoble Verdun - Préfecture;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+21_0_10411_10103_27_12650.0;21;25;Grenoble Colonel Dumont / Le Gua Les Saillants;151.8;151.8;151.8;151.8;151.8;0.0;0.0
+21_0_10682_10022_35_16614.0;21;25;Grenoble Colonel Dumont / Le Gua Les Saillants;0.0;0.0;0.0;0.0;0.0;598.104;249.21
+21_0_10682_10103_34_16187.0;21;25;Grenoble Colonel Dumont / Le Gua Les Saillants;517.984;517.984;517.984;517.984;517.984;0.0;0.0
+21_1_10103_10411_26_13639.0;21;25;Grenoble Colonel Dumont / Le Gua Les Saillants;204.585;204.585;204.585;204.585;204.585;0.0;0.0
+21_1_10103_10682_33_17176.0;21;25;Grenoble Colonel Dumont / Le Gua Les Saillants;515.28;515.28;515.28;515.28;515.28;0.0;0.0
+21_1_10216_10682_35_17315.0;21;25;Grenoble Colonel Dumont / Le Gua Les Saillants;0.0;0.0;0.0;0.0;0.0;623.34;259.725
+21_1_10631_10682_33_23868.0;21;25;Grenoble Colonel Dumont / Le Gua Les Saillants;23.868;23.868;23.868;23.868;23.868;0.0;0.0
+22_0_10311_10335_17_3239.0;22;41;La Tronche Grand Sablon / Corenc La Garenne;35.629;35.629;35.629;35.629;35.629;38.868;0.0
+22_1_10119_10311_17_3042.0;22;41;La Tronche Grand Sablon / Corenc La Garenne;36.504;36.504;36.504;36.504;36.504;36.504;0.0
+23_0_10255_10674_22_4045.0;23;42;Meylan Place de la Louisiane / Montbonnot-Saint-Martin Pré de l'Eau;36.405;36.405;36.405;36.405;36.405;0.0;0.0
+23_0_10255_10674_23_5242.0;23;42;Meylan Place de la Louisiane / Montbonnot-Saint-Martin Pré de l'Eau;104.84;104.84;104.84;104.84;104.84;62.904;62.904
+23_0_10725_10674_15_1420.0;23;42;Meylan Place de la Louisiane / Montbonnot-Saint-Martin Pré de l'Eau;1.42;1.42;1.42;1.42;1.42;0.0;0.0
+23_1_10526_10523_21_3115.0;23;42;Meylan Place de la Louisiane / Montbonnot-Saint-Martin Pré de l'Eau;24.92;24.92;24.92;24.92;24.92;0.0;0.0
+23_1_10526_10523_22_4312.0;23;42;Meylan Place de la Louisiane / Montbonnot-Saint-Martin Pré de l'Eau;86.24;86.24;86.24;86.24;86.24;51.744;51.744
+24_0_10682_10196_9_876.0;24;44;Miribel-Lanchâtre Le Vernay / Le Gua Prélenfrey Eglise / Col de l'Arzelier / Le Gua Les Saillants;5.256;5.256;5.256;5.256;5.256;2.628;0.0
+24_0_10682_10507_9_0.0;24;44;Miribel-Lanchâtre Le Vernay / Le Gua Prélenfrey Eglise / Col de l'Arzelier / Le Gua Les Saillants;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+24_1_10196_10682_9_876.0;24;44;Miribel-Lanchâtre Le Vernay / Le Gua Prélenfrey Eglise / Col de l'Arzelier / Le Gua Les Saillants;4.38;4.38;4.38;4.38;4.38;1.752;0.0
+24_1_10507_10682_9_599.0;24;44;Miribel-Lanchâtre Le Vernay / Le Gua Prélenfrey Eglise / Col de l'Arzelier / Le Gua Les Saillants;4.792;4.792;4.792;4.792;4.792;3.594;0.0
+24_1_10682_10682_7_0.0;24;44;Miribel-Lanchâtre Le Vernay / Le Gua Prélenfrey Eglise / Col de l'Arzelier / Le Gua Les Saillants;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+25_0_10322_10411_24_8342.0;25;45;Vif La Valonne / Varces-Allières-et-Risset Rond Point de l'Europe;16.684;16.684;8.342;16.684;16.684;0.0;0.0
+25_0_10664_10411_22_7967.0;25;45;Vif La Valonne / Varces-Allières-et-Risset Rond Point de l'Europe;39.835;39.835;55.769;39.835;39.835;47.802;0.0
+25_1_10411_10322_24_8342.0;25;45;Vif La Valonne / Varces-Allières-et-Risset Rond Point de l'Europe;8.342;8.342;8.342;8.342;8.342;0.0;0.0
+25_1_10411_10538_32_10890.0;25;45;Vif La Valonne / Varces-Allières-et-Risset Rond Point de l'Europe;10.89;10.89;10.89;10.89;10.89;0.0;0.0
+25_1_10411_10664_22_7967.0;25;45;Vif La Valonne / Varces-Allières-et-Risset Rond Point de l'Europe;47.802;47.802;47.802;47.802;47.802;47.802;0.0
+26_0_10705_10322_13_5058.0;26;46;Varces-Allières-et-Risset Rond Point de l'Europe / Saint-Paul-de-Varces Place;35.406;35.406;35.406;35.406;35.406;0.0;0.0
+26_0_10705_10664_11_4683.0;26;46;Varces-Allières-et-Risset Rond Point de l'Europe / Saint-Paul-de-Varces Place;23.415;23.415;23.415;23.415;23.415;32.781;0.0
+26_1_10322_10705_13_5058.0;26;46;Varces-Allières-et-Risset Rond Point de l'Europe / Saint-Paul-de-Varces Place;40.464;40.464;40.464;40.464;40.464;0.0;0.0
+26_1_10664_10705_11_4683.0;26;46;Varces-Allières-et-Risset Rond Point de l'Europe / Saint-Paul-de-Varces Place;23.415;23.415;23.415;23.415;23.415;32.781;0.0
+27_0_10631_10652_6_2021.0;27;47;Varces-Allières-et-Risset Risset / Claix Val d'Allières;4.042;4.042;4.042;4.042;4.042;0.0;0.0
+27_0_10743_10652_17_3704.0;27;47;Varces-Allières-et-Risset Risset / Claix Val d'Allières;44.448;44.448;44.448;44.448;44.448;29.632;0.0
+27_1_10652_10631_6_2021.0;27;47;Varces-Allières-et-Risset Risset / Claix Val d'Allières;4.042;4.042;4.042;4.042;4.042;0.0;0.0
+27_1_10652_10743_17_4225.0;27;47;Varces-Allières-et-Risset Risset / Claix Val d'Allières;54.925;54.925;54.925;54.925;54.925;33.8;0.0
+28_0_10223_10631_16_4855.0;28;48;Claix Pont Rouge / Claix Cossey;29.13;29.13;29.13;29.13;29.13;29.13;0.0
+28_1_10631_10223_16_4855.0;28;48;Claix Pont Rouge / Claix Cossey;29.13;29.13;29.13;29.13;29.13;29.13;0.0
+29_0_10186_10176_13_3551.0;29;49;Seyssinet-Pariset Cimetière / Seyssins Clinique du Dauphiné;0.0;0.0;0.0;0.0;0.0;3.551;7.102
+29_0_10415_10176_12_3480.0;29;49;Seyssinet-Pariset Cimetière / Seyssins Clinique du Dauphiné;20.88;20.88;20.88;20.88;20.88;0.0;0.0
+29_0_10415_10626_9_2454.0;29;49;Seyssinet-Pariset Cimetière / Seyssins Clinique du Dauphiné;17.178;17.178;17.178;17.178;17.178;14.724;12.27
+29_1_10176_10186_14_4234.0;29;49;Seyssinet-Pariset Cimetière / Seyssins Clinique du Dauphiné;0.0;0.0;0.0;0.0;0.0;4.234;8.468
+29_1_10176_10415_13_4163.0;29;49;Seyssinet-Pariset Cimetière / Seyssins Clinique du Dauphiné;24.978;24.978;24.978;24.978;24.978;0.0;0.0
+29_1_10626_10415_10_3137.0;29;49;Seyssinet-Pariset Cimetière / Seyssins Clinique du Dauphiné;18.822;18.822;18.822;18.822;18.822;18.822;15.685
+29_1_10626_10556_11_5013.0;29;49;Seyssinet-Pariset Cimetière / Seyssins Clinique du Dauphiné;5.013;5.013;5.013;5.013;5.013;0.0;0.0
+30_0_10169_10243_11_2689.0;30;50;Sassenage Les Côtes / Fontaine La Poya;5.378;5.378;5.378;5.378;5.378;0.0;0.0
+30_0_10403_10224_15_2478.0;30;50;Sassenage Les Côtes / Fontaine La Poya;12.39;12.39;12.39;12.39;12.39;19.824;0.0
+30_0_10403_10243_16_2814.0;30;50;Sassenage Les Côtes / Fontaine La Poya;8.442;8.442;8.442;8.442;8.442;0.0;0.0
+30_1_10224_10403_15_2478.0;30;50;Sassenage Les Côtes / Fontaine La Poya;17.346;17.346;17.346;17.346;17.346;22.302;0.0
+30_1_10243_10403_16_2814.0;30;50;Sassenage Les Côtes / Fontaine La Poya;11.256;11.256;11.256;11.256;11.256;0.0;0.0
+31_0_10271_10148_21_198.0;31;51;Veurey-Voroize Châtelard / Saint-Égrève Gare;1.782;1.782;1.782;1.782;1.782;1.584;0.0
+31_0_10766_10148_8_0.0;31;51;Veurey-Voroize Châtelard / Saint-Égrève Gare;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+31_1_10148_10271_21_0.0;31;51;Veurey-Voroize Châtelard / Saint-Égrève Gare;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+31_1_10148_10766_8_0.0;31;51;Veurey-Voroize Châtelard / Saint-Égrève Gare;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+32_0_10548_10150_11_3750.0;32;54;Saint-Égrève Pont de Vence / Grenoble Oxford;18.75;18.75;18.75;18.75;18.75;22.5;0.0
+32_0_10548_10633_19_3750.0;32;54;Saint-Égrève Pont de Vence / Grenoble Oxford;30.0;30.0;30.0;30.0;30.0;26.25;0.0
+32_1_10150_10548_11_3750.0;32;54;Saint-Égrève Pont de Vence / Grenoble Oxford;22.5;22.5;22.5;22.5;22.5;22.5;0.0
+32_1_10633_10548_19_3750.0;32;54;Saint-Égrève Pont de Vence / Grenoble Oxford;26.25;26.25;26.25;26.25;26.25;26.25;0.0
+33_0_10117_10198_17_2264.0;33;55;Saint-Martin-le-Vinoux Hôtel de Ville / Saint-Martin-le-Vinoux Col de Clémencières;9.056;9.056;6.792;9.056;9.056;0.0;0.0
+33_0_10117_10471_16_626.0;33;55;Saint-Martin-le-Vinoux Hôtel de Ville / Saint-Martin-le-Vinoux Col de Clémencières;0.626;0.626;1.252;0.626;0.626;1.878;0.0
+33_0_10117_10471_9_0.0;33;55;Saint-Martin-le-Vinoux Hôtel de Ville / Saint-Martin-le-Vinoux Col de Clémencières;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+33_1_10198_10117_17_2264.0;33;55;Saint-Martin-le-Vinoux Hôtel de Ville / Saint-Martin-le-Vinoux Col de Clémencières;2.264;2.264;2.264;2.264;2.264;0.0;0.0
+33_1_10471_10117_16_626.0;33;55;Saint-Martin-le-Vinoux Hôtel de Ville / Saint-Martin-le-Vinoux Col de Clémencières;3.13;3.13;2.504;3.13;3.13;3.13;0.0
+33_1_10471_10117_9_0.0;33;55;Saint-Martin-le-Vinoux Hôtel de Ville / Saint-Martin-le-Vinoux Col de Clémencières;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+34_0_10114_10117_15_746.0;34;56;Quaix-en-Chartreuse La Cime de Mont-Quaix / Grenoble Casamaures - Village;0.746;0.746;0.0;0.746;0.746;0.0;0.0
+34_0_10114_10174_21_4290.0;34;56;Quaix-en-Chartreuse La Cime de Mont-Quaix / Grenoble Casamaures - Village;8.58;8.58;17.16;8.58;8.58;21.45;0.0
+34_0_10198_10117_17_1837.0;34;56;Quaix-en-Chartreuse La Cime de Mont-Quaix / Grenoble Casamaures - Village;5.511;5.511;3.674;5.511;5.511;0.0;0.0
+34_1_10117_10114_15_746.0;34;56;Quaix-en-Chartreuse La Cime de Mont-Quaix / Grenoble Casamaures - Village;0.746;0.746;0.746;0.746;0.746;0.0;0.0
+34_1_10117_10198_17_1837.0;34;56;Quaix-en-Chartreuse La Cime de Mont-Quaix / Grenoble Casamaures - Village;5.511;5.511;3.674;5.511;5.511;0.0;0.0
+34_1_10174_10114_21_4290.0;34;56;Quaix-en-Chartreuse La Cime de Mont-Quaix / Grenoble Casamaures - Village;8.58;8.58;8.58;8.58;8.58;17.16;0.0
+35_0_10346_10376_21_11632.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;23.264;23.264;23.264;23.264;23.264;0.0;0.0
+35_0_10346_10376_32_7823.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;54.761;54.761;46.938;54.761;54.761;0.0;0.0
+35_0_10346_10376_33_7823.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;7.823;7.823;7.823;7.823;7.823;0.0;0.0
+35_0_10583_10376_18_1123.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;0.0;0.0;1.123;0.0;0.0;0.0;0.0
+35_0_10634_10376_15_0.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+35_0_10634_10376_16_0.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+35_1_10376_10376_36_8221.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;16.442;16.442;0.0;16.442;16.442;0.0;0.0
+35_1_10376_10376_48_8221.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;8.221;8.221;8.221;8.221;8.221;0.0;0.0
+35_1_10376_10376_49_8221.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;16.442;16.442;32.884;16.442;16.442;0.0;0.0
+35_1_10376_10583_22_2051.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;0.0;0.0;2.051;0.0;0.0;0.0;0.0
+35_1_10376_10634_15_0.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+35_1_10376_10634_16_0.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;0.0;0.0;0.0;0.0;0.0;0.0;0.0
+35_1_10376_10665_20_7529.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;0.0;0.0;7.529;0.0;0.0;0.0;0.0
+35_1_10376_10665_32_7529.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;7.529;7.529;7.529;7.529;7.529;0.0;0.0
+35_1_10376_10665_33_7529.0;35;59;Gières Gare - Chamandier / Saint-Martin-d'Uriage La Ronzière / Hautes Vues;7.529;7.529;0.0;7.529;7.529;0.0;0.0
+36_0_10524_10593_20_6983.0;36;60;Proveysieux Planfay Haut / Saint-Égrève Muret;41.898;41.898;48.881;41.898;41.898;34.915;0.0
+36_1_10593_10290_20_8112.0;36;60;Proveysieux Planfay Haut / Saint-Égrève Muret;40.56;40.56;40.56;40.56;40.56;24.336;0.0
+37_0_10524_10258_13_4381.0;37;61;Quaix-en-Chartreuse Village / Saint-Égrève Muret;30.667;30.667;30.667;30.667;30.667;17.524;0.0
+37_1_10258_10290_13_5766.0;37;61;Quaix-en-Chartreuse Village / Saint-Égrève Muret;40.362;40.362;40.362;40.362;40.362;23.064;0.0
+38_0_10719_10205_22_9246.0;38;N62;Grenoble Notre-Dame - Musée / Sarcenas Pont du Croz / Col de Porte;0.0;0.0;0.0;0.0;0.0;83.214;83.214
+38_0_10719_10689_23_8314.0;38;N62;Grenoble Notre-Dame - Musée / Sarcenas Pont du Croz / Col de Porte;49.884;49.884;49.884;49.884;49.884;0.0;0.0
+38_1_10205_10779_23_10059.0;38;N62;Grenoble Notre-Dame - Musée / Sarcenas Pont du Croz / Col de Porte;0.0;0.0;0.0;0.0;0.0;90.531;90.531
+38_1_10689_10779_24_9127.0;38;N62;Grenoble Notre-Dame - Musée / Sarcenas Pont du Croz / Col de Porte;54.762;54.762;54.762;54.762;54.762;0.0;0.0
+39_0_10271_10530_10_2426.0;39;63;Mont-Saint-Martin Chemin de Namière / Saint-Égrève Gare;4.852;4.852;4.852;4.852;4.852;4.852;0.0
+39_1_10530_10271_10_2426.0;39;63;Mont-Saint-Martin Chemin de Namière / Saint-Égrève Gare;4.852;7.278;4.852;4.852;4.852;4.852;0.0
+40_0_10453_10453_7_2007.0;40;64;Le Pont-de-Claix ZI des Îles / Le Pont-de-Claix L'Etoile;8.028;8.028;8.028;8.028;8.028;0.0;0.0
+41_0_10565_10327_24_12528.0;41;65;Grenoble Grand'place / Vizille Le Péage;137.808;137.808;137.808;137.808;137.808;87.696;0.0
+41_1_10327_10565_24_12528.0;41;65;Grenoble Grand'place / Vizille Le Péage;137.808;137.808;137.808;137.808;137.808;75.168;0.0
+42_0_10600_10191_19_7859.0;42;66;Jarrie Clos Jouvin / Échirolles La Rampe - Centre-Ville;15.718;15.718;15.718;15.718;15.718;0.0;0.0
+42_0_10600_10191_20_8630.0;42;66;Jarrie Clos Jouvin / Échirolles La Rampe - Centre-Ville;94.93;94.93;94.93;94.93;94.93;43.15;0.0
+42_1_10191_10242_16_8839.0;42;66;Jarrie Clos Jouvin / Échirolles La Rampe - Centre-Ville;114.907;114.907;114.907;114.907;114.907;44.195;0.0
+43_0_10348_10164_2_758.0;43;67;Grenoble Grand'place / Herbeys Le Bourg;1.516;1.516;1.516;1.516;1.516;0.0;0.0
+43_0_10348_10202_15_6719.0;43;67;Grenoble Grand'place / Herbeys Le Bourg;20.157;20.157;20.157;20.157;20.157;0.0;0.0
+43_0_10348_10327_14_5867.0;43;67;Grenoble Grand'place / Herbeys Le Bourg;58.67;58.67;58.67;58.67;58.67;46.936;0.0
+43_1_10202_10164_15_7466.0;43;67;Grenoble Grand'place / Herbeys Le Bourg;7.466;7.466;7.466;7.466;7.466;0.0;0.0
+43_1_10202_10348_14_6708.0;43;67;Grenoble Grand'place / Herbeys Le Bourg;20.124;20.124;20.124;20.124;20.124;0.0;0.0
+43_1_10327_10164_14_6614.0;43;67;Grenoble Grand'place / Herbeys Le Bourg;6.614;6.614;6.614;6.614;6.614;46.298;0.0
+43_1_10327_10348_13_5856.0;43;67;Grenoble Grand'place / Herbeys Le Bourg;46.848;46.848;46.848;46.848;46.848;0.0;0.0
+44_0_10600_10092_11_379.0;44;68;Eybens Le Verderet / ÉCHIROLLES La Rampe - Centre-Ville;0.758;0.758;0.758;0.758;0.758;0.0;0.0
+44_0_10600_10758_13_734.0;44;68;Eybens Le Verderet / ÉCHIROLLES La Rampe - Centre-Ville;2.202;2.202;2.202;2.202;2.202;4.404;0.0
+44_0_10600_10758_14_734.0;44;68;Eybens Le Verderet / ÉCHIROLLES La Rampe - Centre-Ville;2.936;2.936;2.936;2.936;2.936;0.0;0.0
+44_1_10758_10600_13_574.0;44;68;Eybens Le Verderet / ÉCHIROLLES La Rampe - Centre-Ville;1.148;1.148;1.148;1.148;1.148;3.444;0.0
+44_1_10758_10600_14_574.0;44;68;Eybens Le Verderet / ÉCHIROLLES La Rampe - Centre-Ville;2.296;2.296;2.296;2.296;2.296;0.0;0.0
+45_0_10513_10396_23_12084.0;45;70;Champ-sur-Drac La Melle / Montchaboud Le Village;96.672;96.672;96.672;96.672;96.672;60.42;0.0
+45_0_10513_10464_13_5221.0;45;70;Champ-sur-Drac La Melle / Montchaboud Le Village;5.221;5.221;5.221;5.221;5.221;0.0;0.0
+45_1_10138_10513_4_1904.0;45;70;Champ-sur-Drac La Melle / Montchaboud Le Village;1.904;1.904;1.904;1.904;1.904;0.0;0.0
+45_1_10396_10138_19_9351.0;45;70;Champ-sur-Drac La Melle / Montchaboud Le Village;9.351;9.351;9.351;9.351;9.351;0.0;0.0
+45_1_10396_10144_11_6869.0;45;70;Champ-sur-Drac La Melle / Montchaboud Le Village;6.869;6.869;6.869;6.869;6.869;0.0;0.0
+45_1_10396_10513_22_11255.0;45;70;Champ-sur-Drac La Melle / Montchaboud Le Village;78.785;78.785;78.785;78.785;78.785;56.275;0.0
+46_0_10584_10313_10_6689.0;46;71;Jarrie Gare / Champagnier Place du Laca;13.378;13.378;13.378;13.378;13.378;0.0;0.0
+46_1_10313_10584_10_6689.0;46;71;Jarrie Gare / Champagnier Place du Laca;20.067;20.067;20.067;20.067;20.067;0.0;0.0
+47_0_10533_10494_11_6889.0;47;73;Vif Mairie / Notre-Dame-de-Commiers Le Village;6.889;6.889;6.889;6.889;6.889;0.0;0.0
+47_0_10533_10520_3_700.0;47;73;Vif Mairie / Notre-Dame-de-Commiers Le Village;1.4;1.4;1.4;1.4;1.4;0.0;0.0
+47_0_10533_10771_16_9346.0;47;73;Vif Mairie / Notre-Dame-de-Commiers Le Village;18.692;9.346;18.692;9.346;9.346;0.0;0.0
+47_1_10494_10520_13_7589.0;47;73;Vif Mairie / Notre-Dame-de-Commiers Le Village;7.589;7.589;7.589;7.589;7.589;0.0;0.0
+47_1_10533_10560_16_14803.0;47;73;Vif Mairie / Notre-Dame-de-Commiers Le Village;14.803;0.0;14.803;0.0;14.803;0.0;0.0
+47_1_10771_10520_18_10046.0;47;73;Vif Mairie / Notre-Dame-de-Commiers Le Village;10.046;10.046;10.046;10.046;10.046;0.0;0.0
+48_0_10327_10403_20_8447.0;48;A;Fontaine La Poya / Le Pont-de-Claix L'Etoile;126.705;126.705;126.705;126.705;126.705;101.364;25.341
+48_0_10453_10403_31_12880.0;48;A;Fontaine La Poya / Le Pont-de-Claix L'Etoile;2588.88;2588.88;2588.88;2588.88;2588.88;1674.4;953.12
+48_0_10453_10599_11_4184.0;48;A;Fontaine La Poya / Le Pont-de-Claix L'Etoile;12.552;12.552;12.552;12.552;12.552;12.552;12.552
+48_1_10327_10453_12_4433.0;48;A;Fontaine La Poya / Le Pont-de-Claix L'Etoile;22.165;22.165;22.165;22.165;22.165;17.732;22.165
+48_1_10403_10327_20_8447.0;48;A;Fontaine La Poya / Le Pont-de-Claix L'Etoile;152.046;152.046;152.046;152.046;152.046;92.917;25.341
+48_1_10403_10453_31_12880.0;48;A;Fontaine La Poya / Le Pont-de-Claix L'Etoile;2550.24;2550.24;2550.24;2550.24;2550.24;1687.28;953.12
+48_1_10599_10453_11_4184.0;48;A;Fontaine La Poya / Le Pont-de-Claix L'Etoile;50.208;50.208;50.208;50.208;50.208;25.104;4.184
+49_0_10589_10548_22_9682.0;49;B;Grenoble Oxford / Gières Plaine des Sports;1539.438;1539.438;1539.438;1539.438;1539.438;968.2;551.874
+49_1_10548_10589_22_9682.0;49;B;Grenoble Oxford / Gières Plaine des Sports;1539.438;1539.438;1539.438;1539.438;1539.438;968.2;551.874
+50_0_10215_10626_19_8825.0;50;C;Seyssins Le Prisme / Saint-Martin-d'Hères Université - Condillac;1314.925;1014.875;1014.875;1314.925;1014.875;758.95;397.125
+50_0_10589_10626_22_10166.0;50;C;Seyssins Le Prisme / Saint-Martin-d'Hères Université - Condillac;254.15;132.158;132.158;254.15;132.158;81.328;111.826
+50_1_10626_10215_19_8825.0;50;C;Seyssins Le Prisme / Saint-Martin-d'Hères Université - Condillac;1314.925;1014.875;1014.875;1314.925;1014.875;758.95;397.125
+50_1_10626_10589_22_10166.0;50;C;Seyssins Le Prisme / Saint-Martin-d'Hères Université - Condillac;254.15;132.158;132.158;254.15;132.158;81.328;111.826
+51_0_10282_10312_16_6754.0;51;D;Grenoble Gares / Saint-Martin-d'Hères Etienne Grappe;486.288;486.288;486.288;486.288;486.288;466.026;378.224
+51_0_10589_10282_12_5113.0;51;D;Grenoble Gares / Saint-Martin-d'Hères Etienne Grappe;15.339;15.339;15.339;15.339;15.339;10.226;15.339
+51_0_10589_10312_17_7225.0;51;D;Grenoble Gares / Saint-Martin-d'Hères Etienne Grappe;14.45;14.45;14.45;14.45;14.45;21.675;7.225
+51_1_10282_10589_12_5113.0;51;D;Grenoble Gares / Saint-Martin-d'Hères Etienne Grappe;20.452;20.452;20.452;20.452;20.452;20.452;15.339
+51_1_10312_10282_16_6754.0;51;D;Grenoble Gares / Saint-Martin-d'Hères Etienne Grappe;493.042;493.042;493.042;493.042;493.042;479.534;378.224
+51_1_10312_10589_17_7225.0;51;D;Grenoble Gares / Saint-Martin-d'Hères Etienne Grappe;7.225;7.225;7.225;7.225;7.225;7.225;7.225
+52_0_10459_10304_17_11009.0;52;E;Fontanil-Cornillon Palluel / Grenoble Louise Michel;1409.152;1409.152;1409.152;1409.152;1409.152;946.774;594.486
+52_0_10589_10216_15_6959.0;52;E;Fontanil-Cornillon Palluel / Grenoble Louise Michel;20.877;20.877;20.877;20.877;20.877;20.877;20.877
+52_0_10589_10304_28_16164.0;52;E;Fontanil-Cornillon Palluel / Grenoble Louise Michel;258.624;258.624;258.624;258.624;258.624;64.656;16.164
+52_1_10216_10459_4_1804.0;52;E;Fontanil-Cornillon Palluel / Grenoble Louise Michel;5.412;5.412;5.412;5.412;5.412;5.412;5.412
+52_1_10293_10589_14_6333.0;52;E;Fontanil-Cornillon Palluel / Grenoble Louise Michel;107.661;107.661;107.661;107.661;107.661;31.665;12.666
+52_1_10304_10459_17_11009.0;52;E;Fontanil-Cornillon Palluel / Grenoble Louise Michel;1563.278;1563.278;1563.278;1563.278;1563.278;968.792;583.477
+52_1_10304_10589_28_16164.0;52;E;Fontanil-Cornillon Palluel / Grenoble Louise Michel;16.164;16.164;16.164;16.164;16.164;16.164;16.164
+53_0_10327_10478_6_1373.0;53;NAVA;Fontaine La Poya / Le Pont-de-Claix L'Etoile;89.245;89.245;0.0;0.0;0.0;0.0;0.0
+53_1_10334_10327_6_933.0;53;NAVA;Fontaine La Poya / Le Pont-de-Claix L'Etoile;60.645;60.645;0.0;0.0;0.0;0.0;0.0
+54_0_10019_10304_17_8067.0;54;NAVE;Fontanil-Cornillon Palluel / Grenoble Louise Michel;0.0;72.603;72.603;72.603;0.0;0.0;0.0
+54_1_10304_10019_17_7768.0;54;NAVE;Fontanil-Cornillon Palluel / Grenoble Louise Michel;0.0;62.144;62.144;62.144;0.0;0.0;0.0
