@@ -1,11 +1,11 @@
 import os
 import pandas as pd
 from pathlib import Path
-from backend.app.services.gtfs_core.gtfs_norm import rawgtfs_from_zip, gtfs_normalize
+from app.services.gtfs_core.gtfs_norm import rawgtfs_from_zip, gtfs_normalize
 import traceback
 
 def test_datasets():
-    raw_dir = Path("backend/tests/Resources/raw")
+    raw_dir = Path(__file__).parent / "Resources" / "raw"
     zip_files = list(raw_dir.glob("*.zip"))
     
     results = []

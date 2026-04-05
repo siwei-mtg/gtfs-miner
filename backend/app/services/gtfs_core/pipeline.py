@@ -1,12 +1,12 @@
 import argparse
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
-# Import the decoupled pipeline modules
 from .gtfs_norm import rawgtfs_from_zip, gtfs_normalize, ligne_generate
 from .gtfs_spatial import ag_ap_generate_reshape
 from .gtfs_generator import (
@@ -20,12 +20,21 @@ from .gtfs_export import (
     MEF_ligne, MEF_serdate, MEF_servjour,
 )
 
-# Plages horaires HPM / HPS par défaut (fraction de jour)
+# Module-level constants — kept for backward-compat (worker.py imports these)
 DEFAULT_HPM = (7 / 24, 9 / 24)    # 07:00 – 09:00
 DEFAULT_HPS = (17 / 24, 19 / 24)  # 17:00 – 19:00
 DEFAULT_TYPE_VAC = 'Type_Jour'
 
 CSV_OPTS = dict(sep=';', index=False, encoding='utf-8-sig')
+
+
+@dataclass
+class PipelineConfig:
+    """Pipeline execution parameters. Centralises settings shared by CLI and web worker."""
+    hpm:      Tuple[float, float] = field(default_factory=lambda: (7 / 24, 9 / 24))
+    hps:      Tuple[float, float] = field(default_factory=lambda: (17 / 24, 19 / 24))
+    type_vac: str  = DEFAULT_TYPE_VAC
+    has_shp:  bool = False  # True when real shape distances are available
 
 
 def build_dates_table(
@@ -73,6 +82,110 @@ def build_dates_table(
     return df[['Date_GTFS', 'Type_Jour', 'Semaine', 'Mois', 'Annee']].drop_duplicates()
 
 
+def run_pipeline(
+    raw_dict: Dict[str, pd.DataFrame],
+    config: Optional[PipelineConfig] = None,
+    on_progress: Optional[Callable[[str], None]] = None,
+) -> Dict[str, pd.DataFrame]:
+    """
+    Orchestrates the full GTFS processing pipeline.
+    Pure computation — no file I/O, no print statements.
+
+    Args:
+        raw_dict:    Raw GTFS tables keyed by file stem (e.g. 'stops', 'trips').
+        config:      Pipeline parameters; defaults to PipelineConfig() if None.
+        on_progress: Optional callback called with a step-label string at each stage.
+
+    Returns:
+        Dict of output DataFrames keyed by CSV stem name (e.g. 'A_1_Arrets_Generiques').
+    """
+    if config is None:
+        config = PipelineConfig()
+    _progress = on_progress or (lambda _: None)
+
+    # ── 1. Normalize ──────────────────────────────────────────────────────────
+    _progress("[1/7] Normalizing GTFS tables...")
+    normed = gtfs_normalize(raw_dict)
+
+    # ── 2. Spatial clustering (A_1 / A_2) ────────────────────────────────────
+    _progress("[2/7] Generating spatial mappings (AG / AP)...")
+    AP, AG, _marker = ag_ap_generate_reshape(normed['stops'])
+
+    # ── 3. Itineraries, arcs & courses (C_1 / C_2 / C_3) ────────────────────
+    _progress("[3/7] Generating itineraries, arcs and courses...")
+    lignes         = ligne_generate(normed['routes'])
+    itineraire     = itineraire_generate(normed['stop_times'], AP, normed['trips'])
+    itineraire_arc = itiarc_generate(itineraire, AG)
+    courses        = course_generate(itineraire, itineraire_arc)
+
+    courses_export    = MEF_course(courses, normed['trip_id_coor'])
+    itineraire_export = MEF_iti(itineraire, courses)
+    iti_arc_export    = MEF_iti_arc(itineraire_arc, courses)
+
+    # ── 4. Lignes & sous-lignes (B_1 / B_2) ──────────────────────────────────
+    _progress("[4/7] Generating lignes and sous-lignes...")
+    sous_ligne    = sl_generate(courses, AG, lignes)
+    lignes_export = MEF_ligne(lignes, courses_export, AG)
+
+    # ── 5. Service dates (D_1 / D_2) ─────────────────────────────────────────
+    _progress("[5/7] Generating service dates and day-types...")
+    Dates = build_dates_table(normed['calendar'], normed['calendar_dates'])
+    service_dates, _msg = service_date_generate(
+        normed['calendar'], normed['calendar_dates'], Dates
+    )
+
+    # Graceful fallback: build_dates_table only creates Type_Jour when no
+    # external calendar resource is available; vacation columns are absent.
+    type_vac = config.type_vac
+    if type_vac not in service_dates.columns:
+        type_vac = "Type_Jour"
+
+    service_jour_type = service_jour_type_generate(service_dates, courses, type_vac)
+    ser_dates_export  = MEF_serdate(service_dates, normed['ser_id_coor'])
+    serv_jour_export  = MEF_servjour(
+        service_jour_type, normed['route_id_coor'], normed['ser_id_coor'], type_vac
+    )
+
+    # ── 6. Passage counts & KCC (E_1 / E_4 / F_1–F_4) ───────────────────────
+    _progress("[6/7] Generating passage counts and KCC metrics...")
+    pnode = AG[['id_ag_num', 'stop_name', 'stop_lon', 'stop_lat']].rename(
+        columns={'id_ag_num': 'NO', 'stop_name': 'NAME', 'stop_lon': 'LON', 'stop_lat': 'LAT'}
+    )
+
+    nb_psg_ag    = nb_passage_ag(service_jour_type, itineraire_export, AG, type_vac)
+    nb_psg_arc   = passage_arc(iti_arc_export, service_jour_type, pnode, type_vac)
+    nb_crs_ligne = nb_course_ligne(service_jour_type, courses_export, type_vac, lignes_export)
+    caract_sl    = caract_par_sl(
+        service_jour_type, courses_export, config.hpm, config.hps, type_vac, sous_ligne
+    )
+    kcc_ligne = kcc_course_ligne(
+        service_jour_type, courses_export, type_vac, lignes_export, config.has_shp
+    )
+    kcc_sl = kcc_course_sl(
+        service_jour_type, courses_export, type_vac, sous_ligne, config.has_shp
+    )
+
+    _progress("[7/7] Done.")
+
+    return {
+        "A_1_Arrets_Generiques":     AG,
+        "A_2_Arrets_Physiques":      AP,
+        "B_1_Lignes":                lignes_export,
+        "B_2_Sous_Lignes":           sous_ligne,
+        "C_1_Courses":               courses_export,
+        "C_2_Itineraire":            itineraire_export,
+        "C_3_Itineraire_Arc":        iti_arc_export,
+        "D_1_Service_Dates":         ser_dates_export,
+        "D_2_Service_Jourtype":      serv_jour_export,
+        "E_1_Nombre_Passage_AG":     nb_psg_ag,
+        "E_4_Nombre_Passage_Arc":    nb_psg_arc,
+        "F_1_Nombre_Courses_Lignes": nb_crs_ligne,
+        "F_2_Caract_SousLignes":     caract_sl,
+        "F_3_KCC_Lignes":            kcc_ligne,
+        "F_4_KCC_Sous_Ligne":        kcc_sl,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run GTFS Miner pipeline without QGIS.")
     parser.add_argument("--input",  required=True, help="Path to the GTFS .zip or directory of .txt files.")
@@ -84,7 +197,6 @@ def main() -> None:
 
     input_path = Path(args.input)
     output_dir = Path(args.output)
-    type_vac   = args.type_vac
 
     if not input_path.exists():
         print(f"Error: Input path '{input_path}' does not exist.")
@@ -95,126 +207,25 @@ def main() -> None:
     print("=== GTFS Miner Standalone CLI ===")
     print(f"Input:    {input_path}")
     print(f"Output:   {output_dir}")
-    print(f"Type-vac: {type_vac}\n")
+    print(f"Type-vac: {args.type_vac}\n")
 
     start_time = time.time()
 
-    # ------------------------------------------------------------------
-    # 1. Load & normalise
-    # ------------------------------------------------------------------
-    print("[1/7] Loading raw GTFS data...")
+    # CLI-only I/O: load raw GTFS tables from ZIP or directory
     if input_path.is_dir():
-        raw_dict = {}
-        for f in input_path.glob('*.txt'):
-            raw_dict[f.stem] = pd.read_csv(f, low_memory=False)
+        raw_dict = {f.stem: pd.read_csv(f, low_memory=False) for f in input_path.glob('*.txt')}
     else:
         raw_dict = rawgtfs_from_zip(input_path)
-
     if not raw_dict:
         print("Error: No GTFS .txt tables found in the input.")
         return
     print(f"  -> Loaded tables: {', '.join(raw_dict.keys())}")
 
-    print("[2/7] Normalizing schema...")
-    normed = gtfs_normalize(raw_dict)
-    shapes_exist = normed.get('shapes') is not None
-    print(f"  -> {len(normed['stops'])} stops | {len(normed['routes'])} routes | {len(normed['trips'])} trips")
-    print(f"  -> shapes: {'yes' if shapes_exist else 'no'}")
+    config  = PipelineConfig(type_vac=args.type_vac)
+    results = run_pipeline(raw_dict, config, on_progress=print)
 
-    # ------------------------------------------------------------------
-    # 2. Spatial (A_1 / A_2)
-    # ------------------------------------------------------------------
-    print("[3/7] Generating spatial mappings (AG / AP)...")
-    AP, AG, marker = ag_ap_generate_reshape(normed['stops'])
-    print(f"  -> Clustering: {marker}")
-    print(f"  -> {len(AG)} AG | {len(AP)} AP")
-
-    AG.to_csv(output_dir / "A_1_Arrets_Generiques.csv", **CSV_OPTS)
-    AP.to_csv(output_dir / "A_2_Arrets_Physiques.csv",  **CSV_OPTS)
-
-    # ------------------------------------------------------------------
-    # 3. Itinerary & courses (C_1 / C_2 / C_3)
-    # ------------------------------------------------------------------
-    print("[4/7] Generating itineraries, arcs and courses...")
-    lignes    = ligne_generate(normed['routes'])
-    itineraire     = itineraire_generate(normed['stop_times'], AP, normed['trips'])
-    itineraire_arc = itiarc_generate(itineraire, AG)
-    courses        = course_generate(itineraire, itineraire_arc)
-    print(f"  -> {len(itineraire)} stop-time records | {len(itineraire_arc)} arcs | {len(courses)} courses")
-
-    courses_export   = MEF_course(courses, normed['trip_id_coor'])
-    itineraire_export    = MEF_iti(itineraire, courses)
-    iti_arc_export   = MEF_iti_arc(itineraire_arc, courses)
-
-    courses_export.to_csv(output_dir   / "C_1_Courses.csv",       **CSV_OPTS)
-    itineraire_export.to_csv(output_dir    / "C_2_Itineraire.csv",    **CSV_OPTS)
-    iti_arc_export.to_csv(output_dir   / "C_3_Itineraire_Arc.csv", **CSV_OPTS)
-
-    # ------------------------------------------------------------------
-    # 4. Lignes & sous-lignes (B_1 / B_2)
-    # ------------------------------------------------------------------
-    print("[5/7] Generating lignes and sous-lignes...")
-    sous_ligne   = sl_generate(courses, AG, lignes)
-    lignes_export = MEF_ligne(lignes, courses_export, AG)
-    print(f"  -> {len(lignes_export)} lignes | {len(sous_ligne)} sous-lignes")
-
-    lignes_export.to_csv(output_dir / "B_1_Lignes.csv",     **CSV_OPTS)
-    sous_ligne.to_csv(output_dir    / "B_2_Sous_Lignes.csv", **CSV_OPTS)
-
-    # ------------------------------------------------------------------
-    # 5. Service dates (D_1 / D_2)
-    # ------------------------------------------------------------------
-    print("[6/7] Generating service dates and day-types...")
-    Dates = build_dates_table(normed['calendar'], normed['calendar_dates'])
-    service_dates, msg = service_date_generate(
-        normed['calendar'], normed['calendar_dates'], Dates
-    )
-    print(f"  -> {msg}")
-
-    service_jour_type = service_jour_type_generate(service_dates, courses, type_vac)
-    print(f"  -> {len(service_dates)} service-date rows | {len(service_jour_type)} jour-type rows")
-
-    MEF_serdate(service_dates, normed['ser_id_coor']).to_csv(
-        output_dir / "D_1_Service_Dates.csv", **CSV_OPTS)
-    MEF_servjour(service_jour_type, normed['route_id_coor'], normed['ser_id_coor'], type_vac).to_csv(
-        output_dir / "D_2_Service_Jourtype.csv", **CSV_OPTS)
-
-    # ------------------------------------------------------------------
-    # 6. Passage counts & KCC (E_1 / E_4 / F_1 / F_2 / F_3 / F_4)
-    # ------------------------------------------------------------------
-    print("[7/7] Generating passage counts and KCC metrics...")
-
-    # E_1 – passages par AG
-    nb_psg_ag = nb_passage_ag(service_jour_type, itineraire_export, AG, type_vac)
-    nb_psg_ag.to_csv(output_dir / "E_1_Nombre_Passage_AG.csv", **CSV_OPTS)
-
-    # E_4 – passages par arc
-    pnode = AG[['id_ag_num', 'stop_name', 'stop_lon', 'stop_lat']].rename(
-        columns={'id_ag_num': 'NO', 'stop_name': 'NAME', 'stop_lon': 'LON', 'stop_lat': 'LAT'}
-    )
-    nb_psg_arc = passage_arc(iti_arc_export, service_jour_type, pnode, type_vac)
-    nb_psg_arc.to_csv(output_dir / "E_4_Nombre_Passage_Arc.csv", **CSV_OPTS)
-
-    # F_1 – nb courses par ligne
-    nb_crs_ligne = nb_course_ligne(service_jour_type, courses_export, type_vac, lignes_export)
-    nb_crs_ligne.to_csv(output_dir / "F_1_Nombre_Courses_Lignes.csv", **CSV_OPTS)
-
-    # F_2 – caractéristiques par sous-ligne (headway / périodes)
-    caract_sl = caract_par_sl(
-        service_jour_type, courses_export,
-        DEFAULT_HPM, DEFAULT_HPS,
-        type_vac, sous_ligne
-    )
-    caract_sl.to_csv(output_dir / "F_2_Caract_SousLignes.csv", **CSV_OPTS)
-
-    # F_3 / F_4 – KCC lignes & sous-lignes
-    # Dist_shape requiert QGIS pour calculer la longueur réelle des tracés ;
-    # en mode standalone on utilise toujours DIST_Vol_Oiseau (has_shp=False).
-    kcc_ligne = kcc_course_ligne(service_jour_type, courses_export, type_vac, lignes_export, False)
-    kcc_ligne.to_csv(output_dir / "F_3_KCC_Lignes.csv", **CSV_OPTS)
-
-    kcc_sl = kcc_course_sl(service_jour_type, courses_export, type_vac, sous_ligne, False)
-    kcc_sl.to_csv(output_dir / "F_4_KCC_Sous_Ligne.csv", **CSV_OPTS)
+    for name, df in results.items():
+        df.to_csv(output_dir / f"{name}.csv", **CSV_OPTS)
 
     elapsed = time.time() - start_time
     print(f"\nDone. Processing completed in {elapsed:.2f} seconds.")

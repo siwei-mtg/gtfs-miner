@@ -13,7 +13,16 @@
       "Bash(python -X utf8 tmp/benchmark_ensure_columns.py)",
       "Bash(python -X utf8 test_gtfs_core.py)",
       "Bash(python -X utf8 tmp/benchmark_normalize_parallel.py)",
-      "Bash(python -X utf8 -c ':*)"
+      "Bash(python -X utf8 -c ':*)",
+      "Bash(python -m pytest --collect-only)",
+      "Bash(python -m pytest tests/test_api_pipeline_integration.py -v -s)",
+      "Bash(python -m pytest tests/test_api_pipeline_integration.py::test_gtfs_zip_exists tests/test_api_pipeline_integration.py::test_create_project -v)",
+      "Bash(python -m pytest tests/test_gtfs_core.py -v)",
+      "Bash(python -m pytest tests/test_api_pipeline_integration.py::test_upload_and_wait -v -s)",
+      "Bash(python -m pytest tests/test_api_pipeline_integration.py -v2)",
+      "Bash(python -m pytest tests/test_download.py -v)",
+      "Bash(python -m pytest tests/test_api_pipeline_integration.py tests/test_gtfs_core.py -v)",
+      "Bash(python -m pytest tests/test_api_pipeline_integration.py tests/test_websocket.py tests/test_download.py tests/test_gtfs_core.py -v)"
     ]
   }
 }

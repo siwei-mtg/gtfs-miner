@@ -3,13 +3,13 @@ import pandas as pd
 from pathlib import Path
 import traceback
 
-from backend.app.services.gtfs_core.gtfs_norm import rawgtfs_from_zip, gtfs_normalize
-from backend.app.services.gtfs_core.gtfs_spatial import ag_ap_generate_reshape
-from backend.app.services.gtfs_core.gtfs_generator import itineraire_generate, itiarc_generate, course_generate
-from backend.app.services.gtfs_core.gtfs_export import MEF_ligne, MEF_course, MEF_iti
+from app.services.gtfs_core.gtfs_norm import rawgtfs_from_zip, gtfs_normalize
+from app.services.gtfs_core.gtfs_spatial import ag_ap_generate_reshape
+from app.services.gtfs_core.gtfs_generator import itineraire_generate, itiarc_generate, course_generate
+from app.services.gtfs_core.gtfs_export import MEF_ligne, MEF_course, MEF_iti
 
 def test_pipeline():
-    raw_dir = Path("backend/tests/Resources/raw")
+    raw_dir = Path(__file__).parent / "Resources" / "raw"
     zip_files = list(raw_dir.glob("*.zip"))
     
     results = []

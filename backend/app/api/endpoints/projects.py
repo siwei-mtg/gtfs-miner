@@ -1,15 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
+import io
 import shutil
 import asyncio
+import zipfile
 from pathlib import Path
 
 from ...db.database import get_db
 from ...db.models import Project
 from ...schemas.project import ProjectCreate, ProjectResponse
 from ...services.worker import run_project_task_sync
-from ...core.config import settings, TEMP_DIR
+from ...core.config import settings, TEMP_DIR, PROJECT_DIR
 
 router = APIRouter()
 
@@ -97,4 +100,24 @@ def download_results(project_id: str, db: Session = Depends(get_db)):
     """
     下载整体处理结果的 ZIP 归档
     """
-    pass # To be implemented using FileResponse 
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.status != "completed":
+        raise HTTPException(status_code=400, detail="Project not ready for download")
+
+    out_dir = PROJECT_DIR / project_id / "output"
+    if not out_dir.exists():
+        raise HTTPException(status_code=404, detail="Output directory not found")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for csv_file in sorted(out_dir.glob("*.csv")):
+            zf.write(csv_file, csv_file.name)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="gtfs_results_{project_id}.zip"'},
+    )

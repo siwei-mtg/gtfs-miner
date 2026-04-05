@@ -98,6 +98,7 @@ MVP 的核心主线：**上传 GTFS → 配置参数 → 异步处理 → 下载
 | 晚高峰开始时间（HPS début） | HH:MM | 17:00 |
 | 晚高峰结束时间（HPS fin） | HH:MM | 19:30 |
 | 假期类型（Vacances） | 下拉：A / B / C / 全部 | A |
+| 日历数据源 | 系统内置日历微服务 (支持跨年度同步) | 官方 API (api.gouv.fr) |
 | 日历国家/地区 | 下拉：法国（扩展接口预留） | 法国 |
 
 **高级参数**（MVP 中折叠隐藏，V5 开放编辑）
@@ -232,6 +233,7 @@ GET    /api/v1/projects/{id}/download          下载全部结果 ZIP
 API 网关（FastAPI）
     ├── 认证服务（JWT + OAuth2）
     ├── 项目管理 API
+    ├── 日历服务 (Calendar Service: API Sync + DB)
     ├── 文件上传 API
     ├── 任务状态 WebSocket
     └── 结果查询 API
@@ -239,11 +241,12 @@ API 网关（FastAPI）
 任务队列（Celery + Redis）
     └── Worker：现有 Python 处理逻辑（零修改复用）
             ↓
-数据库（PostgreSQL）
+数据库（Supabase / PostgreSQL）
     ├── 用户 / 租户 / 项目元数据
+    ├── 日历数据（calendar_dates 表，取代本地 Excel）
     └── 处理结果表（分表存储，按 project_id 索引）
             ↓
-对象存储（MinIO / S3）
+对象存储（Supabase Storage / S3）
     └── 原始 GTFS 上传文件、结果 ZIP 归档
 ```
 
@@ -254,12 +257,28 @@ API 网关（FastAPI）
 | 后端 API | **FastAPI (Python)** | 与现有处理逻辑同语言；原生 WebSocket；自动生成 OpenAPI 文档 |
 | 任务队列 | **Celery + Redis** | 成熟异步方案；支持进度回调；Worker 可横向扩展 |
 | 前端 | **React + TypeScript** | 生态成熟；Ant Design 表格组件开箱即用 |
-| 数据库 | **PostgreSQL** | 多租户 Row Level Security；JSON 列支持；可靠性高 |
-| 对象存储 | **MinIO（自建）或 AWS S3** | 大文件上传/下载与应用层解耦 |
+| 数据库 | **Supabase（PostgreSQL）** | 托管 PG；内置 Row Level Security；Storage + Auth 一体；免运维 |
+| 对象存储 | **Supabase Storage**（MVP）/ AWS S3（扩展） | S3 兼容；与 DB 同平台；大文件上传/下载与应用层解耦 |
 | 地图（V2） | **MapLibre GL JS** | 开源；矢量渲染性能好；适合大数据集 |
 | 容器化 | **Docker Compose（开发）/ Kubernetes（生产）** | 标准部署；多服务编排 |
 | 实时通信 | **WebSocket**（FastAPI 原生支持） | 任务进度实时推送 |
 | 邮件通知 | **SMTP / SendGrid** | 任务完成通知 |
+
+### 5.2a Supabase 接入迁移步骤
+
+> **背景**：Phase 0 使用 SQLite 快速验证流程；Phase 1 MVP 前迁移至 Supabase，无需改动 Worker 逻辑。
+
+| 步骤 | 改动文件 | 说明 |
+|------|---------|------|
+| 1. 配置连接串 | `backend/.env`（新建，加入 `.gitignore`） | 写入 Supabase PostgreSQL URI（psycopg2 格式） |
+| 2. 更新 Settings | `backend/app/core/config.py` | `DATABASE_URL` 改读 `.env`；预留 `SUPABASE_URL` / `SUPABASE_ANON_KEY` 字段 |
+| 3. 移除 SQLite 参数 | `backend/app/db/database.py` | 删 `check_same_thread: False`；加 `pool_pre_ping=True` 及连接池配置 |
+| 4. 添加驱动 | `backend/requirements.txt` | 加 `psycopg2-binary`（同步驱动，匹配 Worker 同步模式） |
+| 5. 补充 Model | `backend/app/db/models.py` | 新增 `CalendarDate` 表（按 `CALENDAR_SERVICE_PLAN.md` Schema） |
+| 6. Alembic 迁移 | `backend/alembic/`（初始化） | `alembic init` → `alembic revision --autogenerate` → `alembic upgrade head` 建表到 Supabase |
+| 7. 存储替换（Phase 1）| `backend/app/services/worker.py` | 将本地 `storage/projects/` 输出改写入 Supabase Storage Bucket |
+
+> `worker.py` 核心处理逻辑**无需改动**，SQLAlchemy ORM 对 SQLite/PostgreSQL 透明。
 
 ### 5.3 多租户隔离策略
 

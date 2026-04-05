@@ -6,8 +6,8 @@ GTFS 核心模块单元测试 (test_gtfs_core.py)
 import pandas as pd
 import numpy as np
 import unittest
-from backend.app.services.gtfs_core.gtfs_utils import norm_upper_str, getDistHaversine, heure_from_xsltime
-from backend.app.services.gtfs_core.gtfs_norm import stops_norm, trips_norm
+from app.services.gtfs_core.gtfs_utils import norm_upper_str, getDistHaversine, heure_from_xsltime
+from app.services.gtfs_core.gtfs_norm import stops_norm, trips_norm
 
 class TestGTFSCore(unittest.TestCase):
     
