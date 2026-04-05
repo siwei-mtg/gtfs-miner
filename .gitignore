@@ -12,4 +12,4 @@ test
 Makefile
 *.cfg
 pylintrc
-.gitignore
+# (removed self-referencing .gitignore rule from legacy QGIS era)

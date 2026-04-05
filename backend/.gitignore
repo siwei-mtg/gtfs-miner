@@ -1,0 +1,20 @@
+# Runtime storage — never commit user data or processed output
+storage/projects/
+storage/temp/
+storage/*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Environment
+.env
+.venv/
+venv/
+
+# Misc
+*.egg-info/
+dist/
+build/
