@@ -1,7 +1,8 @@
 import os
 import pandas as pd
 from pathlib import Path
-from app.services.gtfs_core.gtfs_norm import rawgtfs_from_zip, gtfs_normalize
+from app.services.gtfs_core.gtfs_reader import read_gtfs_zip
+from app.services.gtfs_core.gtfs_norm import gtfs_normalize
 import traceback
 
 def test_datasets():
@@ -22,7 +23,7 @@ def test_datasets():
         try:
             # 1. Load raw data
             # Note: We might need to modify rawgtfs_from_zip to handle encoding better
-            raw_dict = rawgtfs_from_zip(zip_path)
+            raw_dict = read_gtfs_zip(zip_path)
             
             # 2. Normalize
             normed = gtfs_normalize(raw_dict)

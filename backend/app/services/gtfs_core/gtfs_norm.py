@@ -16,16 +16,42 @@ GTFS 标准化模块 (gtfs_norm.py)
 
 import numpy as np
 import pandas as pd
-import chardet
 from concurrent.futures import ThreadPoolExecutor
-from zipfile import ZipFile
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional, List, Union
-from .gtfs_utils import norm_upper_str, nan_in_col_workaround, encoding_guess
+from typing import Dict, Any, Tuple, Optional, List, Union, TypedDict
+from .gtfs_utils import norm_upper_str, nan_in_col_workaround
+
+class NormedGTFS(TypedDict):
+    """
+    Typed contract for the dict returned by gtfs_normalize().
+    TypedDict keeps dict-style access (normed['stops']) while giving IDEs and type-checkers
+    full visibility into every key and its type.
+    """
+    agency:           pd.DataFrame
+    routes:           pd.DataFrame
+    stops:            pd.DataFrame
+    trips:            pd.DataFrame
+    stop_times:       pd.DataFrame
+    calendar:         Optional[pd.DataFrame]   # None when the feed has no calendar.txt
+    calendar_dates:   pd.DataFrame
+    shapes:           Optional[pd.DataFrame]   # None when the feed has no shapes.txt
+    route_id_coor:    pd.DataFrame             # [route_id, id_ligne_num]
+    trip_id_coor:     pd.DataFrame             # [trip_id, id_course_num]
+    ser_id_coor:      pd.DataFrame             # [service_id, id_service_num]
+    initial_na:       str                      # NA summary before interpolation
+    final_na_time_col: int                     # remaining NA count in time columns
+
 
 # 常量定义
 DEFAULT_ROUTE_TYPE = 3
 DEFAULT_LOCATION_TYPE = 0
+
+# GTFS route_type → mode 映射表（GTFS spec §1.3）
+# 新增交通类型只需在此追加行，ligne_generate() 无需修改
+ROUTE_TYPE_MAP: pd.DataFrame = pd.DataFrame({
+    'route_type': [0,         1,       2,       3,     4,       5,       6,         7,             11,       12],
+    'mode':       ["tramway", "metro", "train", "bus", "ferry", "cable", "telephe", "funiculaire", "trolley", "monorail"],
+})
 
 def ensure_columns(df: pd.DataFrame, required_cols: List[str]) -> pd.DataFrame:
     """确保 DataFrame 包含所有必要列，缺失列填充 NaN。
@@ -97,12 +123,9 @@ def ligne_generate(raw_routes: pd.DataFrame) -> pd.DataFrame:
     解析线路类型 (公交, 地铁, 火车等)。
     Input Schema: [route_type, ...]
     Output Schema: [route_type, mode, ...]
+    映射表见模块级常量 ROUTE_TYPE_MAP。
     """
-    types_map = pd.DataFrame({
-        'route_type': [0, 1, 2, 3, 4, 5, 6, 7, 11, 12],
-        'mode': ["tramway", "metro", "train", "bus", "ferry", "cable", "telephe", "funiculaire", "trolley", "monorail"]
-    })
-    return raw_routes.merge(types_map, on='route_type', how='left').dropna(axis=1, how='all')
+    return raw_routes.merge(ROUTE_TYPE_MAP, on='route_type', how='left').dropna(axis=1, how='all')
 
 def trips_norm(raw_trips: pd.DataFrame) -> pd.DataFrame:
     """
@@ -194,85 +217,12 @@ def cal_dates_norm(raw_caldates: pd.DataFrame) -> pd.DataFrame:
     calendar_dates['exception_type'] = pd.to_numeric(calendar_dates['exception_type'], errors='coerce').fillna(0).astype(np.int8)
     return calendar_dates
 
-def rawgtfs_from_zip(zippath: Union[str, Path]) -> Dict[str, pd.DataFrame]:
-    """
-    从 ZIP 文件直接读取 GTFS 原始 CSV 数据。
-    """
-    result = {}
-    with ZipFile(zippath, "r") as zfile:
-        for name in zfile.namelist():
-            if name.endswith('.txt'):
-                basename = Path(name).name
-                stem = Path(name).stem
-                # 尝试 utf-8, 否则 fallback 到 latin-1
-                try:
-                    with zfile.open(name) as f:
-                        df = pd.read_csv(f, encoding='utf-8', low_memory=False)
-                except (UnicodeDecodeError, pd.errors.ParserError):
-                    with zfile.open(name) as f:
-                        df = pd.read_csv(f, encoding='latin-1', low_memory=False)
-                
-                result[stem] = df
-    return result
-
-def rawgtfs(dirpath: Union[str, Path]) -> Dict[str, pd.DataFrame]:
-    """
-    从本地目录读取 GTFS 原始 CSV 文件（ZIP 之外的目录输入）。
-    """
-    result = {}
-    for f in Path(dirpath).glob('*.txt'):
-        try:
-            df = pd.read_csv(f, encoding='utf-8', low_memory=False)
-        except UnicodeDecodeError:
-            df = pd.read_csv(f, encoding='latin-1', low_memory=False)
-        result[f.stem] = df
-    return result
-
-def read_date(plugin_path: Path) -> pd.DataFrame:
-    """
-    读取预定义的日历信息 (Calendrier.txt)。
-    Input Schema: N/A
-    Output Schema: [Date_GTFS, Type_Jour, Semaine, Mois, Annee, ...]
-    """
-    p = Path(__file__).parent / "resources" / "Calendrier.txt"
-    dates = pd.read_csv(p, encoding="utf-8", sep="\t", parse_dates=['Date_Num'])
-    drop_cols = ['Date_Num', 'Date_Opendata', 'Ferie', 'Vacances_A', 'Vacances_B', 'Vacances_C',
-                 'Concat_Select_Type_A', 'Concat_Select_Type_B', 'Concat_Select_Type_C', 
-                 'Type_Jour_IDF', 'Annee_Scolaire']
-    dates.drop(columns=drop_cols, errors='ignore', inplace=True)
-    return dates
-
-def read_validite(plugin_path: Path) -> pd.DataFrame:
-    """
-    读取有效期对应关系 (Correspondance_Validite.txt)。
-    Input Schema: N/A
-    Output Schema: [valid_01, valid, ...]
-    """
-    p = Path(__file__).parent / "resources" / "Correspondance_Validite.txt"
-    return pd.read_csv(p, sep=';', dtype={'valid_01': str, 'valid': 'int32'})
-
-def read_input(dirpath: Union[str, Path], plugin_path: Path) -> Tuple[Dict[str, Any], pd.DataFrame, pd.DataFrame]:
-    """
-    一键读取 GTFS 目录及辅助资源表。
-    Input Schema: N/A
-    Output Schema (Tuple): (Normed_Dict, Dates_DataFrame, Validite_DataFrame)
-    """
-    raw_dict = rawgtfs(dirpath)
-    
-    normed = gtfs_normalize(raw_dict)
-    dates = read_date(plugin_path)
-    validite = read_validite(plugin_path)
-    return normed, dates, validite
-
-def gtfs_normalize(raw_dict: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
+def gtfs_normalize(raw_dict: Dict[str, pd.DataFrame]) -> NormedGTFS:
     """
     规范化流程总控制器。
     Input Schema (Dict): {"agency": df, "routes": df, "stops": df, "trips": df, "stop_times": df,
                           "calendar": df (optional), "calendar_dates": df (optional)}
-    Output Schema (Dict): {"agency": df, "routes": df, "stops": df, "trips": df, "stop_times": df,
-                           "calendar": df|None, "calendar_dates": df,
-                           "route_id_coor": df, "trip_id_coor": df, "ser_id_coor": df,
-                           "initial_na": str, "final_na_time_col": int}
+    Output: NormedGTFS — see TypedDict definition above for the full key/type contract.
 
     处理流程：
     ```

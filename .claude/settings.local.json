@@ -22,7 +22,10 @@
       "Bash(python -m pytest tests/test_api_pipeline_integration.py -v2)",
       "Bash(python -m pytest tests/test_download.py -v)",
       "Bash(python -m pytest tests/test_api_pipeline_integration.py tests/test_gtfs_core.py -v)",
-      "Bash(python -m pytest tests/test_api_pipeline_integration.py tests/test_websocket.py tests/test_download.py tests/test_gtfs_core.py -v)"
+      "Bash(python -m pytest tests/test_api_pipeline_integration.py tests/test_websocket.py tests/test_download.py tests/test_gtfs_core.py -v)",
+      "Bash(python -m pytest tests/test_gtfs_norm.py tests/test_gtfs_core.py tests/test_gtfs_pipeline.py -v --tb=short)",
+      "Bash(pip install:*)",
+      "Bash(python -c \"import pandas as pd; xls = pd.read_excel\\('app/services/gtfs_core/resources/Calendrier.xls', nrows=3\\); print\\(xls.columns.tolist\\(\\)\\); print\\(xls.head\\(3\\).to_string\\(\\)\\)\")"
     ]
   }
 }

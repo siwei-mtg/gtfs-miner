@@ -121,10 +121,12 @@ def duree_arc(df: pd.DataFrame) -> float:
     """
     return float(df['heure_arrive'].max() - df['heure_depart'].min())
 
-def encoding_guess(acces: Path) -> dict:
+def encoding_guess(acces: Union[Path, bytes]) -> dict:
     """
-    自动检测文件编码。
+    自动检测文件编码。支持 Path（文件路径）和 bytes（内存数据，如 ZIP 内容）。
     """
+    if isinstance(acces, (bytes, bytearray)):
+        return chardet.detect(acces[:10000])
     with acces.open('rb') as rawdata:
         return chardet.detect(rawdata.read(10000))
 

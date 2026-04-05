@@ -22,7 +22,9 @@ from ..api.websockets.progress import manager
 
 # Import individual pipeline functions (not main, to allow step-by-step progress)
 from .gtfs_core.pipeline import build_dates_table, DEFAULT_TYPE_VAC, CSV_OPTS
-from .gtfs_core.gtfs_norm import rawgtfs_from_zip, gtfs_normalize, ligne_generate
+from .gtfs_core.calendar_provider import LocalXlsCalendarProvider
+from .gtfs_core.gtfs_norm import gtfs_normalize, ligne_generate
+from .gtfs_core.gtfs_reader import read_gtfs_zip
 from .gtfs_core.gtfs_spatial import ag_ap_generate_reshape
 from .gtfs_core.gtfs_generator import (
     itineraire_generate, itiarc_generate, course_generate,
@@ -93,7 +95,7 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
     try:
         # ── 1. Load raw GTFS ──────────────────────────────────────────────
         zip_path_obj = Path(zip_path)
-        raw_dict = rawgtfs_from_zip(zip_path_obj)
+        raw_dict = read_gtfs_zip(zip_path_obj)
         if not raw_dict:
             raise ValueError("No GTFS .txt tables found in the uploaded ZIP.")
         tables_found = list(raw_dict.keys())
@@ -142,13 +144,12 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
 
         # ── 6. Service dates (D_1 / D_2) ─────────────────────────────────
         Dates = build_dates_table(normed['calendar'], normed['calendar_dates'])
+        Dates = LocalXlsCalendarProvider().enrich(Dates)  # inject Type_Jour_Vacances_*
         service_dates, msg = service_date_generate(
             normed['calendar'], normed['calendar_dates'], Dates
         )
-        
-        # Graceful fallback: if the requested type_vac column doesn't exist
-        # (happens when Calendrier.xls is absent and build_dates_table only creates Type_Jour),
-        # fall back to the always-available base column.
+
+        # Graceful fallback: provider may not cover all dates (e.g. XLS absent).
         if type_vac not in service_dates.columns:
             type_vac = "Type_Jour"
         

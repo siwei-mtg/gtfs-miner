@@ -7,7 +7,9 @@ from typing import Callable, Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from .gtfs_norm import rawgtfs_from_zip, gtfs_normalize, ligne_generate
+from .gtfs_norm import gtfs_normalize, ligne_generate
+from .gtfs_reader import read_gtfs_zip, read_gtfs_dir
+from .calendar_provider import CalendarProvider, LocalXlsCalendarProvider, NullCalendarProvider
 from .gtfs_spatial import ag_ap_generate_reshape
 from .gtfs_generator import (
     itineraire_generate, itiarc_generate, course_generate,
@@ -86,6 +88,7 @@ def run_pipeline(
     raw_dict: Dict[str, pd.DataFrame],
     config: Optional[PipelineConfig] = None,
     on_progress: Optional[Callable[[str], None]] = None,
+    calendar_provider: Optional[CalendarProvider] = None,
 ) -> Dict[str, pd.DataFrame]:
     """
     Orchestrates the full GTFS processing pipeline.
@@ -102,6 +105,7 @@ def run_pipeline(
     if config is None:
         config = PipelineConfig()
     _progress = on_progress or (lambda _: None)
+    _calendar = calendar_provider or NullCalendarProvider()
 
     # ── 1. Normalize ──────────────────────────────────────────────────────────
     _progress("[1/7] Normalizing GTFS tables...")
@@ -130,12 +134,12 @@ def run_pipeline(
     # ── 5. Service dates (D_1 / D_2) ─────────────────────────────────────────
     _progress("[5/7] Generating service dates and day-types...")
     Dates = build_dates_table(normed['calendar'], normed['calendar_dates'])
+    Dates = _calendar.enrich(Dates)  # inject Type_Jour_Vacances_* via provider
     service_dates, _msg = service_date_generate(
         normed['calendar'], normed['calendar_dates'], Dates
     )
 
-    # Graceful fallback: build_dates_table only creates Type_Jour when no
-    # external calendar resource is available; vacation columns are absent.
+    # Graceful fallback: provider may not cover all dates or be NullCalendarProvider.
     type_vac = config.type_vac
     if type_vac not in service_dates.columns:
         type_vac = "Type_Jour"
@@ -213,16 +217,17 @@ def main() -> None:
 
     # CLI-only I/O: load raw GTFS tables from ZIP or directory
     if input_path.is_dir():
-        raw_dict = {f.stem: pd.read_csv(f, low_memory=False) for f in input_path.glob('*.txt')}
+        raw_dict = read_gtfs_dir(input_path)
     else:
-        raw_dict = rawgtfs_from_zip(input_path)
+        raw_dict = read_gtfs_zip(input_path)
     if not raw_dict:
         print("Error: No GTFS .txt tables found in the input.")
         return
     print(f"  -> Loaded tables: {', '.join(raw_dict.keys())}")
 
-    config  = PipelineConfig(type_vac=args.type_vac)
-    results = run_pipeline(raw_dict, config, on_progress=print)
+    config    = PipelineConfig(type_vac=args.type_vac)
+    provider  = LocalXlsCalendarProvider()
+    results   = run_pipeline(raw_dict, config, on_progress=print, calendar_provider=provider)
 
     for name, df in results.items():
         df.to_csv(output_dir / f"{name}.csv", **CSV_OPTS)

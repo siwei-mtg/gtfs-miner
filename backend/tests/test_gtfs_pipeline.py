@@ -3,7 +3,8 @@ import pandas as pd
 from pathlib import Path
 import traceback
 
-from app.services.gtfs_core.gtfs_norm import rawgtfs_from_zip, gtfs_normalize
+from app.services.gtfs_core.gtfs_reader import read_gtfs_zip
+from app.services.gtfs_core.gtfs_norm import gtfs_normalize
 from app.services.gtfs_core.gtfs_spatial import ag_ap_generate_reshape
 from app.services.gtfs_core.gtfs_generator import itineraire_generate, itiarc_generate, course_generate
 from app.services.gtfs_core.gtfs_export import MEF_ligne, MEF_course, MEF_iti
@@ -27,7 +28,7 @@ def test_pipeline():
         
         # 1. Norm Module
         try:
-            raw_dict = rawgtfs_from_zip(zip_path)
+            raw_dict = read_gtfs_zip(zip_path)
             normed = gtfs_normalize(raw_dict)
             res["norm"]["status"] = "Success"
             res["metrics"]["stops"] = len(normed['stops'])

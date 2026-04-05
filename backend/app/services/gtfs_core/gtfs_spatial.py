@@ -19,9 +19,57 @@ import pandas as pd
 from scipy.cluster.hierarchy import linkage, cut_tree
 from scipy.cluster.vq import kmeans2
 from sklearn.cluster import DBSCAN
-from typing import Tuple, Dict
+from typing import Protocol, Tuple, Dict
 from .gtfs_utils import distmatrice, getDistHaversine
 from .gtfs_schemas import APSchema, AGSchema
+
+
+class ClusteringStrategy(Protocol):
+    """
+    Strategy protocol for AG/AP generation algorithms.
+    Implement this to add a new clustering approach without modifying ag_ap_generate_reshape().
+    """
+    marker: str
+
+    def cluster(self, stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]: ...
+
+
+class BigVolumeStrategy:
+    """Two-phase K-Means + hierarchical clustering for large datasets (>= 5000 stops)."""
+    marker = 'cluster_method'
+
+    def cluster(self, stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        return ag_ap_generate_bigvolume(stops)
+
+
+class HClusterStrategy:
+    """DBSCAN-based clustering for small/medium datasets (< 5000 stops)."""
+    marker = 'cluster_method'
+
+    def cluster(self, stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        return ag_ap_generate_hcluster(stops)
+
+
+class AsitStrategy:
+    """Uses existing parent_station hierarchy when all stops have a parent."""
+    marker = 'original_parent_station'
+
+    def cluster(self, stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        return ag_ap_generate_asit(stops)
+
+
+def select_strategy(raw_stops: pd.DataFrame) -> ClusteringStrategy:
+    """
+    Factory: inspect raw_stops and return the appropriate ClusteringStrategy.
+    To add a new algorithm: implement ClusteringStrategy, add a branch here.
+    """
+    nb_types    = len(raw_stops['location_type'].unique())
+    ap_potentiel = len(raw_stops.loc[raw_stops['location_type'] == 0])
+    ap_no_parent = raw_stops[raw_stops['location_type'] == 0]['parent_station'].isnull().sum()
+
+    if nb_types > 1 and ap_no_parent == 0:
+        return AsitStrategy()
+    return BigVolumeStrategy() if ap_potentiel >= 5000 else HClusterStrategy()
 
 
 def ag_ap_generate_bigvolume(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -131,37 +179,16 @@ def ag_ap_generate_asit(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataF
 
 def ag_ap_generate_reshape(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, str]:
     """
-    自适应重构 AG/AP。
-    逻辑：若无 ParentStation 则聚类；若有则根据数量决定聚类算法。
+    自适应重构 AG/AP。策略由 select_strategy() 决定，此函数仅负责调度。
     Input Schema: [stop_id, stop_name, stop_lat, stop_lon, location_type, parent_station, ...]
     Output Schema (Tuple):
         AP: [id_ap, ...]
         AG: [id_ag, ...]
         marker: str (cluster_method/original_parent_station)
     """
-    nb_types = len(raw_stops.location_type.unique())
-    ap_no_parent = raw_stops[raw_stops['location_type'] == 0]['parent_station'].isnull().sum()
-    
-    ap_potentiel = len(raw_stops.loc[raw_stops['location_type'] == 0])
-
-    if nb_types == 1:
-        if ap_potentiel >= 5000:
-            AP, AG = ag_ap_generate_bigvolume(raw_stops)
-        else:
-            AP, AG = ag_ap_generate_hcluster(raw_stops)
-        marker = 'cluster_method'
-    elif ap_no_parent == 0:
-        AP, AG = ag_ap_generate_asit(raw_stops)
-        marker = 'original_parent_station'
-    else:
-        # Partiellement renseigné : on choisit selon le volume
-        if ap_potentiel >= 5000:
-            AP, AG = ag_ap_generate_bigvolume(raw_stops)
-        else:
-            AP, AG = ag_ap_generate_hcluster(raw_stops)
-        marker = 'cluster_method'
-        
-    return AP, AG, marker
+    strategy = select_strategy(raw_stops)
+    AP, AG = strategy.cluster(raw_stops)
+    return AP, AG, strategy.marker
 
 if __name__ == '__main__':
     print("gtfs_spatial module loaded.")
