@@ -25,7 +25,12 @@
       "Bash(python -m pytest tests/test_api_pipeline_integration.py tests/test_websocket.py tests/test_download.py tests/test_gtfs_core.py -v)",
       "Bash(python -m pytest tests/test_gtfs_norm.py tests/test_gtfs_core.py tests/test_gtfs_pipeline.py -v --tb=short)",
       "Bash(pip install:*)",
-      "Bash(python -c \"import pandas as pd; xls = pd.read_excel\\('app/services/gtfs_core/resources/Calendrier.xls', nrows=3\\); print\\(xls.columns.tolist\\(\\)\\); print\\(xls.head\\(3\\).to_string\\(\\)\\)\")"
+      "Bash(python -c \"import pandas as pd; xls = pd.read_excel\\('app/services/gtfs_core/resources/Calendrier.xls', nrows=3\\); print\\(xls.columns.tolist\\(\\)\\); print\\(xls.head\\(3\\).to_string\\(\\)\\)\")",
+      "Bash(cmd:*)",
+      "Bash(python -m pytest test_eh01.py -v)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(python -m pytest \"C:/Users/wei.si/Projets/GTFS Miner/backend/test_eh01.py\" -v --rootdir=\"C:/Users/wei.si/Projets/GTFS Miner/backend\")",
+      "Bash(git:*)"
     ]
   }
 }

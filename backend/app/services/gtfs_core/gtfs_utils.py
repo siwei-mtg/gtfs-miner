@@ -7,6 +7,7 @@ GTFS 基础工具模块 (gtfs_utils.py)
 3. 编码检测与通用数据清洗
 """
 
+import logging
 import math
 import numpy as np
 import pandas as pd
@@ -15,6 +16,9 @@ from pathlib import Path
 from typing import List, Union, Optional
 from scipy.spatial.distance import squareform
 from sklearn.metrics.pairwise import haversine_distances
+from .constants import ENCODING_SAMPLE_BYTES
+
+logger = logging.getLogger(__name__)
 
 # --- 字符串处理 ---
 
@@ -32,7 +36,8 @@ def str_time_hms_hour(hms: str) -> int:
     """提取 HH:MM:SS 中的小时。"""
     try:
         return int(hms.split(':')[0])
-    except (ValueError, IndexError):
+    except (ValueError, IndexError) as e:
+        logger.warning("str_time_hms_hour(%r) parse failed, defaulting to 0: %s", hms, e)
         return 0
 
 def str_time_hms(hms: str) -> float:
@@ -40,7 +45,8 @@ def str_time_hms(hms: str) -> float:
     try:
         h, m, s = hms.split(':')
         return int(h)/24 + int(m)/24/60 + int(s)/24/3600
-    except (ValueError, IndexError):
+    except (ValueError, IndexError) as e:
+        logger.warning("str_time_hms(%r) parse failed, defaulting to 0.0: %s", hms, e)
         return 0.0
 
 def get_sec(input_timedelta: List) -> List[float]:
@@ -126,9 +132,9 @@ def encoding_guess(acces: Union[Path, bytes]) -> dict:
     自动检测文件编码。支持 Path（文件路径）和 bytes（内存数据，如 ZIP 内容）。
     """
     if isinstance(acces, (bytes, bytearray)):
-        return chardet.detect(acces[:10000])
+        return chardet.detect(acces[:ENCODING_SAMPLE_BYTES])
     with acces.open('rb') as rawdata:
-        return chardet.detect(rawdata.read(10000))
+        return chardet.detect(rawdata.read(ENCODING_SAMPLE_BYTES))
 
 if __name__ == '__main__':
     # 快速自测

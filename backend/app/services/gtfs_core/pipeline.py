@@ -1,4 +1,5 @@
 import argparse
+import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -6,6 +7,8 @@ from typing import Callable, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 from .gtfs_norm import gtfs_normalize, ligne_generate
 from .gtfs_reader import read_gtfs_zip, read_gtfs_dir
@@ -56,20 +59,26 @@ def build_dates_table(
             s, e = int(row['start_date']), int(row['end_date'])
             if s > 0 and e > 0:
                 try:
-                    start = pd.to_datetime(str(s), format='%Y%m%d')
-                    end   = pd.to_datetime(str(e), format='%Y%m%d')
-                    for d in pd.date_range(start, end):
+                    start    = pd.to_datetime(str(s), format='%Y%m%d')
+                    end_date = pd.to_datetime(str(e), format='%Y%m%d')
+                    for d in pd.date_range(start, end_date):
                         dates_set.add(d)
-                except Exception:
-                    pass
+                except (ValueError, OverflowError) as exc:
+                    logger.warning(
+                        "build_dates_table: invalid calendar date range [%s, %s], skipping: %s",
+                        s, e, exc,
+                    )
 
     for d_int in calendar_dates['date'].unique():
         d_int = int(d_int)
         if d_int > 0:
             try:
                 dates_set.add(pd.to_datetime(str(d_int), format='%Y%m%d'))
-            except Exception:
-                pass
+            except (ValueError, OverflowError) as exc:
+                logger.warning(
+                    "build_dates_table: invalid date value %r in calendar_dates, skipping: %s",
+                    d_int, exc,
+                )
 
     if not dates_set:
         return pd.DataFrame(columns=['Date_GTFS', 'Type_Jour', 'Semaine', 'Mois', 'Annee'])

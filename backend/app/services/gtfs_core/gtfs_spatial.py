@@ -22,6 +22,12 @@ from sklearn.cluster import DBSCAN
 from typing import Protocol, Tuple, Dict
 from .gtfs_utils import distmatrice, getDistHaversine
 from .gtfs_schemas import APSchema, AGSchema
+from .constants import (
+    BIG_VOLUME_THRESHOLD,
+    KMEANS_CHUNK_DIVISOR,
+    STOP_MERGE_RADIUS_METERS,
+    EARTH_RADIUS_METERS,
+)
 
 
 class ClusteringStrategy(Protocol):
@@ -69,7 +75,7 @@ def select_strategy(raw_stops: pd.DataFrame) -> ClusteringStrategy:
 
     if nb_types > 1 and ap_no_parent == 0:
         return AsitStrategy()
-    return BigVolumeStrategy() if ap_potentiel >= 5000 else HClusterStrategy()
+    return BigVolumeStrategy() if ap_potentiel >= BIG_VOLUME_THRESHOLD else HClusterStrategy()
 
 
 def ag_ap_generate_bigvolume(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -86,7 +92,7 @@ def ag_ap_generate_bigvolume(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.
 
     # 阶段 1: K-Means 粗分组 (每组约 500 站点)
     coor = AP[['stop_lon', 'stop_lat']].to_numpy()
-    k = max(1, round(len(coor) / 500))
+    k = max(1, round(len(coor) / KMEANS_CHUNK_DIVISOR))
     _, labels = kmeans2(coor, k, minit='points')
     AP['kmean_id'] = labels
 
@@ -99,7 +105,7 @@ def ag_ap_generate_bigvolume(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.
             AP.loc[cluster_mask, 'clust_id'] = 0
             continue
         distmat = distmatrice(AP_sub.to_numpy())
-        sub_labels = cut_tree(linkage(distmat, method='complete'), height=100).flatten()
+        sub_labels = cut_tree(linkage(distmat, method='complete'), height=STOP_MERGE_RADIUS_METERS).flatten()
         AP.loc[cluster_mask, 'clust_id'] = sub_labels
 
     AP['id_ag'] = AP['kmean_id'].astype(str) + '_' + AP['clust_id'].astype(int).astype(str)
@@ -130,7 +136,7 @@ def ag_ap_generate_hcluster(raw_stops: pd.DataFrame) -> Tuple[pd.DataFrame, pd.D
         return AP, pd.DataFrame()
         
     coords_rad = np.radians(AP[['stop_lat', 'stop_lon']].to_numpy())
-    labels = DBSCAN(eps=100/6371000, min_samples=1, metric='haversine', algorithm='ball_tree', n_jobs=-1).fit_predict(coords_rad)
+    labels = DBSCAN(eps=STOP_MERGE_RADIUS_METERS / EARTH_RADIUS_METERS, min_samples=1, metric='haversine', algorithm='ball_tree', n_jobs=-1).fit_predict(coords_rad)
     
     AP['id_ag'] = (labels + 1).astype(str)
     AP['id_ag_num'] = labels + 10000

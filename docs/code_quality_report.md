@@ -31,27 +31,19 @@
 
 ### 2.1 错误处理与可观测性
 
-#### [EH-01] — P0 — 异常被吞没，无任何日志
-- **文件**：`gtfs_norm.py`（`calendar` merge 的 try/except 块）
-- **现象**：日历合并失败时，代码静默地将 `calendar = None`，生产环境无法诊断。
-- **问题代码**：
-  ```python
-  try:
-      ...  # calendar merge
-  except Exception:
-      calendar = None   # 无日志，无任何痕迹
-  ```
-- **修复方案**：
-  ```python
-  except Exception as exc:
-      logger.warning("Calendar merge failed, continuing without calendar: %s", exc)
-      calendar = None
-  ```
+#### [EH-01] — ~~P0~~ — ✅ 已修复（2026-04-06）
+- **文件**：`gtfs_norm.py`
+- **变更**：
+  - 新增模块级 `logger = logging.getLogger(__name__)`
+  - Block A（坐标解析，L99-101）：`except (ValueError, TypeError) as e` + `logger.warning("stops[%s] coercion failed, defaulting to 0: %s", col, e)`
+  - Block B（calendar merge，L281-283）：`except Exception` → `except (KeyError, ValueError) as e` + `logger.warning("calendar merge failed, skipping: %s", e, exc_info=True)`
 
-#### [EH-02] — P0 — 关键路径上的静默 fallback
-- **文件**：`gtfs_spatial.py`、`gtfs_utils.py`、`pipeline.py`
-- **现象**：默认返回值（`0`、`np.nan`、`None`）无任何日志记录，数据损坏无法被发现。
-- **修复方案**：在每个模块引入 `logging.getLogger(__name__)`，对所有非平凡 fallback 记录 `WARNING` 级别日志。
+#### [EH-02] — ~~P0~~ — ✅ 已修复（2026-04-06）
+- **文件**：`gtfs_utils.py`、`pipeline.py`（`gtfs_spatial.py` 无 try/except，无需修改）
+- **变更**：
+  - 两个文件均新增 `logger = logging.getLogger(__name__)`
+  - `gtfs_utils.py`：`str_time_hms_hour` 和 `str_time_hms` 的 except 块加入 `logger.warning(...)`
+  - `pipeline.py`：`build_dates_table` 的两个 `except Exception: pass` 改为 `except (ValueError, OverflowError) as exc` + `logger.warning(...)`；顺带重命名 `end` → `end_date` 避免变量遮蔽
 
 #### [EH-03] — P1 — 无入参列校验
 - **文件**：`gtfs_export.py`、`gtfs_generator.py`
@@ -68,40 +60,20 @@
 
 ### 2.2 命名与常量
 
-#### [CN-01] — P0 — 业务逻辑中硬编码魔法数字
-- **文件**：`gtfs_spatial.py`、`gtfs_norm.py`（另见 CLAUDE.md §硬编码常量）
-- **问题代码**：
-  ```python
-  k = max(1, round(len(coor) / 500))   # 500：K-Means 分块大小
-  eps = 100 / 6371000                   # 100 m：DBSCAN epsilon
-  if len(stops) > 5000:                 # 5000：大数据集切换阈值
-  ```
-- **修复方案**：新建 `gtfs_core/constants.py`，将 CLAUDE.md 中所有常量集中管理：
-  ```python
-  CLUSTERING_CHUNK_SIZE: int = 500       # 每个 K-Means 分组的站点数
-  DBSCAN_EPSILON_METERS: float = 100.0   # 站点合并距离阈值（米）
-  BIG_VOLUME_THRESHOLD: int = 5000       # 超过此值切换至 K-Means
-  KMEANS_CHUNK_DIVISOR: int = 500        # k = len(stops) / this
-  MISSING_DIRECTION_ID: int = 999
-  MISSING_ROUTE_TYPE: int = 3            # 回退值 = 公共汽车
-  ENCODING_SAMPLE_BYTES: int = 10_000
-  ```
+#### [CN-01] — ~~P0~~ — ✅ 已修复（2026-04-06）
+- **文件**：`gtfs_spatial.py`、`gtfs_norm.py`、`gtfs_utils.py`（bonus）
+- **变更**：
+  - 新建 `gtfs_core/constants.py`，包含 `BIG_VOLUME_THRESHOLD`、`KMEANS_CHUNK_DIVISOR`、`STOP_MERGE_RADIUS_METERS`、`EARTH_RADIUS_METERS`、`MISSING_ROUTE_TYPE`、`MISSING_DIRECTION_ID`、`ENCODING_SAMPLE_BYTES`
+  - `gtfs_spatial.py`：4 处魔法数字替换为常量（`5000`→`BIG_VOLUME_THRESHOLD`、`500`→`KMEANS_CHUNK_DIVISOR`、`height=100`→`STOP_MERGE_RADIUS_METERS`、`eps=100/6371000`→`STOP_MERGE_RADIUS_METERS/EARTH_RADIUS_METERS`）
+  - `gtfs_norm.py`：移除局部 `DEFAULT_ROUTE_TYPE = 3`，改从 `constants` 导入 `MISSING_ROUTE_TYPE`
+  - `gtfs_utils.py`：`10000` → `ENCODING_SAMPLE_BYTES`
 
-#### [CN-02] — P0 — 时段字符串硬编码，无常量定义
-- **文件**：`gtfs_generator.py`（约第 278–307 行）
-- **现象**：`'FM'`、`'HPM'`、`'HC'`、`'HPS'`、`'FS'` 散落在频率计算逻辑中，无集中定义。
-- **修复方案**：
-  ```python
-  class Period:
-      EARLY_MORNING = 'FM'   # 早班低谷
-      PEAK_MORNING  = 'HPM'  # 早高峰
-      OFF_PEAK      = 'HC'   # 平峰
-      PEAK_EVENING  = 'HPS'  # 晚高峰
-      LATE_EVENING  = 'FS'   # 晚班低谷
-
-  ALL_PERIODS = [Period.EARLY_MORNING, Period.PEAK_MORNING, Period.OFF_PEAK,
-                 Period.PEAK_EVENING, Period.LATE_EVENING]
-  ```
+#### [CN-02] — ~~P0~~ — ✅ 已修复（2026-04-06）
+- **文件**：`gtfs_generator.py`
+- **变更**：
+  - `constants.py` 新增 `class Period`（`EARLY_MORNING/PEAK_MORNING/OFF_PEAK/PEAK_EVENING/LATE_EVENING`）和 `ALL_PERIODS` 列表
+  - `gtfs_generator.py`：5 处 `'FM'/'HPM'/'HC'/'HPS'/'FS'` 字符串替换为 `Period.*` 常量；`drop(columns=[...])` 改用 `ALL_PERIODS`；`default='HC'` 改为 `default=Period.OFF_PEAK`
+  - 顺带移除 `DEFAULT_DIRECTION_ID = 999`（与 `constants.MISSING_DIRECTION_ID` 重复），改用统一导入
 
 #### [CN-03] — P2 — 缩写无文档说明
 - **文件**：全局（`TH`、`crs_tj`、`AP`、`AG`、`nb_crs`、`iti_arc`、`EPM/HPS/HC`……）
@@ -261,12 +233,12 @@
 
 | 编号 | 问题 | 文件 | 预估工时 |
 |------|------|------|----------|
-| EH-01 | 异常被吞没，无日志 | `gtfs_norm.py` | 30 分钟 |
-| EH-02 | 关键路径静默 fallback | `gtfs_spatial.py`、`gtfs_utils.py`、`pipeline.py` | 2 小时 |
-| CN-01 | 魔法数字硬编码 | `gtfs_spatial.py`、`gtfs_norm.py` | 1 小时 |
-| CN-02 | 时段字符串无常量 | `gtfs_generator.py` | 1 小时 |
+| ~~EH-01~~ | ~~异常被吞没，无日志~~ | ~~`gtfs_norm.py`~~ | ✅ 已修复 |
+| ~~EH-02~~ | ~~关键路径静默 fallback~~ | ~~`gtfs_utils.py`、`pipeline.py`~~ | ✅ 已修复 |
+| ~~CN-01~~ | ~~魔法数字硬编码~~ | ~~`gtfs_spatial.py`、`gtfs_norm.py`~~ | ✅ 已修复 |
+| ~~CN-02~~ | ~~时段字符串无常量~~ | ~~`gtfs_generator.py`~~ | ✅ 已修复 |
 
-**P0 合计估算：约 4.5 小时**
+**P0 合计估算：约 4 小时**（EH-01 已完成）
 
 ---
 
@@ -310,7 +282,7 @@
 
 ```
 P0
-├── backend/app/services/gtfs_core/gtfs_norm.py       [EH-01, CN-01]
+├── backend/app/services/gtfs_core/gtfs_norm.py       [~~EH-01~~✅, CN-01]
 ├── backend/app/services/gtfs_core/gtfs_spatial.py    [EH-02, CN-01]
 ├── backend/app/services/gtfs_core/gtfs_utils.py      [EH-02]
 ├── backend/app/services/gtfs_core/pipeline.py        [EH-02]

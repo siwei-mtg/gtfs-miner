@@ -14,12 +14,16 @@ GTFS 标准化模块 (gtfs_norm.py)
 ```
 """
 
+import logging
 import numpy as np
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from typing import Dict, Any, Tuple, Optional, List, Union, TypedDict
 from .gtfs_utils import norm_upper_str, nan_in_col_workaround
+from .constants import MISSING_ROUTE_TYPE
 
 class NormedGTFS(TypedDict):
     """
@@ -43,7 +47,6 @@ class NormedGTFS(TypedDict):
 
 
 # 常量定义
-DEFAULT_ROUTE_TYPE = 3
 DEFAULT_LOCATION_TYPE = 0
 
 # GTFS route_type → mode 映射表（GTFS spec §1.3）
@@ -93,7 +96,8 @@ def stops_norm(raw_stops: pd.DataFrame) -> pd.DataFrame:
         try:
             cleaned = stops[col].astype(str).str.strip().replace('', '0')
             stops[col] = pd.to_numeric(cleaned, errors='coerce').fillna(0).astype(np.float32)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as e:
+            logger.warning("stops[%s] coercion failed, defaulting to 0: %s", col, e)
             stops[col] = np.float32(0.0)
     
     stops.stop_name = norm_upper_str(stops.stop_name)
@@ -114,7 +118,7 @@ def routes_norm(raw_routes: pd.DataFrame) -> pd.DataFrame:
     routes.drop(['route_url', 'route_sort_order'], axis=1, errors='ignore', inplace=True)
     routes.dropna(axis=1, how='all', inplace=True)
     routes.route_id = routes.route_id.astype(str)
-    routes.route_type = pd.to_numeric(routes.route_type, errors='coerce').fillna(DEFAULT_ROUTE_TYPE).astype(np.int8) # Default BUS
+    routes.route_type = pd.to_numeric(routes.route_type, errors='coerce').fillna(MISSING_ROUTE_TYPE).astype(np.int8) # Default BUS
     routes['id_ligne_num'] = np.arange(1, len(routes) + 1)
     return routes
 
@@ -274,7 +278,8 @@ def gtfs_normalize(raw_dict: Dict[str, pd.DataFrame]) -> NormedGTFS:
             calendar = cal_normed.merge(ser_id_coor, on='service_id').drop(columns=['service_id'])
             if calendar.empty:
                 calendar = None
-    except Exception:
+    except (KeyError, ValueError) as e:
+        logger.warning("calendar merge failed, skipping: %s", e, exc_info=True)
         calendar = None
 
     # Calendar dates 合并 ser_id_coor

@@ -1,7 +1,7 @@
 # SOLID 原则分析报告 — gtfs_core
 
 **分析范围**：`backend/app/services/gtfs_core/`  
-**分析日期**：2026-04-04  **最后更新**：2026-04-06（P5 已处理）
+**分析日期**：2026-04-04  **最后更新**：2026-04-06（全部已处理）
 
 ---
 
@@ -27,7 +27,7 @@
 | P3 | S | `rawgtfs_from_zip()` 编码检测内嵌，`encoding_guess()` 已存在却未复用 | ✅ 已处理 |
 | P4 | O | `ag_ap_generate_reshape()` if/elif 硬编码三种聚类算法分支 | ✅ 已处理 |
 | P5 | I | `gtfs_normalize()` 返回 13 键胖字典，下游只需其中少数键 | ✅ 已处理 |
-| P6 | O | `ligne_generate()` 交通类型映射表内嵌为字面量 | 待处理 |
+| P6 | O | `ligne_generate()` 交通类型映射表内嵌为字面量 | ✅ 已处理 |
 
 ---
 
@@ -116,17 +116,20 @@ class MyNewStrategy:
 
 ---
 
-## 待处理问题
+### P6 — O：`ligne_generate()` 内嵌交通类型映射表（2026-04-06）
 
-### P6 — O：`ligne_generate()` 内嵌交通类型映射表
+**问题根源**：`types_map` 字面量内嵌于函数体，每次新增 GTFS `route_type`（如 `800`）必须修改函数内部。
 
-新增 GTFS 交通类型（如 `route_type=800`）需修改函数内部字面量，而非外部配置。
+**执行结果**：
 
-```python
-types_map = pd.DataFrame({
-    'route_type': [0, 1, 2, 3, 4, 5, 6, 7, 11, 12],
-    'mode': ["tramway", "metro", "train", "bus", ...]
-})
-```
+| 文件 | 操作 |
+|------|------|
+| `gtfs_core/gtfs_norm.py` | `types_map` 提取为模块级常量 `ROUTE_TYPE_MAP: pd.DataFrame`（附注释说明对应 GTFS spec §1.3）；`ligne_generate()` 函数体缩减为单行 merge |
 
-**目标方向**：将映射表提取为模块级常量或可注入的外部配置（JSON/DB），函数只做 merge 操作。低频变化，优先级最低。
+**扩展路径**：新增交通类型只需在 `ROUTE_TYPE_MAP` 追加一行，函数无需改动。
+
+**验证**：20 个测试全部通过。
+
+---
+
+*所有 P0–P6 问题已处理完毕，本文档无待处理条目。*

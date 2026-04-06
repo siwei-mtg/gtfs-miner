@@ -17,15 +17,14 @@ GTFS 业务生成模块 (gtfs_generator.py)
 ```
 """
 
-# 常量定义
-DEFAULT_DIRECTION_ID = 999
-DEFAULT_TRIP_HEADSIGN = '999'
-
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, Tuple, Optional, List
 from .gtfs_utils import str_time_hms_hour, str_time_hms, getDistHaversine
 from .gtfs_schemas import ItineraireSchema, CourseSchema, ItiArcSchema, ServiceDateSchema
+from .constants import MISSING_DIRECTION_ID, Period, ALL_PERIODS
+
+DEFAULT_TRIP_HEADSIGN = '999'
 
 
 def itineraire_generate(stop_times: pd.DataFrame, AP: pd.DataFrame, trips: pd.DataFrame) -> pd.DataFrame:
@@ -57,7 +56,7 @@ def itineraire_generate(stop_times: pd.DataFrame, AP: pd.DataFrame, trips: pd.Da
     itineraire = itnry_2[cols].copy()
     itineraire['stop_sequence'] = itineraire.groupby(['id_course_num']).cumcount() + 1
     
-    itineraire.fillna({'direction_id': DEFAULT_DIRECTION_ID, 'trip_headsign': DEFAULT_TRIP_HEADSIGN}, inplace=True)
+    itineraire.fillna({'direction_id': MISSING_DIRECTION_ID, 'trip_headsign': DEFAULT_TRIP_HEADSIGN}, inplace=True)
     return ItineraireSchema.validate(itineraire)
 
 
@@ -293,8 +292,8 @@ def caract_par_sl(
             (h >= debut_HPS) & (h < fin_HPS),
             h >= fin_HPS,
         ],
-        ['FM', 'HPM', 'HC', 'HPS', 'FS'],
-        default='HC'
+        [Period.EARLY_MORNING, Period.PEAK_MORNING, Period.OFF_PEAK, Period.PEAK_EVENING, Period.LATE_EVENING],
+        default=Period.OFF_PEAK
     )
 
     # Nombre de courses par période (参见 legacy 737-738)
@@ -306,7 +305,7 @@ def caract_par_sl(
         fill_value=0, aggfunc=np.sum
     ).reset_index()
     # S'assurer que toutes les colonnes période existent
-    for p in ['FM', 'HPM', 'HC', 'HPS', 'FS']:
+    for p in ALL_PERIODS:
         if p not in headway_pv.columns:
             headway_pv[p] = 0
 
@@ -320,12 +319,12 @@ def caract_par_sl(
     duration_FS  = (h_max     - fin_HPS)   * 24 * 60
 
     # Calcul Headway = durée_plage / nb_courses (参见 legacy 744-749)
-    headway_pv['Headway_FM']  = duration_FM  / headway_pv['FM']
-    headway_pv['Headway_HPM'] = duration_HPM / headway_pv['HPM']
-    headway_pv['Headway_HC']  = duration_HC  / headway_pv['HC']
-    headway_pv['Headway_HPS'] = duration_HPS / headway_pv['HPS']
-    headway_pv['Headway_FS']  = duration_FS  / headway_pv['FS']
-    headway_pv = headway_pv.replace(np.inf, np.nan).drop(columns=['FM', 'HPM', 'HC', 'HPS', 'FS'])
+    headway_pv['Headway_FM']  = duration_FM  / headway_pv[Period.EARLY_MORNING]
+    headway_pv['Headway_HPM'] = duration_HPM / headway_pv[Period.PEAK_MORNING]
+    headway_pv['Headway_HC']  = duration_HC  / headway_pv[Period.OFF_PEAK]
+    headway_pv['Headway_HPS'] = duration_HPS / headway_pv[Period.PEAK_EVENING]
+    headway_pv['Headway_FS']  = duration_FS  / headway_pv[Period.LATE_EVENING]
+    headway_pv = headway_pv.replace(np.inf, np.nan).drop(columns=ALL_PERIODS)
 
     caract_fin = caract.merge(headway_pv, on=['sous_ligne', type_vac])
     ligne_names = sous_ligne[['sous_ligne', 'id_ligne_num', 'route_short_name', 'route_long_name']]

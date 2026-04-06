@@ -13,6 +13,9 @@ __pycache__/
 .env
 .venv/
 venv/
+.gtfs/
+gtfs/
+
 
 # Misc
 *.egg-info/
