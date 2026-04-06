@@ -30,7 +30,9 @@
       "Bash(python -m pytest test_eh01.py -v)",
       "Bash(echo \"EXIT:$?\")",
       "Bash(python -m pytest \"C:/Users/wei.si/Projets/GTFS Miner/backend/test_eh01.py\" -v --rootdir=\"C:/Users/wei.si/Projets/GTFS Miner/backend\")",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
