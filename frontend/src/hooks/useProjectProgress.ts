@@ -16,6 +16,10 @@ export function useProjectProgress(projectId: string | null): UseProjectProgress
   useEffect(() => {
     if (!projectId) return
 
+    setMessages([])
+    setLatestStatus(null)
+    setIsConnected(false)
+
     const ws = new WebSocket(`/api/v1/projects/${projectId}/ws`)
     wsRef.current = ws
 
