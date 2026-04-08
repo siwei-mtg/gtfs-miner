@@ -3,6 +3,9 @@ storage/projects/
 storage/temp/
 storage/*.db
 
+# Test output — generated files, never commit
+tests/test_output/
+
 # Python
 __pycache__/
 *.py[cod]
