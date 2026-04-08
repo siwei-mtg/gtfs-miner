@@ -7,9 +7,12 @@ test
 *.ui
 *.png
 *.txt
+!backend/requirements.txt
 *.qrc
 *.html
 Makefile
 *.cfg
 pylintrc
-.gitignore
+secrets.txt
+*.log
+# (removed self-referencing .gitignore rule from legacy QGIS era)

@@ -1,0 +1,26 @@
+# Runtime storage — never commit user data or processed output
+storage/projects/
+storage/temp/
+storage/*.db
+
+# Test output — generated files, never commit
+tests/test_output/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Environment
+.env
+.venv/
+venv/
+.gtfs/
+gtfs/
+
+
+# Misc
+*.egg-info/
+dist/
+build/
