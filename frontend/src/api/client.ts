@@ -1,6 +1,11 @@
 import type { ProjectCreate, ProjectResponse, UploadResponse } from '../types/api'
 
-const API_ORIGIN = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
+function normalizeOrigin(raw: string | undefined): string {
+  if (!raw) return ''
+  const s = raw.replace(/\/$/, '')
+  return /^https?:\/\//.test(s) ? s : `https://${s}`
+}
+const API_ORIGIN = normalizeOrigin(import.meta.env.VITE_API_URL as string | undefined)
 const BASE = `${API_ORIGIN}/api/v1/projects`
 
 export async function createProject(params: ProjectCreate): Promise<ProjectResponse> {
