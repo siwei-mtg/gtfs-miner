@@ -12,3 +12,4 @@ class Project(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     error_message = Column(String, nullable=True)
+    output_path = Column(String, nullable=True)  # R2 key 或本地路径
