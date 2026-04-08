@@ -1,6 +1,7 @@
 import type { ProjectCreate, ProjectResponse, UploadResponse } from '../types/api'
 
-const BASE = '/api/v1/projects'
+const API_ORIGIN = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
+const BASE = `${API_ORIGIN}/api/v1/projects`
 
 export async function createProject(params: ProjectCreate): Promise<ProjectResponse> {
   const res = await fetch(`${BASE}/`, {

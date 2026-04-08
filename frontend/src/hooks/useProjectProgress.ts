@@ -20,7 +20,9 @@ export function useProjectProgress(projectId: string | null): UseProjectProgress
     setLatestStatus(null)
     setIsConnected(false)
 
-    const ws = new WebSocket(`/api/v1/projects/${projectId}/ws`)
+    const apiOrigin = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
+    const wsOrigin = apiOrigin.replace(/^https/, 'wss').replace(/^http/, 'ws')
+    const ws = new WebSocket(`${wsOrigin}/api/v1/projects/${projectId}/ws`)
     wsRef.current = ws
 
     ws.onopen = () => setIsConnected(true)
