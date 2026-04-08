@@ -1,5 +1,5 @@
 # Stage 1: install dependencies
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim-bookworm AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ libgeos-dev libproj-dev gdal-bin libgdal-dev \
     libatlas-base-dev liblapack-dev libblas-dev libffi-dev libpq-dev \
@@ -9,7 +9,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # Stage 2: runtime image
-FROM python:3.11-slim AS runtime
+FROM python:3.11-slim-bookworm AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgeos-c1v5 libproj25 libgdal32 libatlas3-base liblapack3 libpq5 \
     && rm -rf /var/lib/apt/lists/*
