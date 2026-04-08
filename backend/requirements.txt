@@ -1,0 +1,35 @@
+# Web framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.24
+
+# Async DB
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.29.0
+alembic==1.13.3
+
+# Celery / Redis
+celery==5.4.0
+redis==5.1.1
+aiobotocore==2.15.0
+boto3==1.35.16
+
+# Settings
+pydantic-settings==2.5.2
+
+# GTFS core (existing modules) — no QGIS
+pandas==2.2.3
+xlrd>=2.0.1
+numpy==2.1.2
+scipy==1.14.1
+scikit-learn==1.5.2
+chardet==5.2.0
+pandera>=0.18
+
+geopandas==1.0.1
+shapely==2.0.6
+
+# Dev
+pytest==8.3.3
+pytest-asyncio==0.24.0
+httpx==0.27.2
