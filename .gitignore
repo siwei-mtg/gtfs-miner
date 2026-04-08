@@ -10,6 +10,7 @@ test
 !backend/requirements.txt
 *.qrc
 *.html
+!frontend/index.html
 Makefile
 *.cfg
 pylintrc
