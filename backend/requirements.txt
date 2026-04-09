@@ -16,6 +16,7 @@ boto3==1.35.16
 
 # Settings
 pydantic-settings==2.5.2
+email-validator==2.2.0
 
 # GTFS core (existing modules) — no QGIS
 pandas==2.2.3
