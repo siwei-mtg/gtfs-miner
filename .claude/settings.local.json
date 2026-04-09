@@ -39,12 +39,16 @@
       "Read(//c/Users/wei.si/anaconda3/**)",
       "Read(//c/Users/wei.si/miniconda3/**)",
       "Read(//c/ProgramData/anaconda3/**)",
-      "Bash(\"/c/Users/wei.si/Projets/GTFS Miner/backend/gtfs/Scripts/alembic.exe\" --version)",
-      "Bash(\"/c/Users/wei.si/Projets/GTFS Miner/backend/gtfs/Scripts/python.exe\" -c \"import alembic; print\\('ok'\\)\")",
-      "Bash(\"/c/Users/wei.si/Projets/GTFS Miner/backend/gtfs/Scripts/alembic.exe\" init alembic)",
-      "Bash(\"/c/Users/wei.si/Projets/GTFS Miner/backend/gtfs/Scripts/alembic.exe\" revision --autogenerate -m \"initial_schema\")",
-      "Bash(\"/c/Users/wei.si/Projets/GTFS Miner/backend/gtfs/Scripts/alembic.exe\" upgrade head)",
-      "Bash(\"/c/Users/wei.si/Projets/GTFS Miner/backend/gtfs/Scripts/pytest.exe\" -x -q --tb=short)"
+      "Bash(\"/c/Users/wei.si/Projets/GTFS Miner/backend/.venv/Scripts/alembic.exe\" --version)",
+      "Bash(\"/c/Users/wei.si/Projets/GTFS Miner/backend/.venv/Scripts/python.exe\" -c \"import alembic; print\\('ok'\\)\")",
+      "Bash(\"/c/Users/wei.si/Projets/GTFS Miner/backend/.venv/Scripts/alembic.exe\" init alembic)",
+      "Bash(\"/c/Users/wei.si/Projets/GTFS Miner/backend/.venv/Scripts/alembic.exe\" revision --autogenerate -m \"initial_schema\")",
+      "Bash(\"/c/Users/wei.si/Projets/GTFS Miner/backend/.venv/Scripts/alembic.exe\" upgrade head)",
+      "Bash(\"/c/Users/wei.si/Projets/GTFS Miner/backend/.venv/Scripts/pytest.exe\" -x -q --tb=short)",
+      "Bash(venv/Scripts/python.exe -c \"import alembic; print\\(alembic.__version__\\)\"2)",
+      "Bash(rm -f storage/miner_app.db)",
+      "Bash(venv/Scripts/python.exe -c \"from alembic.config import main; main\\(argv=['upgrade', 'head']\\)\")",
+      "Bash(venv/Scripts/python.exe -c ':*)"
     ]
   }
 }

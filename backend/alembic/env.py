@@ -10,7 +10,7 @@ from alembic import context
 
 from app.core.config import settings
 from app.db.database import Base
-from app.db.models import Project  # noqa: F401
+from app.db.models import Project, Tenant, User  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -14,9 +14,9 @@
 
 ```bash
 cd backend
-# venv 位于 backend/gtfs/（Windows）
-gtfs\Scripts\python.exe -m pip install -r requirements.txt
-gtfs\Scripts\python.exe -m uvicorn app.main:app --port 8000
+# venv 位于 backend/.venv/（Windows）
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
 ```
 
 > **Windows 注意**：`--reload` 模式在 Windows 上存在 socket 继承问题，启动时去掉该参数。
