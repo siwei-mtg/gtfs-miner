@@ -35,11 +35,11 @@ git pull origin main   # 保持与生产同步
 cd backend
 # 首次：创建并激活虚拟环境
 python -m venv .venv
-source .venv/Scripts/activate   # Windows Git Bash
+source .gtfs/Scripts/activate.ps1   # Windows Git Bash
 pip install -r requirements.txt
 
 # 之后每次
-source .venv/Scripts/activate
+source .gtfs/Scripts/activate.ps1 
 uvicorn app.main:app --reload
 ```
 
