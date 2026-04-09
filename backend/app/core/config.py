@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # Celery / Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # JWT
+    SECRET_KEY: str = "change-me-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+
     # Phase 1 预留
     SUPABASE_URL: str = ""
     SUPABASE_ANON_KEY: str = ""
