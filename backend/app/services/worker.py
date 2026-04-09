@@ -69,9 +69,13 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
             "time_elapsed": elapsed,
             "error": error,
         }
-        asyncio.run_coroutine_threadsafe(
+        future = asyncio.run_coroutine_threadsafe(
             manager.broadcast_to_project(project_id, message), loop
         )
+        try:
+            future.result(timeout=5)
+        except Exception:
+            pass  # Never let a WS failure kill the pipeline
 
     # Resolve processing parameters
     hpm = (_parse_time_frac(parameters.get("hpm_debut", "07:00")),
