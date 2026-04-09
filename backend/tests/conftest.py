@@ -25,6 +25,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from app.main import app
 from app.db.database import Base, engine as real_engine, get_db
+from sqlalchemy.pool import StaticPool as _StaticPool
 
 # ──────────────────────────────────────────────────────────────────
 # Constants
@@ -130,3 +131,32 @@ def isolated_client(test_engine):
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def fresh_client():
+    """Function-scoped TestClient with a brand-new in-memory DB.
+
+    Use this for auth tests that INSERT rows and need full isolation
+    between test functions (no shared state from other tests).
+    """
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=_StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    FreshSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    def override_get_db():
+        db = FreshSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()
+    engine.dispose()

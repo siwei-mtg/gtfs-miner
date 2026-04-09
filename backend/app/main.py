@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
-from .api.endpoints import projects
+from .api.endpoints import auth, projects
 from .api.websockets import progress
 
 app = FastAPI(
@@ -20,6 +20,12 @@ app.add_middleware(
 )
 
 # Mount Routers
+app.include_router(
+    auth.router,
+    prefix=f"{settings.API_V1_STR}/auth",
+    tags=["Auth"]
+)
+
 app.include_router(
     projects.router,
     prefix=f"{settings.API_V1_STR}/projects",
