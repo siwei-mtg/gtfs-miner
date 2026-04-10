@@ -465,7 +465,7 @@ class ProjectCreate(BaseModel):
 
 ## GROUP F：在线结果表格 F-06（Task 17–20）
 
-### Task 17：15 个结果表 DB 模型
+### Task 17：15 个结果表 DB 模型 ✅
 
 **创建文件**：`backend/app/db/result_models.py`
 
@@ -501,7 +501,7 @@ alembic upgrade head
 
 ---
 
-### Task 18：Worker 写入 PostgreSQL
+### Task 18：Worker 写入 PostgreSQL ✅
 
 **修改文件**：`backend/app/services/worker.py`
 
@@ -824,7 +824,7 @@ GROUP H (前端)         [依赖 B 契约 + F 契约]
 | Sprint 1（基础设施）| Task 1–5 | ✅ 完成（Supabase + Alembic + Docker 就绪） |
 | Sprint 2（认证）| Task 6–10 | ✅ 完成（端点受保护，租户隔离，32 测试通过） |
 | Sprint 3（租户 + Celery）| Task 11–15 + Task 16 | ✅ 完成（Task 11–15: 26 测试通过；Task 16: 5 测试通过） |
-| Sprint 4（结果）| Task 17–20 + **Task 20b** | F-06 在线表格可查，**DWD SQLite 加载就绪**（F-09 前置） |
+| Sprint 4（结果）| Task 17–20 + **Task 20b** | ⚠️ Task 17–18 ✅ 完成（3 测试通过）；Task 19–20 待开发 |
 | Sprint 5（前端）| Task 22–28 | 完整前端：登录→项目管理→结果查看 |
 
 ---
