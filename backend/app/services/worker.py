@@ -16,8 +16,9 @@ import numpy as np
 import pandas as pd
 
 from ..core.config import settings, PROJECT_DIR, TEMP_DIR
-from ..db.database import SessionLocal
+from ..db.database import SessionLocal, engine as _db_engine
 from ..db.models import Project
+from ..db import result_models as _r  # noqa: F401 — registers result tables with Base.metadata
 from ..api.websockets.progress import manager
 
 # Import individual pipeline functions (not main, to allow step-by-step progress)
@@ -42,6 +43,76 @@ def _parse_time_frac(hhmm: str) -> float:
     """'07:30' -> 7.5/24"""
     h, m = hhmm.split(":")
     return (int(h) + int(m) / 60) / 24
+
+
+# ── CSV → DB mapping ──────────────────────────────────────────────────────────
+# (csv_filename, id_vars_for_melt_or_None, value_column_name_or_None)
+_CSV_TO_TABLE: dict[str, tuple] = {
+    "A_1_Arrets_Generiques.csv":     ("result_a1_arrets_generiques",     None, None),
+    "A_2_Arrets_Physiques.csv":      ("result_a2_arrets_physiques",      None, None),
+    "B_1_Lignes.csv":                ("result_b1_lignes",                None, None),
+    "B_2_Sous_Lignes.csv":           ("result_b2_sous_lignes",           None, None),
+    "C_1_Courses.csv":               ("result_c1_courses",               None, None),
+    "C_2_Itineraire.csv":            ("result_c2_itineraire",            None, None),
+    "C_3_Itineraire_Arc.csv":        ("result_c3_itineraire_arc",        None, None),
+    "D_1_Service_Dates.csv":         ("result_d1_service_dates",         None, None),
+    "D_2_Service_Jourtype.csv":      ("result_d2_service_jourtype",      None, None),
+    # pivot tables: wide columns "1"–"7" → long (type_jour, metric)
+    "E_1_Nombre_Passage_AG.csv":     ("result_e1_passage_ag",
+                                      ["id_ag_num", "stop_name", "stop_lat", "stop_lon"], "nb_passage"),
+    "E_4_Nombre_Passage_Arc.csv":    ("result_e4_passage_arc",
+                                      ["id_ag_num_a", "id_ag_num_b"], "nb_passage"),
+    "F_1_Nombre_Courses_Lignes.csv": ("result_f1_nb_courses_lignes",
+                                      ["id_ligne_num", "route_short_name", "route_long_name"], "nb_course"),
+    "F_2_Caract_SousLignes.csv":     ("result_f2_caract_sous_lignes",    None, None),
+    "F_3_KCC_Lignes.csv":            ("result_f3_kcc_lignes",
+                                      ["id_ligne_num", "route_short_name", "route_long_name"], "kcc"),
+    "F_4_KCC_Sous_Ligne.csv":        ("result_f4_kcc_sous_lignes",
+                                      ["sous_ligne", "id_ligne_num", "route_short_name", "route_long_name"], "kcc"),
+}
+
+
+def _persist_results_to_db(project_id: str, out_dir: Path, db: Session) -> None:
+    """Read each output CSV and bulk-insert into the corresponding result table.
+
+    Idempotent: previous rows for *project_id* are deleted before insertion.
+    Only columns present in the target table are written (extra CSV columns are dropped).
+    Pivot tables (E_1, E_4, F_1, F_3, F_4) are melted to long format first.
+    """
+    from sqlalchemy import text, inspect as sa_inspect
+
+    # Use the engine the session is bound to so tests can redirect to an in-memory DB.
+    _engine = getattr(db, "bind", None) or _db_engine
+
+    for csv_name, (table_name, id_cols, val_col) in _CSV_TO_TABLE.items():
+        csv_path = out_dir / csv_name
+        if not csv_path.exists():
+            continue
+
+        df = pd.read_csv(csv_path, sep=";", encoding="utf-8-sig")
+
+        # Melt pivot tables (wide Type_Jour columns → long)
+        if id_cols is not None:
+            pivot_cols = [c for c in df.columns if str(c).isdigit()]
+            keep = [c for c in id_cols if c in df.columns]
+            if keep and pivot_cols:
+                df = df[keep + pivot_cols].melt(
+                    id_vars=keep, var_name="type_jour", value_name=val_col
+                )
+                df["type_jour"] = df["type_jour"].astype(int)
+
+        # Idempotency: clear previous results for this project
+        db.execute(text(f"DELETE FROM {table_name} WHERE project_id = :pid"),
+                   {"pid": project_id})
+        db.commit()
+
+        df["project_id"] = project_id
+
+        # Drop columns not present in the target table (robustness against CSV extras)
+        table_cols = {c["name"] for c in sa_inspect(_engine).get_columns(table_name)}
+        df = df[[c for c in df.columns if c in table_cols]]
+
+        df.to_sql(table_name, _engine, if_exists="append", index=False)
 
 
 def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop: asyncio.AbstractEventLoop = None):
@@ -198,6 +269,10 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
 
         # ── Cleanup temp zip ─────────────────────────────────────────────
         zip_path_obj.unlink(missing_ok=True)
+
+        # ── Step 8: persist CSV results to DB ────────────────────────────
+        send_progress("[8/8] 将结果写入数据库")
+        _persist_results_to_db(project_id, out_dir, db)
 
         # ── Mark as completed ─────────────────────────────────────────────
         project.status = "completed"
