@@ -69,3 +69,26 @@ def test_me_no_token(fresh_client):
 def test_me_invalid_token(fresh_client):
     r = fresh_client.get("/api/v1/auth/me", headers={"Authorization": "Bearer invalid.token.here"})
     assert r.status_code == 401
+
+
+# ── project endpoint auth guards (Task 10) ────────────────────────────────────
+
+def test_create_project_unauthenticated(fresh_client):
+    """POST /projects without a token must return 401."""
+    r = fresh_client.post("/api/v1/projects", json={})
+    assert r.status_code == 401
+
+
+def test_create_project_authenticated(auth_client):
+    """POST /projects with a valid token must return 201."""
+    r = auth_client.post("/api/v1/projects", json={})
+    assert r.status_code == 201
+
+
+def test_list_projects_only_own_tenant(auth_client, auth_client_b):
+    """User B must not see projects created by User A (different tenant)."""
+    # A creates a project
+    auth_client.post("/api/v1/projects", json={})
+    # B lists projects — auth_client_b headers override A's session header
+    r = auth_client.get("/api/v1/projects", headers=auth_client_b)
+    assert r.json() == []

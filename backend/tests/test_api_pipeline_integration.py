@@ -25,11 +25,11 @@ from .conftest import GTFS_ZIP, EXPECTED_CSVS
 # Helpers
 # ──────────────────────────────────────────────────────────────────
 
-def wait_for_completion(client, project_id: str, timeout: int = 300) -> str:
+def wait_for_completion(client_authed, project_id: str, timeout: int = 300) -> str:
     """Poll GET /status until status is 'completed' or 'failed'."""
     deadline = time.time() + timeout
     while time.time() < deadline:
-        resp = client.get(f"/api/v1/projects/{project_id}")
+        resp = client_authed.get(f"/api/v1/projects/{project_id}")
         assert resp.status_code == 200, resp.text
         data = resp.json()
         status = data["status"]
@@ -49,7 +49,7 @@ def test_gtfs_zip_exists():
     assert GTFS_ZIP.exists(), f"Test data not found: {GTFS_ZIP}"
 
 
-def test_create_project(client):
+def test_create_project(client_authed):
     """A-1. POST /projects/ 应该返回 201 和一个 project_id。"""
     payload = {
         "hpm_debut": "07:00",
@@ -59,8 +59,8 @@ def test_create_project(client):
         "vacances": "A",
         "pays": "法国",
     }
-    resp = client.post("/api/v1/projects/", json=payload)
-    assert resp.status_code == 200, resp.text
+    resp = client_authed.post("/api/v1/projects/", json=payload)
+    assert resp.status_code == 201, resp.text
     data = resp.json()
     assert "id" in data
     assert data["status"] == "pending"
@@ -68,14 +68,14 @@ def test_create_project(client):
     print(f"  Created project: {data['id']}")
 
 
-def test_upload_and_wait(client):
+def test_upload_and_wait(client_authed):
     """A-2 + B + C.  上传 → 等待完成 → 验证文件 + DB 状态。"""
     project_id = getattr(test_create_project, "project_id", None)
     assert project_id, "test_create_project must run first"
 
     # ── A-2: Upload ────────────────────────────────────────────────
     with open(GTFS_ZIP, "rb") as f:
-        resp = client.post(
+        resp = client_authed.post(
             f"/api/v1/projects/{project_id}/upload",
             files={"file": ("SEM-GTFS.zip", f, "application/zip")},
         )
@@ -84,7 +84,7 @@ def test_upload_and_wait(client):
 
     # ── A-3: Poll until done ────────────────────────────────────────
     print("  Waiting for pipeline to complete (may take several minutes)...")
-    final_status = wait_for_completion(client, project_id, timeout=600)
+    final_status = wait_for_completion(client_authed, project_id, timeout=600)
     assert final_status == "completed", \
         f"Pipeline ended with status '{final_status}'. Check the 'error_message' in DB."
 
@@ -107,9 +107,9 @@ def test_upload_and_wait(client):
     print(f"  ✓ DB status = 'completed'.")
 
 
-def test_get_project_list(client):
+def test_get_project_list(client_authed):
     """应返回非空的项目列表。"""
-    resp = client.get("/api/v1/projects/")
+    resp = client_authed.get("/api/v1/projects/")
     assert resp.status_code == 200
     projects = resp.json()
     assert isinstance(projects, list)
@@ -121,7 +121,7 @@ def test_get_project_list(client):
 # Task 8: Full E2E — upload → process → download
 # ──────────────────────────────────────────────────────────────────
 
-def test_full_e2e_upload_process_download(client):
+def test_full_e2e_upload_process_download(client_authed):
     """完整 E2E：创建 → 上传 → 轮询至 completed → 下载 → 验证 ZIP 内 15 个 CSV。"""
     # ── 创建项目 ───────────────────────────────────────────────────
     payload = {
@@ -129,14 +129,14 @@ def test_full_e2e_upload_process_download(client):
         "hps_debut": "17:00", "hps_fin": "19:30",
         "vacances": "A", "pays": "法国",
     }
-    resp = client.post("/api/v1/projects/", json=payload)
-    assert resp.status_code == 200, resp.text
+    resp = client_authed.post("/api/v1/projects/", json=payload)
+    assert resp.status_code == 201, resp.text
     project_id = resp.json()["id"]
     print(f"  E2E project: {project_id}")
 
     # ── 上传 ───────────────────────────────────────────────────────
     with open(GTFS_ZIP, "rb") as f:
-        resp = client.post(
+        resp = client_authed.post(
             f"/api/v1/projects/{project_id}/upload",
             files={"file": ("SEM-GTFS.zip", f, "application/zip")},
         )
@@ -144,11 +144,11 @@ def test_full_e2e_upload_process_download(client):
 
     # ── 轮询完成 ───────────────────────────────────────────────────
     print("  Waiting for pipeline to complete...")
-    final_status = wait_for_completion(client, project_id, timeout=600)
+    final_status = wait_for_completion(client_authed, project_id, timeout=600)
     assert final_status == "completed", f"Pipeline ended with '{final_status}'"
 
     # ── 下载 ZIP ───────────────────────────────────────────────────
-    resp = client.get(f"/api/v1/projects/{project_id}/download")
+    resp = client_authed.get(f"/api/v1/projects/{project_id}/download")
     assert resp.status_code == 200, resp.text
     assert "application/zip" in resp.headers["content-type"]
 

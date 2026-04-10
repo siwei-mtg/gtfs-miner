@@ -39,13 +39,13 @@ PROJECT_PARAMS = {
 # ──────────────────────────────────────────────────────────────────
 
 @pytest.mark.slow
-def test_websocket_receives_progress_messages(client):
+def test_websocket_receives_progress_messages(client_authed):
     """WebSocket receives ≥7 step messages ending with status=completed."""
     assert GTFS_ZIP_SMALL.exists(), f"Small test dataset missing: {GTFS_ZIP_SMALL}"
 
     # 1. Create project
-    resp = client.post("/api/v1/projects/", json=PROJECT_PARAMS)
-    assert resp.status_code == 200, resp.text
+    resp = client_authed.post("/api/v1/projects/", json=PROJECT_PARAMS)
+    assert resp.status_code == 201, resp.text
     project_id = resp.json()["id"]
 
     messages = []
@@ -55,7 +55,7 @@ def test_websocket_receives_progress_messages(client):
         """POST upload 0.3 s after start so the WS is accepted before processing begins."""
         time.sleep(0.3)
         with open(GTFS_ZIP_SMALL, "rb") as f:
-            r = client.post(
+            r = client_authed.post(
                 f"/api/v1/projects/{project_id}/upload",
                 files={"file": ("gtfs.zip", f, "application/zip")},
             )
@@ -67,7 +67,7 @@ def test_websocket_receives_progress_messages(client):
 
     # 2. Collect messages via WebSocket
     deadline = time.time() + 300
-    with client.websocket_connect(f"/api/v1/projects/{project_id}/ws") as ws:
+    with client_authed.websocket_connect(f"/api/v1/projects/{project_id}/ws") as ws:
         while time.time() < deadline:
             try:
                 msg = ws.receive_json()

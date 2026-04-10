@@ -2,10 +2,16 @@
 conftest.py — Shared pytest fixtures for all backend tests.
 
 Provides:
-  - client: session-scoped TestClient against the real DB
+  - client: session-scoped TestClient against the real DB (anonymous)
              (required for E2E tests: worker uses SessionLocal directly)
+  - client_authed: session-scoped TestClient against the real DB with auth bypass
+                   (for E2E/integration/WebSocket tests after Task 10)
   - isolated_client: function-scoped TestClient with in-memory DB override
                      (for fast unit/download tests that must not touch real DB)
+  - isolated_client_authed: same as isolated_client but with auth bypass
+                            (for download tests after Task 10)
+  - auth_client: function-scoped authenticated TestClient (User A / TenantA)
+  - auth_client_b: User B auth headers dict (shares DB with auth_client)
   - test_engine / test_db: in-memory SQLite engine + isolated session for
                            tests that interact with the DB directly
   - GTFS_ZIP / EXPECTED_CSVS: shared path/list constants
@@ -160,3 +166,110 @@ def fresh_client():
         yield c
     app.dependency_overrides.clear()
     engine.dispose()
+
+
+# ──────────────────────────────────────────────────────────────────
+# Auth-aware fixtures (Task 10+)
+# ──────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def auth_client(fresh_client):
+    """Authenticated TestClient — User A (TenantA).
+
+    Registers alice@test.com and sets the Authorization header on the
+    shared fresh_client.  auth_client_b, if requested in the same test,
+    shares the same underlying in-memory DB.
+    """
+    r = fresh_client.post("/api/v1/auth/register", json={
+        "email": "alice@test.com",
+        "password": "password123",
+        "tenant_name": "TenantA",
+    })
+    assert r.status_code == 201, f"auth_client setup failed: {r.text}"
+    token = r.json()["access_token"]
+    fresh_client.headers.update({"Authorization": f"Bearer {token}"})
+    return fresh_client
+
+
+@pytest.fixture
+def auth_client_b(fresh_client):
+    """Auth headers for User B (TenantB) — dict, not a client.
+
+    Shares the same in-memory DB as auth_client when both are requested
+    by the same test (pytest reuses the function-scoped fresh_client
+    instance within a single test).
+
+    Usage::
+        def test_isolation(auth_client, auth_client_b):
+            auth_client.get("/api/v1/projects/", headers=auth_client_b)
+    """
+    r = fresh_client.post("/api/v1/auth/register", json={
+        "email": "bob@test.com",
+        "password": "password456",
+        "tenant_name": "TenantB",
+    })
+    assert r.status_code == 201, f"auth_client_b setup failed: {r.text}"
+    token = r.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="session")
+def client_authed():
+    """Session-scoped TestClient against the real DB with auth bypassed.
+
+    Use this in E2E / integration / WebSocket tests that need the real
+    background worker but do not test authentication itself.
+    get_current_active_user is overridden to return a stable fake User so
+    all project-endpoint calls are authenticated without a real login flow.
+    """
+    from app.api.deps import get_current_active_user
+    from app.db.models import User
+
+    fake_user = User(
+        id="test-user-id",
+        email="test@test.com",
+        hashed_password="irrelevant",
+        tenant_id="test-tenant-id",
+        is_active=True,
+        role="admin",
+    )
+    app.dependency_overrides[get_current_active_user] = lambda: fake_user
+    Base.metadata.create_all(bind=real_engine)
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.pop(get_current_active_user, None)
+
+
+@pytest.fixture
+def isolated_client_authed(test_engine):
+    """Function-scoped in-memory TestClient with auth bypassed.
+
+    Like isolated_client but also overrides get_current_active_user so
+    project endpoints (protected since Task 10) can be called without a
+    real JWT token.  Use this for download / error-case tests.
+    """
+    from app.api.deps import get_current_active_user
+    from app.db.models import User
+
+    fake_user = User(
+        id="test-user-id",
+        email="test@test.com",
+        hashed_password="irrelevant",
+        tenant_id="test-tenant-id",
+        is_active=True,
+        role="admin",
+    )
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+    def override_get_db():
+        db = TestingSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_active_user] = lambda: fake_user
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()

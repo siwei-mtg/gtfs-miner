@@ -2,7 +2,7 @@
 
 **版本**：1.1  
 **日期**：2026-04-10  
-**状态**：Sprint 1 完成 / Sprint 2 进行中（Task 6–9 完成，Task 10 部分完成）
+**状态**：Sprint 1 完成 / Sprint 2 完成（Task 6–10 全部完成）
 
 ---
 
@@ -287,9 +287,9 @@ class TokenData(BaseModel): user_id: str | None
 
 ---
 
-### Task 10：get_current_user 依赖 + 保护现有端点 ⚠️
+### Task 10：get_current_user 依赖 + 保护现有端点 ✅
 
-> **当前状态**：**部分完成**。`backend/app/api/deps.py` 已创建（`get_current_user` 和 `get_current_active_user` 均已实现）。**待完成**：`projects.py` 所有端点尚未添加 `current_user: User = Depends(get_current_active_user)` 依赖；`conftest.py` 的 `auth_client` fixtures 尚未新增。
+> **当前状态**：已完成。`projects.py` 全部 6 个端点添加了 `get_current_active_user` 依赖；`create_project` 写入 `tenant_id`/`owner_id`；`list_projects` 加租户过滤。`conftest.py` 新增 `auth_client`、`auth_client_b`、`client_authed`、`isolated_client_authed` 四个 fixture；`test_auth.py` 追加 3 个测试（含租户隔离）；`test_download.py`/`test_api_pipeline_integration.py`/`test_websocket.py` 更新为使用 authed fixtures。全量 32 个测试通过（不含慢速 E2E）。
 
 **创建文件**：`backend/app/api/deps.py`
 
@@ -818,7 +818,7 @@ GROUP H (前端)         [依赖 B 契约 + F 契约]
 | Sprint | 任务 | 目标 |
 |--------|------|------|
 | Sprint 1（基础设施）| Task 1–5 | ✅ 完成（Supabase + Alembic + Docker 就绪） |
-| Sprint 2（认证）| Task 6–10 | ⚠️ Task 6–9 ✅ 完成；Task 10 部分完成（deps.py 已建，endpoints 保护待做） |
+| Sprint 2（认证）| Task 6–10 | ✅ 完成（端点受保护，租户隔离，32 测试通过） |
 | Sprint 3（租户 + Celery）| Task 11–15 + Task 16 | 多租户隔离，异步队列运行 |
 | Sprint 4（结果）| Task 17–20 + **Task 20b** | F-06 在线表格可查，**DWD SQLite 加载就绪**（F-09 前置） |
 | Sprint 5（前端）| Task 22–28 | 完整前端：登录→项目管理→结果查看 |
