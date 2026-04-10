@@ -3,6 +3,8 @@ from fastapi import WebSocket, WebSocketDisconnect, APIRouter
 from typing import Dict, List
 import json
 
+from app.core.config import settings
+
 class ConnectionManager:
     def __init__(self):
         # project_id -> list of active connections
@@ -55,9 +57,27 @@ router = APIRouter()
 async def websocket_endpoint(websocket: WebSocket, project_id: str):
     await manager.connect(websocket, project_id)
     try:
-        while True:
-            # The client doesn't need to send anything, but we need to listen for connection closed events.
-            data = await websocket.receive_text()
-            # Could process incoming messages if needed
+        if settings.REDIS_URL:
+            # Celery mode: subscribe to Redis pub/sub channel and forward to WS
+            import redis.asyncio as aioredis
+            r = aioredis.from_url(settings.REDIS_URL)
+            pubsub = r.pubsub()
+            await pubsub.subscribe(f"progress:{project_id}")
+            try:
+                async for message in pubsub.listen():
+                    if message["type"] == "message":
+                        data_str = message["data"].decode()
+                        await websocket.send_text(data_str)
+                        if json.loads(data_str).get("status") in ("completed", "failed"):
+                            break
+            except WebSocketDisconnect:
+                pass
+            finally:
+                await pubsub.unsubscribe(f"progress:{project_id}")
+                await r.aclose()
+        else:
+            # BackgroundTasks mode (dev/test — no Redis): just keep connection alive
+            while True:
+                await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket, project_id)

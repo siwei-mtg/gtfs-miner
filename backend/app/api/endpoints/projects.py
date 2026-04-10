@@ -105,17 +105,20 @@ async def upload_gtfs(
     project.status = "pending"
     db.commit()
 
-    # Pass the current event loop for asyncio coroutine threadsafe calls inside sync worker
-    loop = asyncio.get_running_loop()
-
-    # Dispatch to background wrapper
-    background_tasks.add_task(
-        run_project_task_sync,
-        project_id=project_id,
-        zip_path=str(temp_zip_path),
-        parameters=project.parameters,
-        loop=loop
-    )
+    if settings.REDIS_URL:
+        # Celery mode: dispatch to worker queue
+        from ...services.worker import process_project_task
+        process_project_task.delay(project_id, str(temp_zip_path), project.parameters)
+    else:
+        # BackgroundTasks fallback (dev/test — no Redis required)
+        loop = asyncio.get_running_loop()
+        background_tasks.add_task(
+            run_project_task_sync,
+            project_id=project_id,
+            zip_path=str(temp_zip_path),
+            parameters=project.parameters,
+            loop=loop,
+        )
 
     return {"msg": "Upload successful, processing started.", "project_id": project_id}
 

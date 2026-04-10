@@ -2,7 +2,7 @@
 
 **版本**：1.1  
 **日期**：2026-04-10  
-**状态**：Sprint 1–2 完成 / Sprint 3 进行中（Task 11–12 完成）
+**状态**：Sprint 1–2 完成 / Sprint 3 进行中（Task 11–15 完成）
 
 ---
 
@@ -360,9 +360,9 @@ async def get_current_active_user(current_user = Depends(get_current_user)) → 
 
 ---
 
-## GROUP D：Celery 异步队列（Task 13–15）
+## GROUP D：Celery 异步队列（Task 13–15）✅
 
-### Task 13：Celery app 配置
+### Task 13：Celery app 配置 ✅
 
 **创建文件**：`backend/app/celery_app.py`
 
@@ -381,7 +381,7 @@ celery.conf.task_serializer = "json"
 
 ---
 
-### Task 14：BackgroundTasks → Celery task 迁移
+### Task 14：BackgroundTasks → Celery task 迁移 ✅
 
 **修改文件**：`backend/app/services/worker.py`
 
@@ -411,7 +411,7 @@ process_project_task.delay(project_id, zip_path, parameters)
 
 ---
 
-### Task 15：WebSocket 进度通过 Redis pub/sub（多 Worker 支持）
+### Task 15：WebSocket 进度通过 Redis pub/sub（多 Worker 支持）✅
 
 **修改文件**：`backend/app/api/websockets/progress.py`
 
@@ -823,7 +823,7 @@ GROUP H (前端)         [依赖 B 契约 + F 契约]
 |--------|------|------|
 | Sprint 1（基础设施）| Task 1–5 | ✅ 完成（Supabase + Alembic + Docker 就绪） |
 | Sprint 2（认证）| Task 6–10 | ✅ 完成（端点受保护，租户隔离，32 测试通过） |
-| Sprint 3（租户 + Celery）| Task 11–15 + Task 16 | ⚠️ Task 11–12 ✅ 完成（36 测试通过）；Task 13–16 待开发 |
+| Sprint 3（租户 + Celery）| Task 11–15 + Task 16 | ⚠️ Task 11–15 ✅ 完成（26 测试通过）；Task 16 待开发 |
 | Sprint 4（结果）| Task 17–20 + **Task 20b** | F-06 在线表格可查，**DWD SQLite 加载就绪**（F-09 前置） |
 | Sprint 5（前端）| Task 22–28 | 完整前端：登录→项目管理→结果查看 |
 

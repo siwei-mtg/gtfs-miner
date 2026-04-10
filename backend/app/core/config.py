@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     R2_BUCKET_NAME: str = "gtfs-miner"
     R2_ENDPOINT_URL: str = ""
 
-    # Celery / Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
+    # Celery / Redis — set via .env to enable Celery/Redis mode; empty = BackgroundTasks fallback
+    REDIS_URL: str = ""
 
     # JWT
     SECRET_KEY: str = "change-me-in-production"

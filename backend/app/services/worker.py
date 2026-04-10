@@ -44,7 +44,7 @@ def _parse_time_frac(hhmm: str) -> float:
     return (int(h) + int(m) / 60) / 24
 
 
-def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop: asyncio.AbstractEventLoop):
+def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop: asyncio.AbstractEventLoop = None):
     """
     Sync function intended to run in a FastAPI BackgroundTask.
     Calls each pipeline step individually so that WebSocket progress can be sent after each one.
@@ -69,13 +69,25 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
             "time_elapsed": elapsed,
             "error": error,
         }
-        future = asyncio.run_coroutine_threadsafe(
-            manager.broadcast_to_project(project_id, message), loop
-        )
-        try:
-            future.result(timeout=5)
-        except Exception:
-            pass  # Never let a WS failure kill the pipeline
+        if loop is not None:
+            # BackgroundTasks mode (dev/test — no Redis)
+            future = asyncio.run_coroutine_threadsafe(
+                manager.broadcast_to_project(project_id, message), loop
+            )
+            try:
+                future.result(timeout=5)
+            except Exception:
+                pass  # Never let a WS failure kill the pipeline
+        else:
+            # Celery mode: publish to Redis (silent failure when Redis absent)
+            try:
+                import redis as _redis
+                import json as _json
+                r = _redis.from_url(settings.REDIS_URL, socket_connect_timeout=1)
+                r.publish(f"progress:{project_id}", _json.dumps(message))
+                r.close()
+            except Exception:
+                pass
 
     # Resolve processing parameters
     hpm = (_parse_time_frac(parameters.get("hpm_debut", "07:00")),
@@ -203,3 +215,13 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
 
     finally:
         db.close()
+
+
+# ── Celery task wrapper ────────────────────────────────────────────────────────
+from app.celery_app import celery  # noqa: E402 — imported after module-level code
+
+
+@celery.task(bind=True, name="gtfs_miner.process_project")
+def process_project_task(self, project_id: str, zip_path: str, parameters: dict):
+    """Celery-dispatched version of the pipeline (no event loop — uses Redis publish)."""
+    run_project_task_sync(project_id, zip_path, parameters, loop=None)
