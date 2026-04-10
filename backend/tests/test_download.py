@@ -21,6 +21,9 @@ from app.db.models import Project
 from app.core.config import PROJECT_DIR
 from .conftest import EXPECTED_CSVS
 
+# tenant_id used by isolated_client_authed's fake_user — must stay in sync with conftest.py
+FAKE_TENANT_ID = "test-tenant-id"
+
 # ──────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────
@@ -28,15 +31,16 @@ from .conftest import EXPECTED_CSVS
 def _make_project(test_db, status: str = "completed") -> str:
     """Insert a project row with the given status; return its ID."""
     project_id = str(uuid.uuid4())
-    project = Project(id=project_id, status=status, parameters={})
+    project = Project(id=project_id, status=status, parameters={},
+                      tenant_id=FAKE_TENANT_ID)
     test_db.add(project)
     test_db.commit()
     return project_id
 
 
 def _create_output_csvs(project_id: str) -> Path:
-    """Create all 15 dummy CSV files in the project output dir."""
-    out_dir = PROJECT_DIR / project_id / "output"
+    """Create all 15 dummy CSV files in the tenant-prefixed output dir."""
+    out_dir = PROJECT_DIR / FAKE_TENANT_ID / project_id / "output"
     out_dir.mkdir(parents=True, exist_ok=True)
     for name in EXPECTED_CSVS:
         (out_dir / name).write_text("col_a;col_b\nval_1;val_2\n", encoding="utf-8-sig")
@@ -44,7 +48,7 @@ def _create_output_csvs(project_id: str) -> Path:
 
 
 def _cleanup(project_id: str) -> None:
-    project_dir = PROJECT_DIR / project_id
+    project_dir = PROJECT_DIR / FAKE_TENANT_ID / project_id
     if project_dir.exists():
         shutil.rmtree(project_dir)
 

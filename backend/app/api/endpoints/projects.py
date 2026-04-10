@@ -65,7 +65,10 @@ def get_project(
     """
     查询特定项目状态
     """
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
@@ -81,7 +84,10 @@ async def upload_gtfs(
     """
     上传 GTFS 包并触发后台处理流程
     """
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -125,7 +131,10 @@ def get_table_data(
     """
     获取项目处理完成后的特定 CSV 表格的分页数据
     """
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
     if not project or project.status != "completed":
         raise HTTPException(status_code=400, detail="Project data not ready")
 
@@ -142,13 +151,16 @@ def download_results(
     """
     下载整体处理结果的 ZIP 归档
     """
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if project.status != "completed":
         raise HTTPException(status_code=400, detail="Project not ready for download")
 
-    out_dir = PROJECT_DIR / project_id / "output"
+    out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
     if not out_dir.exists():
         raise HTTPException(status_code=404, detail="Output directory not found")
 

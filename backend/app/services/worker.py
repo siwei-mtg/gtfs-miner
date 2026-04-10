@@ -91,7 +91,7 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
     }
     type_vac = type_vac_map.get(vacances, DEFAULT_TYPE_VAC)
 
-    out_dir = PROJECT_DIR / project_id / "output"
+    out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     send_progress("[1/7] 读取与解压 GTFS 文件")

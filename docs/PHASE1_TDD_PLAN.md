@@ -2,7 +2,7 @@
 
 **版本**：1.1  
 **日期**：2026-04-10  
-**状态**：Sprint 1 完成 / Sprint 2 完成（Task 6–10 全部完成）
+**状态**：Sprint 1–2 完成 / Sprint 3 进行中（Task 11–12 完成）
 
 ---
 
@@ -320,7 +320,9 @@ async def get_current_active_user(current_user = Depends(get_current_user)) → 
 
 ## GROUP C：多租户隔离（Task 11–12）
 
-### Task 11：项目查询租户过滤
+### Task 11：项目查询租户过滤 ✅
+
+> **当前状态**：已完成。`get_project`、`upload_gtfs`、`get_table_data`、`download_results` 均加入双条件过滤（`Project.id` + `Project.tenant_id`），跨租户访问返回 404。`tests/test_tenancy.py` 新增 3 个测试全部通过。
 
 **修改文件**：`backend/app/api/endpoints/projects.py`
 
@@ -337,7 +339,9 @@ async def get_current_active_user(current_user = Depends(get_current_user)) → 
 
 ---
 
-### Task 12：存储路径租户前缀化
+### Task 12：存储路径租户前缀化 ✅
+
+> **当前状态**：已完成。`worker.py` output dir 改为 `PROJECT_DIR / tenant_id / project_id / output/`；`projects.py` download 路径同步；`storage.py` 新增 `delete_file()`。`test_tenancy.py` 第 4 个测试（路径结构验证）通过；`test_download.py` helpers 已更新 tenant_id 前缀。
 
 **修改文件**：`backend/app/services/worker.py`
 
@@ -819,7 +823,7 @@ GROUP H (前端)         [依赖 B 契约 + F 契约]
 |--------|------|------|
 | Sprint 1（基础设施）| Task 1–5 | ✅ 完成（Supabase + Alembic + Docker 就绪） |
 | Sprint 2（认证）| Task 6–10 | ✅ 完成（端点受保护，租户隔离，32 测试通过） |
-| Sprint 3（租户 + Celery）| Task 11–15 + Task 16 | 多租户隔离，异步队列运行 |
+| Sprint 3（租户 + Celery）| Task 11–15 + Task 16 | ⚠️ Task 11–12 ✅ 完成（36 测试通过）；Task 13–16 待开发 |
 | Sprint 4（结果）| Task 17–20 + **Task 20b** | F-06 在线表格可查，**DWD SQLite 加载就绪**（F-09 前置） |
 | Sprint 5（前端）| Task 22–28 | 完整前端：登录→项目管理→结果查看 |
 
