@@ -1,14 +1,32 @@
-from pydantic import BaseModel, ConfigDict
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, ConfigDict, field_validator, ValidationInfo
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
+import re
+
+_TIME_RE = re.compile(r'^([01]\d|2[0-3]):[0-5]\d$')
 
 class ProjectCreate(BaseModel):
     hpm_debut: str = "07:00"
-    hpm_fin: str = "09:00"
+    hpm_fin:   str = "09:00"
     hps_debut: str = "17:00"
-    hps_fin: str = "19:30"
-    vacances: str = "A"
-    pays: str = "法国"
+    hps_fin:   str = "19:30"
+    vacances:  Literal["A", "B", "C", "全部"] = "A"
+    pays:      str = "france"
+
+    @field_validator("hpm_debut", "hpm_fin", "hps_debut", "hps_fin")
+    @classmethod
+    def validate_time_format(cls, v: str) -> str:
+        if not _TIME_RE.match(v):
+            raise ValueError(f"Format HH:MM attendu, reçu : {v!r}")
+        return v
+
+    @field_validator("hpm_fin")
+    @classmethod
+    def hpm_fin_after_debut(cls, v: str, info: ValidationInfo) -> str:
+        debut = info.data.get("hpm_debut")
+        if debut and _TIME_RE.match(debut) and v <= debut:
+            raise ValueError("hpm_fin doit être postérieur à hpm_debut")
+        return v
 
 class ProjectResponse(BaseModel):
     id: str
