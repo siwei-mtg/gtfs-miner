@@ -48,7 +48,15 @@
       "Bash(venv/Scripts/python.exe -c \"import alembic; print\\(alembic.__version__\\)\"2)",
       "Bash(rm -f storage/miner_app.db)",
       "Bash(venv/Scripts/python.exe -c \"from alembic.config import main; main\\(argv=['upgrade', 'head']\\)\")",
-      "Bash(venv/Scripts/python.exe -c ':*)"
+      "Bash(venv/Scripts/python.exe -c ':*)",
+      "Bash(venv/Scripts/pip.exe install:*)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_auth_schemas.py -v)",
+      "Bash(venv/Scripts/python.exe -m pip install \"email-validator==2.2.0\")",
+      "Bash(venv/Scripts/python.exe -m pip install \"passlib[bcrypt]==1.7.4\" \"python-jose[cryptography]==3.3.0\" -q)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_security.py -v)",
+      "Bash(venv/Scripts/python.exe -m pip show bcrypt)",
+      "Bash(venv/Scripts/python.exe -m pip install \"bcrypt==4.0.1\" -q)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_auth.py -v)"
     ]
   }
 }
