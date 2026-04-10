@@ -9,9 +9,11 @@ celery = Celery(
     "gtfs_miner",
     broker=_broker,
     backend=_backend,
+    include=["app.services.worker"],
 )
 celery.conf.update(
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
+    broker_connection_retry_on_startup=True,
 )
