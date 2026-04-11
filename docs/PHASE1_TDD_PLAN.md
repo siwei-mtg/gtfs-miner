@@ -655,7 +655,7 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 
 ---
 
-### Task 23：useAuth hook + token 管理
+### Task 23：useAuth hook + token 管理 ✅
 
 **创建文件**：`frontend/src/hooks/useAuth.ts`
 
@@ -673,6 +673,8 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 6. `test_user_loaded_after_login`
 
 **依赖**：Task 22
+
+> **当前状态**：已完成。成功实现由 localStorage 管理 token 的 useAuth hooks，处理了组件和 React 异步更新，配套的 6 个测试全部通过。
 
 ---
 
