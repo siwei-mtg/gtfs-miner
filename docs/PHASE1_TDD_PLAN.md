@@ -1,8 +1,8 @@
 # Phase 1 TDD 任务拆解计划
 
-**版本**：1.1  
-**日期**：2026-04-10  
-**状态**：Sprint 1–2 完成 / Sprint 3 进行中（Task 11–15 完成）
+**版本**：1.2  
+**日期**：2026-04-11  
+**状态**：Sprint 1–3 完成 / Sprint 4 进行中（Task 17–19 完成）
 
 ---
 
@@ -521,7 +521,7 @@ alembic upgrade head
 
 ---
 
-### Task 19：结果查询 API（stub → 完整）
+### Task 19：结果查询 API（stub → 完整）✅
 
 **修改文件**：`backend/app/api/endpoints/projects.py`
 
@@ -553,9 +553,11 @@ alembic upgrade head
 
 **依赖**：Task 18、Task 11
 
+> **当前状态**：已完成。7 个测试全部通过（commit `7c888f3`，2026-04-11）。
+
 ---
 
-### Task 20：单表 CSV 下载（F-07 扩展）
+### Task 20：单表 CSV 下载（F-07 扩展）✅
 
 **修改文件**：`backend/app/api/endpoints/projects.py`
 
@@ -568,6 +570,8 @@ alembic upgrade head
 2. `test_single_table_csv_columns` — 列名与 table schema 一致
 
 **依赖**：Task 19
+
+> **当前状态**：已完成。2 个测试全部通过（2026-04-11）。
 
 ---
 
@@ -824,7 +828,7 @@ GROUP H (前端)         [依赖 B 契约 + F 契约]
 | Sprint 1（基础设施）| Task 1–5 | ✅ 完成（Supabase + Alembic + Docker 就绪） |
 | Sprint 2（认证）| Task 6–10 | ✅ 完成（端点受保护，租户隔离，32 测试通过） |
 | Sprint 3（租户 + Celery）| Task 11–15 + Task 16 | ✅ 完成（Task 11–15: 26 测试通过；Task 16: 5 测试通过） |
-| Sprint 4（结果）| Task 17–20 + **Task 20b** | ⚠️ Task 17–18 ✅ 完成（3 测试通过）；Task 19–20 待开发 |
+| Sprint 4（结果）| Task 17–20 + **Task 20b** | ⚠️ Task 17–20 ✅ 完成（3 + 7 + 2 测试通过）；Task 20b 待开发 |
 | Sprint 5（前端）| Task 22–28 | 完整前端：登录→项目管理→结果查看 |
 
 ---

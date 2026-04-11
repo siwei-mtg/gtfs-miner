@@ -155,6 +155,48 @@ def get_table_data(
     return query_table(db, TABLE_REGISTRY[table_name], project_id,
                        skip, limit, sort_by, sort_order, q)
 
+@router.get("/{project_id}/tables/{table_name}/download")
+def download_table_csv(
+    project_id: str,
+    table_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """下载单张结果表为分号分隔的 UTF-8 BOM CSV。"""
+    import csv
+
+    if table_name not in TABLE_REGISTRY:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.status != "completed":
+        raise HTTPException(status_code=400, detail="Project data not ready")
+
+    model = TABLE_REGISTRY[table_name]
+    _internal = {"id", "project_id"}
+    columns = [col.name for col in model.__table__.columns if col.name not in _internal]
+    rows_orm = db.query(model).filter(model.project_id == project_id).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, delimiter=";")
+    writer.writerow(columns)
+    for row in rows_orm:
+        writer.writerow([getattr(row, col) for col in columns])
+
+    bytes_buf = io.BytesIO(buf.getvalue().encode("utf-8-sig"))
+    filename = f"{table_name}_{project_id}.csv"
+    return StreamingResponse(
+        bytes_buf,
+        media_type="text/csv; charset=utf-8-sig",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/{project_id}/download")
 def download_results(
     project_id: str,

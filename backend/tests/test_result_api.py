@@ -114,3 +114,32 @@ def test_total_count_correct(isolated_client_authed, result_data, test_db):
         ResultA1ArretGenerique.project_id == PROJECT_ID
     ).count()
     assert r.json()["total"] == expected
+
+
+# ── Task 20: single-table CSV download ──────────────────────────────────────
+
+DOWNLOAD_URL = f"/api/v1/projects/{PROJECT_ID}/tables/a1/download"
+
+
+def test_single_table_csv_download(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(DOWNLOAD_URL)
+    assert r.status_code == 200
+    assert "text/csv" in r.headers["content-type"]
+    # UTF-8 BOM: first 3 bytes must be EF BB BF
+    assert r.content[:3] == b"\xef\xbb\xbf"
+    # semicolon-delimited: header line contains ";"
+    first_line = r.content.decode("utf-8-sig").splitlines()[0]
+    assert ";" in first_line
+
+
+def test_single_table_csv_columns(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(DOWNLOAD_URL)
+    assert r.status_code == 200
+    first_line = r.content.decode("utf-8-sig").splitlines()[0]
+    csv_cols = first_line.split(";")
+    # internal fields must not appear
+    assert "id" not in csv_cols
+    assert "project_id" not in csv_cols
+    # domain columns must be present
+    for col in ("id_ag", "stop_name", "stop_lat", "stop_lon", "id_ag_num"):
+        assert col in csv_cols

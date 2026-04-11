@@ -57,7 +57,9 @@
       "Bash(venv/Scripts/python.exe -m pip show bcrypt)",
       "Bash(venv/Scripts/python.exe -m pip install \"bcrypt==4.0.1\" -q)",
       "Bash(venv/Scripts/python.exe -m pytest tests/test_auth.py -v)",
-      "Bash(/c/Users/wei.si/Projets/GTFS Miner/backend/venv/Scripts/python.exe:*)"
+      "Bash(/c/Users/wei.si/Projets/GTFS Miner/backend/venv/Scripts/python.exe:*)",
+      "Bash(python -m pytest tests/test_result_api.py -v)",
+      "Bash(ls:*)"
     ]
   }
 }
