@@ -9,10 +9,15 @@ const API_ORIGIN = normalizeOrigin(import.meta.env.VITE_API_URL as string | unde
 const BASE = `${API_ORIGIN}/api/v1/projects`
 const AUTH_BASE = `${API_ORIGIN}/api/v1/auth`
 
+function getAuthHeaders(headers: HeadersInit = {}): HeadersInit {
+  const token = localStorage.getItem('token')
+  return token ? { ...headers, Authorization: `Bearer ${token}` } : headers
+}
+
 export async function createProject(params: ProjectCreate): Promise<ProjectResponse> {
   const res = await fetch(`${BASE}/`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(params),
   })
   if (!res.ok) throw new Error(`createProject failed: ${res.status}`)
@@ -24,6 +29,7 @@ export async function uploadGtfs(projectId: string, file: File): Promise<UploadR
   form.append('file', file)
   const res = await fetch(`${BASE}/${projectId}/upload`, {
     method: 'POST',
+    headers: getAuthHeaders(),
     body: form,
   })
   if (!res.ok) throw new Error(`uploadGtfs failed: ${res.status}`)
@@ -31,8 +37,18 @@ export async function uploadGtfs(projectId: string, file: File): Promise<UploadR
 }
 
 export async function getProject(projectId: string): Promise<ProjectResponse> {
-  const res = await fetch(`${BASE}/${projectId}`)
+  const res = await fetch(`${BASE}/${projectId}`, {
+    headers: getAuthHeaders(),
+  })
   if (!res.ok) throw new Error(`getProject failed: ${res.status}`)
+  return res.json()
+}
+
+export async function listProjects(): Promise<ProjectResponse[]> {
+  const res = await fetch(`${BASE}/`, {
+    headers: getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error(`listProjects failed: ${res.status}`)
   return res.json()
 }
 

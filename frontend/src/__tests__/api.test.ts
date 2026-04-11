@@ -75,7 +75,9 @@ describe('getProject', () => {
 
     const result = await getProject('test-uuid')
 
-    expect(fetchSpy).toHaveBeenCalledWith('/api/v1/projects/test-uuid')
+    expect(fetchSpy).toHaveBeenCalledWith('/api/v1/projects/test-uuid', {
+      headers: {}
+    })
     expect(result.status).toBe('pending')
   })
 

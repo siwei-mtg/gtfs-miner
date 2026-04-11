@@ -700,7 +700,7 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 
 ---
 
-### Task 25：项目列表页
+### Task 25：项目列表页 ✅
 
 **创建文件**：`frontend/src/pages/ProjectListPage.tsx`
 
@@ -717,6 +717,8 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 5. `test_click_project_navigates`
 
 **依赖**：Task 22
+
+> **当前状态**：已完成。新增了项目列表页组件和相关测试。同时修改了 api/client.ts 的内部逻辑使其支持附加 Authorization Headers，顺利修复并验证了之前所有的相关测试。共有 56 个单元测试全部通过。
 
 ---
 
