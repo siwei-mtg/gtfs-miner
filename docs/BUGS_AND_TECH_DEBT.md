@@ -10,6 +10,7 @@
 |----|------|--------|------|---------|
 | [BUG-001](#bug-001) | ✅ Resolved | High | `test_websocket` — `client_authed` auth bypass 被 function-scoped fixture 清除 → 401 | 2026-04-11 |
 | [BUG-002](#bug-002) | ✅ Resolved | Medium | `test_upload_and_wait` — pipeline 完成但 output 目录不存在 | 2026-04-11 |
+| [BUG-003](#bug-003) | ✅ Resolved | High | 假期区分析时 D2/E1/E4/F1/F3/F4 结果表全部为空 | 2026-04-11 |
 
 ---
 
@@ -80,6 +81,37 @@ out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
 ```
 
 **涉及文件**：`backend/tests/test_api_pipeline_integration.py:92`
+
+---
+
+---
+
+### BUG-003
+
+**标题**：假期区分析时 D2/E1/E4/F1/F3/F4 结果表全部为空
+
+**状态**：✅ Resolved（2026-04-11）  
+**严重度**：High（前端所有 pivot 表无数据，用户无法使用假期区功能）  
+**影响范围**：`vacances` 参数为 A/B/C 时；`全部`（Type_Jour）模式不受影响  
+
+**根因**（双重）：  
+1. `Calendrier.xls` 的 `Type_Jour_Vacances_*` 列存储**字符串标签**（`"Lundi_Scolaire"`, `"Ferie"` 等），pipeline pivot 后 CSV 列名亦为字符串。`worker.py` 的 melt 逻辑 `str(c).isdigit()` 只识别数字列名 `"1"`–`"7"`，字符串列名无法触发 melt → E1/E4/F1/F3/F4 不入库。  
+2. D2 的 CSV 列名为 `"Type_Jour_Vacances_A"`，DB model 期望列名 `"Type_Jour"` → Type_Jour 字段 NULL。
+
+**修复方案**：  
+- `LocalXlsCalendarProvider.enrich()`：merge 后将字符串标签 `.map(TYPE_JOUR_VAC_LABELS)` 为整数（1–11 编码）。  
+- `MEF_servjour()`：末尾添加 `.rename(columns={type_vac: "Type_Jour"})`，统一列名。  
+- 同时实现 Calendar Service（`DBCalendarProvider` + `calendar_seeder.py`），以 DB 驱动替代本地 XLS。
+
+**Day-type 整数编码**（`TYPE_JOUR_VAC_LABELS`）：  
+1–7 = 学期内周一至周日；8 = 假期工作日；9 = 假期周六；10 = 假期周日；11 = 法定节假日。
+
+**涉及文件**：  
+- `backend/app/services/gtfs_core/calendar_provider.py`  
+- `backend/app/services/gtfs_core/gtfs_export.py`  
+- `backend/app/services/worker.py`  
+- `backend/app/db/models.py`（新增 `CalendarDate`）  
+- `backend/app/services/calendar_seeder.py`（新增）
 
 ---
 

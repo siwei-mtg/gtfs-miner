@@ -115,9 +115,10 @@ def MEF_serdate(service_dates: pd.DataFrame, ser_id_coor: pd.DataFrame) -> pd.Da
     return service_dates.merge(ser_id_coor, on='id_service_num')[cols]
 
 def MEF_servjour(service_jour_type: pd.DataFrame, route_id_coor: pd.DataFrame, ser_id_coor: pd.DataFrame, type_vac: str) -> pd.DataFrame:
-    """格式化服务日类型导出。"""
+    """格式化服务日类型导出。始终将 type_vac 列重命名为 'Type_Jour'（DB model 期望的列名）。"""
     cols = ['id_ligne_num', 'service_id', 'id_service_num', 'Date_GTFS', type_vac]
-    return service_jour_type.merge(ser_id_coor, on='id_service_num')[cols]
+    df = service_jour_type.merge(ser_id_coor, on='id_service_num')[cols]
+    return df.rename(columns={type_vac: 'Type_Jour'})
 
 def trace_sl_vol_oiseau(iti: pd.DataFrame, AG: pd.DataFrame, sl: pd.DataFrame) -> pd.DataFrame:
     """

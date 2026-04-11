@@ -23,7 +23,8 @@ from ..api.websockets.progress import manager
 
 # Import individual pipeline functions (not main, to allow step-by-step progress)
 from .gtfs_core.pipeline import build_dates_table, DEFAULT_TYPE_VAC, CSV_OPTS
-from .gtfs_core.calendar_provider import LocalXlsCalendarProvider
+from .gtfs_core.calendar_provider import DBCalendarProvider
+from .calendar_seeder import ensure_calendar
 from .gtfs_core.gtfs_norm import gtfs_normalize, ligne_generate
 from .gtfs_core.gtfs_reader import read_gtfs_zip
 from .gtfs_core.gtfs_spatial import ag_ap_generate_reshape
@@ -178,6 +179,9 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
     out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Ensure calendar DB is seeded (noop if already populated)
+    ensure_calendar(db)
+
     send_progress("[1/7] 读取与解压 GTFS 文件")
 
     try:
@@ -232,7 +236,7 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
 
         # ── 6. Service dates (D_1 / D_2) ─────────────────────────────────
         Dates = build_dates_table(normed['calendar'], normed['calendar_dates'])
-        Dates = LocalXlsCalendarProvider().enrich(Dates)  # inject Type_Jour_Vacances_*
+        Dates = DBCalendarProvider(db).enrich(Dates)  # inject Type_Jour_Vacances_*
         service_dates, msg = service_date_generate(
             normed['calendar'], normed['calendar_dates'], Dates
         )
