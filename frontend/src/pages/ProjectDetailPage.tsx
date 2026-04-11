@@ -7,11 +7,20 @@ import { useProjectProgress } from '../hooks/useProjectProgress';
 
 const RESULT_TABLES = [
   { id: 'a1', label: 'A1: Arrêts Génériques' },
+  { id: 'a2', label: 'A2: Arrêts Physiques' },
   { id: 'b1', label: 'B1: Lignes' },
+  { id: 'b2', label: 'B2: Sous-Lignes' },
   { id: 'c1', label: 'C1: Courses' },
+  { id: 'c2', label: 'C2: Itinéraire' },
+  { id: 'c3', label: 'C3: Itinéraire Arc' },
   { id: 'd1', label: 'D1: Service Dates' },
+  { id: 'd2', label: 'D2: Service Jourtype' },
   { id: 'e1', label: 'E1: Passage AG' },
-  { id: 'f1', label: 'F1: Courses/Lignes' }
+  { id: 'e4', label: 'E4: Passage Arc' },
+  { id: 'f1', label: 'F1: Courses/Lignes' },
+  { id: 'f2', label: 'F2: Caract. Sous-Lignes' },
+  { id: 'f3', label: 'F3: KCC Lignes' },
+  { id: 'f4', label: 'F4: KCC Sous-Lignes' },
 ];
 
 export const ProjectDetailPage: React.FC = () => {
