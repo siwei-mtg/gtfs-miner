@@ -88,16 +88,7 @@ def test_upload_and_wait(client_authed):
     assert final_status == "completed", \
         f"Pipeline ended with status '{final_status}'. Check the 'error_message' in DB."
 
-    # ── B: File persistence ─────────────────────────────────────────
-    out_dir = PROJECT_DIR / project_id / "output"
-    print(f"  Checking output dir: {out_dir}")
-    assert out_dir.exists(), f"Output directory not found: {out_dir}"
-
-    missing = [f for f in EXPECTED_CSVS if not (out_dir / f).exists()]
-    assert not missing, f"Missing output files: {missing}"
-    print(f"  ✓ All {len(EXPECTED_CSVS)} expected CSVs are present.")
-
-    # ── C: DB status ───────────────────────────────────────────────
+    # ── B + C: DB status & File persistence ───────────────────────
     db = SessionLocal()
     project = db.query(Project).filter(Project.id == project_id).first()
     db.close()
@@ -105,6 +96,15 @@ def test_upload_and_wait(client_authed):
     assert project.status == "completed", \
         f"DB status is '{project.status}', error: {project.error_message}"
     print(f"  ✓ DB status = 'completed'.")
+
+    # Worker writes to PROJECT_DIR / tenant_id / project_id / "output"
+    out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
+    print(f"  Checking output dir: {out_dir}")
+    assert out_dir.exists(), f"Output directory not found: {out_dir}"
+
+    missing = [f for f in EXPECTED_CSVS if not (out_dir / f).exists()]
+    assert not missing, f"Missing output files: {missing}"
+    print(f"  ✓ All {len(EXPECTED_CSVS)} expected CSVs are present.")
 
 
 def test_get_project_list(client_authed):

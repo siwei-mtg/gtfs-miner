@@ -122,6 +122,8 @@ def isolated_client(test_engine):
     Use this fixture in fast unit tests (download, error-case, etc.) that
     must not touch the real DB and do not run the background worker.
     """
+    from app.api.deps import get_current_active_user
+
     TestingSessionLocal = sessionmaker(
         autocommit=False, autoflush=False, bind=test_engine
     )
@@ -133,10 +135,15 @@ def isolated_client(test_engine):
         finally:
             db.close()
 
+    # Temporarily remove any session-scoped auth bypass so this client uses
+    # real auth behaviour (or no auth at all), then restore it on teardown.
+    saved_auth = app.dependency_overrides.pop(get_current_active_user, None)
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as c:
         yield c
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_db, None)
+    if saved_auth is not None:
+        app.dependency_overrides[get_current_active_user] = saved_auth
 
 
 @pytest.fixture
@@ -146,6 +153,8 @@ def fresh_client():
     Use this for auth tests that INSERT rows and need full isolation
     between test functions (no shared state from other tests).
     """
+    from app.api.deps import get_current_active_user
+
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -161,10 +170,15 @@ def fresh_client():
         finally:
             db.close()
 
+    # Temporarily remove any session-scoped auth bypass so auth tests receive
+    # real authentication behaviour (401 on missing/bad tokens, etc.).
+    saved_auth = app.dependency_overrides.pop(get_current_active_user, None)
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as c:
         yield c
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_db, None)
+    if saved_auth is not None:
+        app.dependency_overrides[get_current_active_user] = saved_auth
     engine.dispose()
 
 
@@ -268,8 +282,18 @@ def isolated_client_authed(test_engine):
         finally:
             db.close()
 
+    # Save existing auth override so we can restore it on teardown (BUG-001).
+    # client_authed (session-scoped) may have already registered its own fake
+    # user; we must put it back after this fixture finishes so subsequent
+    # tests that rely on client_authed still see the correct override.
+    saved_auth = app.dependency_overrides.get(get_current_active_user)
+
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_active_user] = lambda: fake_user
     with TestClient(app) as c:
         yield c
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_db, None)
+    if saved_auth is not None:
+        app.dependency_overrides[get_current_active_user] = saved_auth
+    else:
+        app.dependency_overrides.pop(get_current_active_user, None)

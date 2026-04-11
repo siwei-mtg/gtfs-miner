@@ -37,6 +37,7 @@ from .gtfs_core.gtfs_export import (
     MEF_course, MEF_iti, MEF_iti_arc,
     MEF_ligne, MEF_serdate, MEF_servjour,
 )
+from .dwd_loader import load_outputs_to_dwd
 
 # HPM/HPS as time fractions — overridable from project parameters
 def _parse_time_frac(hhmm: str) -> float:
@@ -273,6 +274,9 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
         # ── Step 8: persist CSV results to DB ────────────────────────────
         send_progress("[8/8] 将结果写入数据库")
         _persist_results_to_db(project_id, out_dir, db)
+
+        # ── Load to DWD SQLite (Phase 3 LLM Agent 查询用) ───────────────────
+        load_outputs_to_dwd(project_id, out_dir)
 
         # ── Mark as completed ─────────────────────────────────────────────
         project.status = "completed"

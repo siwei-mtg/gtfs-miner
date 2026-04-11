@@ -8,8 +8,8 @@
 
 | ID | 状态 | 严重度 | 标题 | 首次发现 |
 |----|------|--------|------|---------|
-| [BUG-001](#bug-001) | 🔴 Open | High | `test_websocket` — `client_authed` auth bypass 被 function-scoped fixture 清除 → 401 | 2026-04-11 |
-| [BUG-002](#bug-002) | 🔴 Open | Medium | `test_upload_and_wait` — pipeline 完成但 output 目录不存在 | 2026-04-11 |
+| [BUG-001](#bug-001) | ✅ Resolved | High | `test_websocket` — `client_authed` auth bypass 被 function-scoped fixture 清除 → 401 | 2026-04-11 |
+| [BUG-002](#bug-002) | ✅ Resolved | Medium | `test_upload_and_wait` — pipeline 完成但 output 目录不存在 | 2026-04-11 |
 
 ---
 
@@ -17,7 +17,7 @@
 
 **标题**：`test_websocket_receives_progress_messages` 因 `dependency_overrides.clear()` 失效 → 401
 
-**状态**：🔴 Open  
+**状态**：✅ Resolved（修复 commit：Task 20b session，2026-04-11）  
 **严重度**：High（导致 WebSocket 集成测试持续失败）  
 **影响测试**：`tests/test_websocket.py::test_websocket_receives_progress_messages`  
 **错误信息**：
@@ -55,7 +55,7 @@ app.dependency_overrides.pop(get_current_active_user, None)  # 仅 authed 变体
 
 **标题**：`test_upload_and_wait` — pipeline 完成但 `output/` 目录未写入本地
 
-**状态**：🔴 Open  
+**状态**：✅ Resolved（修复 commit：Task 20b session，2026-04-11）  
 **严重度**：Medium（E2E 文件持久化断言失败；pipeline 本身运行正常）  
 **影响测试**：`tests/test_api_pipeline_integration.py::test_upload_and_wait`  
 **错误信息**：
@@ -65,13 +65,21 @@ AssertionError: Output directory not found:
 assert False
 ```
 
-**根因**（待确认）：  
-pipeline DB 状态已为 `completed`，但 `PROJECT_DIR / {project_id} / output` 目录不存在。怀疑 Task 17-18 重构后 worker 文件写出路径与测试断言路径不一致，或 worker 在 local 模式下已改为仅写 DB 而不再输出本地 CSV。
+**根因**（已确认）：  
+`worker.py` 写出路径为 `PROJECT_DIR / project.tenant_id / project_id / "output"`（含 `tenant_id` 层级），而测试（`test_api_pipeline_integration.py:92`）断言路径为 `PROJECT_DIR / project_id / "output"`（缺少 `tenant_id`）。路径不匹配导致 `assert out_dir.exists()` 失败。
 
-**待查**：  
-`backend/app/services/worker.py` 中文件写出路径是否仍为 `PROJECT_DIR / project_id / "output"`。
+**修复方案**：  
+更新测试中路径构造，先从 DB 查询 `project.tenant_id`，再拼接完整路径：
 
-**涉及文件**：`backend/app/services/worker.py`、`backend/tests/test_api_pipeline_integration.py`
+```python
+# test_api_pipeline_integration.py
+db = SessionLocal()
+project = db.query(Project).filter(Project.id == project_id).first()
+db.close()
+out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
+```
+
+**涉及文件**：`backend/tests/test_api_pipeline_integration.py:92`
 
 ---
 

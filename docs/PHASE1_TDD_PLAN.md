@@ -2,7 +2,7 @@
 
 **版本**：1.2  
 **日期**：2026-04-11  
-**状态**：Sprint 1–3 完成 / Sprint 4 进行中（Task 17–19 完成）
+**状态**：Sprint 1–4 完成 / Sprint 5 进行中（Task 22 完成）
 
 ---
 
@@ -575,7 +575,7 @@ alembic upgrade head
 
 ---
 
-### Task 20b：DWD SQLite 加载（F-09 前置依赖）
+### Task 20b：DWD SQLite 加载（F-09 前置依赖）✅
 
 > **来源**：PRD v0.5 Phase 1 新增项。pipeline 完成后将 14 个 CSV 加载至项目专属 SQLite，供 Phase 3 LLM Agent 查询；E_*/F_* 透视列在加载时规范化（melt）。
 
@@ -625,6 +625,8 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 
 **依赖**：Task 18（CSV 已写入 output_dir）、Task 14（Celery task 框架）
 
+> **当前状态**：已完成。6 个测试全部通过（2026-04-11）。注：实际 CSV 文件为 15 个（TDD 计划中"14"为笔误，E_4 是第 15 个文件），测试断言已相应修正为 15 张表。
+
 ---
 
 
@@ -632,7 +634,7 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 
 > 可与 GROUP B–G **并行开发**（依赖 Task 9 auth endpoints 就绪的契约即可）。
 
-### Task 22：Auth API client + types
+### Task 22：Auth API client + types ✅
 
 **修改文件**：`frontend/src/types/api.ts`
 
@@ -648,6 +650,8 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 3. `test_getMe_with_auth_header`
 
 **依赖**：Task 9（接口契约）
+
+> **当前状态**：已完成。新增类型及 register/login/getMe 函数，配套测试全部通过。
 
 ---
 
@@ -828,7 +832,7 @@ GROUP H (前端)         [依赖 B 契约 + F 契约]
 | Sprint 1（基础设施）| Task 1–5 | ✅ 完成（Supabase + Alembic + Docker 就绪） |
 | Sprint 2（认证）| Task 6–10 | ✅ 完成（端点受保护，租户隔离，32 测试通过） |
 | Sprint 3（租户 + Celery）| Task 11–15 + Task 16 | ✅ 完成（Task 11–15: 26 测试通过；Task 16: 5 测试通过） |
-| Sprint 4（结果）| Task 17–20 + **Task 20b** | ⚠️ Task 17–20 ✅ 完成（3 + 7 + 2 测试通过）；Task 20b 待开发 |
+| Sprint 4（结果）| Task 17–20 + **Task 20b** | ✅ 全部完成（Task 17: 3 + Task 18: 7 + Task 20: 2 + Task 20b: 6 测试通过） |
 | Sprint 5（前端）| Task 22–28 | 完整前端：登录→项目管理→结果查看 |
 
 ---
