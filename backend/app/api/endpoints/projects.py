@@ -12,6 +12,7 @@ from ...db.database import get_db
 from ...db.models import Project, User
 from ...schemas.project import ProjectCreate, ProjectResponse
 from ...services.worker import run_project_task_sync
+from ...services.result_query import TABLE_REGISTRY, query_table
 from ...core.config import settings, TEMP_DIR, PROJECT_DIR
 from ...api.deps import get_current_active_user
 
@@ -128,22 +129,31 @@ def get_table_data(
     table_name: str,
     skip: int = 0,
     limit: int = 50,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
+    q: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    获取项目处理完成后的特定 CSV 表格的分页数据
+    获取项目处理完成后的特定 CSV 表格的分页数据。
+
+    返回：{"total": int, "rows": list[dict], "columns": list[str]}
     """
+    if table_name not in TABLE_REGISTRY:
+        raise HTTPException(status_code=404, detail="Table not found")
+
     project = db.query(Project).filter(
         Project.id == project_id,
         Project.tenant_id == current_user.tenant_id,
     ).first()
-    if not project or project.status != "completed":
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.status != "completed":
         raise HTTPException(status_code=400, detail="Project data not ready")
 
-    # TODO: Read from SQLite result tables or CSV file.
-    # This is a stub for frontend testing.
-    return {"total": 0, "page": skip, "limit": limit, "data": []}
+    return query_table(db, TABLE_REGISTRY[table_name], project_id,
+                       skip, limit, sort_by, sort_order, q)
 
 @router.get("/{project_id}/download")
 def download_results(
