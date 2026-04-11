@@ -2,7 +2,7 @@
 
 **版本**：1.2  
 **日期**：2026-04-11  
-**状态**：Sprint 1–4 完成 / Sprint 5 进行中（Task 22 完成）
+**状态**：Sprint 1–5 全部完成（Phase 1 闭环结束）
 
 ---
 
@@ -777,7 +777,7 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 
 ---
 
-### Task 28：App 路由 + 状态机更新
+### Task 28：App 路由 + 状态机更新 ✅
 
 **修改文件**：`frontend/src/App.tsx`
 
@@ -800,6 +800,8 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 4. `test_logout_clears_session`
 
 **依赖**：Task 24、25、26、27
+
+> **当前状态**：已完成。成功利用 `react-router-dom` 重构了 App 的路由架构。添加了 `AuthGuard` 防止未授权访问，实现了 `/login`、`/register`、`/` 以及 `/projects/:id` 等路径的分发。测试用例已同步重构以符合路由逻辑验证，全部 62 个测试成功通过！标志着前端重构闭环完成！
 
 ---
 
