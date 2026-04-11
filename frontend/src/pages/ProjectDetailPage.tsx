@@ -6,12 +6,12 @@ import { ResultTable } from '../components/ResultTable';
 import { useProjectProgress } from '../hooks/useProjectProgress';
 
 const RESULT_TABLES = [
-  { id: 'result_a1_arrets_generiques', label: 'A1: Arrêts Génériques' },
-  { id: 'result_b1_lignes', label: 'B1: Lignes' },
-  { id: 'result_c1_courses', label: 'C1: Courses' },
-  { id: 'result_d1_service_dates', label: 'D1: Service Dates' },
-  { id: 'result_e1_passage_ag', label: 'E1: Passage AG' },
-  { id: 'result_f1_nb_courses_lignes', label: 'F1: Courses/Lignes' }
+  { id: 'a1', label: 'A1: Arrêts Génériques' },
+  { id: 'b1', label: 'B1: Lignes' },
+  { id: 'c1', label: 'C1: Courses' },
+  { id: 'd1', label: 'D1: Service Dates' },
+  { id: 'e1', label: 'E1: Passage AG' },
+  { id: 'f1', label: 'F1: Courses/Lignes' }
 ];
 
 export const ProjectDetailPage: React.FC = () => {
@@ -33,7 +33,7 @@ export const ProjectDetailPage: React.FC = () => {
         <h2>Project {id}</h2>
       </div>
 
-      <ProgressPanel messages={messages} />
+      <ProgressPanel messages={messages} status={latestStatus} />
       
       <div className="actions">
         <DownloadButton

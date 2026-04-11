@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { getProject } from '../api/client'
 import type { ProjectStatus, WebSocketMessage } from '../types/api'
 
 interface UseProjectProgressResult {
@@ -19,6 +20,11 @@ export function useProjectProgress(projectId: string | null): UseProjectProgress
     setMessages([])
     setLatestStatus(null)
     setIsConnected(false)
+
+    // Seed initial status from DB so completed projects are immediately usable
+    getProject(projectId)
+      .then((p) => setLatestStatus(p.status as ProjectStatus))
+      .catch(() => { /* ignore — WebSocket will provide live updates */ })
 
     const apiOrigin = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
     const wsOrigin = apiOrigin.replace(/^https/, 'wss').replace(/^http/, 'ws')

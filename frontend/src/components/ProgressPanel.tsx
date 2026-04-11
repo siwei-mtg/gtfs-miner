@@ -1,7 +1,8 @@
-import type { WebSocketMessage } from '../types/api'
+import type { ProjectStatus, WebSocketMessage } from '../types/api'
 
 interface ProgressPanelProps {
   messages: WebSocketMessage[]
+  status?: ProjectStatus | null
 }
 
 const STEP_LABELS = [
@@ -19,11 +20,15 @@ function getStepIndex(step: string): number {
   return match ? parseInt(match[1], 10) - 1 : -1
 }
 
-export function ProgressPanel({ messages }: ProgressPanelProps) {
+export function ProgressPanel({ messages, status }: ProgressPanelProps) {
   if (messages.length === 0) {
+    const label =
+      status === 'completed' ? 'Traitement terminé.' :
+      status === 'failed'    ? 'Traitement échoué.' :
+                               'En attente du démarrage…'
     return (
       <div aria-label="progress-panel">
-        <p>En attente du démarrage…</p>
+        <p>{label}</p>
       </div>
     )
   }
