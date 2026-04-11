@@ -16,9 +16,6 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
   const [limit, setLimit] = useState(50);
   const [sortBy, setSortBy] = useState<string | undefined>(undefined);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [query, setQuery] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-
   useEffect(() => {
     let mounted = true;
     setIsLoading(true);
@@ -28,7 +25,6 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
       limit,
       sort_by: sortBy,
       sort_order: sortOrder,
-      q: query
     })
       .then(res => {
         if (mounted) {
@@ -44,7 +40,7 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
       });
 
     return () => { mounted = false; };
-  }, [projectId, tableName, skip, limit, sortBy, sortOrder, query]);
+  }, [projectId, tableName, skip, limit, sortBy, sortOrder]);
 
   const handleSort = (col: string) => {
     if (sortBy === col) {
@@ -56,27 +52,10 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
     setSkip(0);
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setQuery(searchInput);
-    setSkip(0);
-  };
-
   return (
     <div className="result-table-container">
       <div className="controls">
-        <form onSubmit={handleSearch} className="search-form">
-          <input 
-            type="text" 
-            placeholder="Search..." 
-            value={searchInput} 
-            onChange={e => setSearchInput(e.target.value)}
-            aria-label="Search"
-          />
-          <button type="submit">Search</button>
-        </form>
-
-        <a 
+        <a
           href={getTableDownloadUrl(projectId, tableName)} 
           className="download-button"
           download
