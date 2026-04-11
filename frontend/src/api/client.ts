@@ -1,4 +1,4 @@
-import type { ProjectCreate, ProjectResponse, UploadResponse, UserCreate, Token, UserResponse } from '../types/api'
+import type { ProjectCreate, ProjectResponse, UploadResponse, UserCreate, Token, UserResponse, TableDataResponse } from '../types/api'
 
 function normalizeOrigin(raw: string | undefined): string {
   if (!raw) return ''
@@ -54,6 +54,29 @@ export async function listProjects(): Promise<ProjectResponse[]> {
 
 export function getDownloadUrl(projectId: string): string {
   return `${BASE}/${projectId}/download`
+}
+
+export async function getTableData(
+  projectId: string, 
+  tableName: string, 
+  params: { skip?: number; limit?: number; sort_by?: string; sort_order?: string; q?: string }
+): Promise<TableDataResponse> {
+  const query = new URLSearchParams()
+  if (params.skip !== undefined) query.append('skip', params.skip.toString())
+  if (params.limit !== undefined) query.append('limit', params.limit.toString())
+  if (params.sort_by) query.append('sort_by', params.sort_by)
+  if (params.sort_order) query.append('sort_order', params.sort_order)
+  if (params.q) query.append('q', params.q)
+
+  const res = await fetch(`${BASE}/${projectId}/tables/${tableName}?${query.toString()}`, {
+    headers: getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error(`getTableData failed: ${res.status}`)
+  return res.json()
+}
+
+export function getTableDownloadUrl(projectId: string, tableName: string): string {
+  return `${BASE}/${projectId}/tables/${tableName}/download`
 }
 
 export async function register(data: UserCreate): Promise<Token> {

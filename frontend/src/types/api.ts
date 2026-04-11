@@ -31,6 +31,12 @@ export interface UploadResponse {
   project_id: string
 }
 
+export interface TableDataResponse {
+  total: number
+  rows: Record<string, any>[]
+  columns: string[]
+}
+
 export interface UserCreate {
   email: string
   password: string

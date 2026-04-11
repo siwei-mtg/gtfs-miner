@@ -751,7 +751,7 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 
 ---
 
-### Task 27：在线结果表格组件 F-06
+### Task 27：在线结果表格组件 F-06 ✅
 
 **创建文件**：`frontend/src/components/ResultTable.tsx`
 
@@ -772,6 +772,8 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 8. `test_download_button_per_table`
 
 **依赖**：Task 19（API 契约）、Task 22
+
+> **当前状态**：已完成。成功封装了 ResultTable 组件，并通过 TableDataResponse 接口对接后端 API 完成分页加载、排序触发、前台过滤条件搜集与下载地址构造，全部相关的 8 个单元测试均通过。
 
 ---
 
