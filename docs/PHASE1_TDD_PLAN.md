@@ -678,7 +678,7 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 
 ---
 
-### Task 24：登录 / 注册页
+### Task 24：登录 / 注册页 ✅
 
 **创建文件**：`frontend/src/pages/LoginPage.tsx`、`RegisterPage.tsx`
 
@@ -695,6 +695,8 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 5. `test_link_to_register`
 
 **依赖**：Task 23
+
+> **当前状态**：已完成。成功创建了包含受控表单的 LoginPage 和 RegisterPage 组件，以及针对 LoginPage 组件完整的 DOM 交互测试，测试 100% 通过。
 
 ---
 
