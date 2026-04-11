@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 interface RegisterPageProps {
@@ -6,11 +7,15 @@ interface RegisterPageProps {
 }
 
 export const RegisterPage: React.FC<RegisterPageProps> = ({ onSuccess }) => {
-  const { register } = useAuth();
+  const { register, token } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [tenantName, setTenantName] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  // Already authenticated → redirect to home
+  if (token) return <Navigate to="/" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,7 +25,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onSuccess }) => {
       if (onSuccess) {
         onSuccess();
       } else {
-        window.location.href = '/';
+        navigate('/', { replace: true });
       }
     } catch (err: any) {
       setError(err.message || 'Registration failed');

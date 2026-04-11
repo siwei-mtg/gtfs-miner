@@ -57,8 +57,8 @@ export function getDownloadUrl(projectId: string): string {
 }
 
 export async function getTableData(
-  projectId: string, 
-  tableName: string, 
+  projectId: string,
+  tableName: string,
   params: { skip?: number; limit?: number; sort_by?: string; sort_order?: string; q?: string }
 ): Promise<TableDataResponse> {
   const query = new URLSearchParams()
@@ -93,7 +93,7 @@ export async function login(email: string, password: string): Promise<Token> {
   const params = new URLSearchParams()
   params.append('username', email)
   params.append('password', password)
-  
+
   const res = await fetch(`${AUTH_BASE}/login`, {
     method: 'POST',
     body: params,
