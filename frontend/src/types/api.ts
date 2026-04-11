@@ -30,3 +30,26 @@ export interface UploadResponse {
   msg: string
   project_id: string
 }
+
+export interface UserCreate {
+  email: string
+  password: string
+  tenant_name: string
+}
+
+export interface UserResponse {
+  id: string
+  email: string
+  role: string
+  tenant_id: string
+  created_at: string
+}
+
+export interface Token {
+  access_token: string
+  token_type: string
+}
+
+export interface TenantCreate {
+  name: string
+}
