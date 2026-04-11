@@ -13,21 +13,35 @@ const DEFAULT_PARAMS: ProjectCreate = {
   hps_debut: '17:00',
   hps_fin: '19:30',
   vacances: 'A',
-  pays: '法国',
+  pays: 'france',
 }
 
 export function UploadForm({ onSubmit, isLoading = false, error = null }: UploadFormProps) {
   const [file, setFile] = useState<File | null>(null)
   const [params, setParams] = useState<ProjectCreate>(DEFAULT_PARAMS)
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setValidationError(null)
+
+    if (params.hpm_fin <= params.hpm_debut) {
+      setValidationError("La fin de l'heure de pointe du matin doit être postérieure au début.")
+      return
+    }
+    if (params.hps_fin <= params.hps_debut) {
+      setValidationError("La fin de l'heure de pointe du soir doit être postérieure au début.")
+      return
+    }
+
     if (file) onSubmit(file, params)
   }
 
   function handleParam(key: keyof ProjectCreate) {
-    return (e: React.ChangeEvent<HTMLInputElement>) =>
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       setParams((prev) => ({ ...prev, [key]: e.target.value }))
+      setValidationError(null)
+    }
   }
 
   return (
@@ -44,30 +58,33 @@ export function UploadForm({ onSubmit, isLoading = false, error = null }: Upload
 
       <div>
         <label htmlFor="hpm_debut">HP matin début</label>
-        <input id="hpm_debut" type="time" value={params.hpm_debut} onChange={handleParam('hpm_debut')} />
+        <input id="hpm_debut" type="time" value={params.hpm_debut} onChange={handleParam('hpm_debut')} required />
       </div>
       <div>
         <label htmlFor="hpm_fin">HP matin fin</label>
-        <input id="hpm_fin" type="time" value={params.hpm_fin} onChange={handleParam('hpm_fin')} />
+        <input id="hpm_fin" type="time" value={params.hpm_fin} onChange={handleParam('hpm_fin')} required />
       </div>
       <div>
         <label htmlFor="hps_debut">HP soir début</label>
-        <input id="hps_debut" type="time" value={params.hps_debut} onChange={handleParam('hps_debut')} />
+        <input id="hps_debut" type="time" value={params.hps_debut} onChange={handleParam('hps_debut')} required />
       </div>
       <div>
         <label htmlFor="hps_fin">HP soir fin</label>
-        <input id="hps_fin" type="time" value={params.hps_fin} onChange={handleParam('hps_fin')} />
+        <input id="hps_fin" type="time" value={params.hps_fin} onChange={handleParam('hps_fin')} required />
       </div>
       <div>
         <label htmlFor="vacances">Vacances</label>
-        <input id="vacances" type="text" value={params.vacances} onChange={handleParam('vacances')} />
-      </div>
-      <div>
-        <label htmlFor="pays">Pays</label>
-        <input id="pays" type="text" value={params.pays} onChange={handleParam('pays')} />
+        <select id="vacances" value={params.vacances} onChange={handleParam('vacances')}>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+          <option value="全部">全部</option>
+        </select>
       </div>
 
-      {error && <p role="alert">{error}</p>}
+      <input id="pays" type="hidden" value={params.pays} />
+
+      {(error || validationError) && <p role="alert" className="error-message">{error || validationError}</p>}
 
       <button type="submit" disabled={!file || isLoading}>
         {isLoading ? 'Traitement en cours…' : 'Lancer le traitement'}

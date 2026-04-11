@@ -722,7 +722,7 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 
 ---
 
-### Task 26：参数配置表单组件 F-04
+### Task 26：参数配置表单组件 F-04 ✅
 
 **修改文件**：`frontend/src/components/UploadForm.tsx`（或提取为 `ParametersForm.tsx`）
 
@@ -746,6 +746,8 @@ dwd_path = load_outputs_to_dwd(project_id, output_dir)
 6. `test_time_field_validation`
 
 **依赖**：Task 22
+
+> **当前状态**：已完成。成功修改了 UploadForm 以支持额外的 5 个基础参数录入，以及客户端时间范围简单验证，同时补全了所有 DOM 交互测试，单元测试全部通过。
 
 ---
 
