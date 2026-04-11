@@ -122,6 +122,7 @@ out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
 | [TD-001](#td-001) | 🟡 Pending | Low | `create_engine()` 缺 `pool_pre_ping=True` | Task 2 小缺口 |
 | [TD-002](#td-002) | 🟡 Pending | Low | `.env.example` 模板文件未创建 | Task 2 TODO |
 | [TD-003](#td-003) | 🟡 Pending | Low | `storage.py` 缺 `delete_file()` 实现 | Task 3 TODO |
+| [TD-004](#td-004) | ✅ Resolved | High | Calendar Service 缺定期自动同步（Celery Beat）；XLS 有效数据仅至 2027-12 | Calendar Service 遗留缺口 |
 
 ---
 
@@ -152,3 +153,24 @@ out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
 **说明**：Task 3 中标注 TODO，Task 12（存储路径租户前缀化）或项目删除清理时需要。  
 **位置**：`backend/app/services/storage.py`  
 **优先级**：Low（Task 12 时补充）
+
+---
+
+### TD-004
+
+**标题**：Calendar Service 缺定期自动同步（Celery Beat）
+
+**状态**：✅ Resolved（2026-04-11）
+
+**说明**：`calendar_seeder.sync_from_api()` 已实现，但目前仅在 `calendar_dates` 表为空时触发一次（被动播种）。
+
+**⚠️ 数据有效期截止**（经验证）：
+- `Vacances_A/B/C`（学区假期）有效数据最后日期：**2026-05-17**
+- `Ferie`（法定节假日）有效数据最后日期：**2027-12-25**
+- XLS 文件行数覆盖至 2050-12-31，但 2026-05 / 2027-12 之后的行均为全零（无假期标记）
+
+**影响**：处理含 2026-05 以后日期的 GTFS 文件时，假期区分析将**静默出错**——所有日期被错误归类为普通学期日（`Lundi_Scolaire` 等），Type_Jour_Vacances_A/B/C 计算结果失真，且不会有任何报错提示。
+
+**修复**：新增 `backend/app/services/calendar_task.py`，注册 `@celery.task(name="gtfs_miner.sync_calendar")`；在 `celery_app.py` 配置 Beat 调度（每周一 03:00）。4 个测试通过（`tests/test_calendar_task.py`）。
+
+**涉及文件**：`backend/app/celery_app.py`、`backend/app/services/calendar_task.py`（新增）、`backend/tests/test_calendar_task.py`（新增）
