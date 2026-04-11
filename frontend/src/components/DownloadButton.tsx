@@ -1,4 +1,5 @@
-import { getDownloadUrl } from '../api/client'
+import { useState } from 'react'
+import { downloadProjectResults } from '../api/client'
 
 interface DownloadButtonProps {
   projectId: string | null
@@ -6,24 +7,20 @@ interface DownloadButtonProps {
 }
 
 export function DownloadButton({ projectId, disabled = false }: DownloadButtonProps) {
-  const isDisabled = disabled || !projectId
-
-  if (isDisabled) {
-    return (
-      <button disabled aria-label="download-button">
-        Télécharger les résultats
-      </button>
-    )
-  }
+  const [isDownloading, setIsDownloading] = useState(false)
+  const isDisabled = disabled || !projectId || isDownloading
 
   return (
-    <a
-      href={getDownloadUrl(projectId)}
-      download
-      role="button"
+    <button
+      disabled={isDisabled}
       aria-label="download-button"
+      onClick={() => {
+        if (!projectId) return
+        setIsDownloading(true)
+        downloadProjectResults(projectId).finally(() => setIsDownloading(false))
+      }}
     >
-      Télécharger les résultats
-    </a>
+      {isDownloading ? 'Téléchargement…' : 'Télécharger les résultats'}
+    </button>
   )
 }

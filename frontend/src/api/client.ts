@@ -52,8 +52,27 @@ export async function listProjects(): Promise<ProjectResponse[]> {
   return res.json()
 }
 
-export function getDownloadUrl(projectId: string): string {
-  return `${BASE}/${projectId}/download`
+async function fetchBlob(url: string): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(url, { headers: getAuthHeaders() })
+  if (!res.ok) throw new Error(`Download failed: ${res.status}`)
+  const disposition = res.headers.get('Content-Disposition') ?? ''
+  const match = disposition.match(/filename="([^"]+)"/)
+  const filename = match ? match[1] : 'download'
+  return { blob: await res.blob(), filename }
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function downloadProjectResults(projectId: string): Promise<void> {
+  const { blob, filename } = await fetchBlob(`${BASE}/${projectId}/download`)
+  triggerBlobDownload(blob, filename)
 }
 
 export async function getTableData(
@@ -75,8 +94,9 @@ export async function getTableData(
   return res.json()
 }
 
-export function getTableDownloadUrl(projectId: string, tableName: string): string {
-  return `${BASE}/${projectId}/tables/${tableName}/download`
+export async function downloadTableCsv(projectId: string, tableName: string): Promise<void> {
+  const { blob, filename } = await fetchBlob(`${BASE}/${projectId}/tables/${tableName}/download`)
+  triggerBlobDownload(blob, filename)
 }
 
 export async function register(data: UserCreate): Promise<Token> {

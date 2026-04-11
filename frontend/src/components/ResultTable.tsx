@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getTableData, getTableDownloadUrl } from '../api/client';
+import { getTableData, downloadTableCsv } from '../api/client';
 import type { TableDataResponse } from '../types/api';
 
 interface ResultTableProps {
@@ -11,6 +11,7 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
   const [data, setData] = useState<TableDataResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const [skip, setSkip] = useState(0);
   const [limit, setLimit] = useState(50);
@@ -55,13 +56,16 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
   return (
     <div className="result-table-container">
       <div className="controls">
-        <a
-          href={getTableDownloadUrl(projectId, tableName)} 
+        <button
           className="download-button"
-          download
+          disabled={isDownloading}
+          onClick={() => {
+            setIsDownloading(true);
+            downloadTableCsv(projectId, tableName).finally(() => setIsDownloading(false));
+          }}
         >
-          Download CSV
-        </a>
+          {isDownloading ? 'Téléchargement…' : 'Download CSV'}
+        </button>
 
         <div className="pagination-controls">
           <select 
