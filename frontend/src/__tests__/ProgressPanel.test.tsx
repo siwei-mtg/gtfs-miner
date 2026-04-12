@@ -54,4 +54,13 @@ describe('ProgressPanel', () => {
     render(<ProgressPanel messages={[makeMsg('[3/7] 空间聚类生成站点映射（100 停靠站）')]} />)
     expect(screen.getByLabelText('status')).toHaveTextContent('En cours')
   })
+
+  it('test_progress_panel_completed_step_checkmark', () => {
+    // 完成步骤含 ✓ 文本
+    const msgs = [
+      makeMsg('[1/7] 读取与解压 GTFS 文件', 'processing', 1.0)
+    ]
+    render(<ProgressPanel messages={msgs} />)
+    expect(screen.getByText('✓')).toBeInTheDocument()
+  })
 })

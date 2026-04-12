@@ -4,6 +4,11 @@ import { ProgressPanel } from '@/components/organisms/ProgressPanel';
 import { DownloadButton } from '@/components/organisms/DownloadButton';
 import { ResultTable } from '@/components/organisms/ResultTable';
 import { useProjectProgress } from '../hooks/useProjectProgress';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/atoms/button';
+import { ChevronLeft } from 'lucide-react';
+import { Badge } from '@/components/atoms/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const RESULT_TABLES = [
   { id: 'a1', label: 'A1: Arrêts Génériques' },
@@ -31,44 +36,58 @@ export const ProjectDetailPage: React.FC = () => {
   const { messages, latestStatus } = useProjectProgress(id || null);
 
   const isCompleted = latestStatus === 'completed';
-  const isFailed = latestStatus === 'failed';
 
   if (!id) return <div>Invalid Project ID</div>;
 
   return (
-    <div className="project-detail-container">
-      <div className="header">
-        <button onClick={() => navigate('/')}>&larr; Back to Projects</button>
-        <h2>Project {id}</h2>
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" onClick={() => navigate('/')} className="gap-2" aria-label="back-button">
+          <ChevronLeft className="h-4 w-4" />
+          Retour aux projets
+        </Button>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-bold">Projet</h2>
+          <Badge variant="outline" className="font-mono">{id}</Badge>
+        </div>
       </div>
 
-      <ProgressPanel messages={messages} status={latestStatus} />
-      
-      <div className="actions">
-        <DownloadButton
-          projectId={isCompleted ? id : null}
-          disabled={!isCompleted}
-        />
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>État du traitement</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ProgressPanel messages={messages} status={latestStatus} />
+        </CardContent>
+        {isCompleted && (
+          <CardFooter className="justify-end border-t pt-4">
+            <DownloadButton projectId={id} disabled={!isCompleted} />
+          </CardFooter>
+        )}
+      </Card>
 
       {isCompleted && (
-        <div className="results-section">
-          <h3>Results</h3>
-          <div className="tabs">
-            {RESULT_TABLES.map(table => (
-              <button 
-                key={table.id}
-                className={activeTab === table.id ? 'active' : ''}
-                onClick={() => setActiveTab(table.id)}
-              >
-                {table.label}
-              </button>
-            ))}
-          </div>
-          <div className="tab-content">
-             <ResultTable projectId={id} tableName={activeTab} />
-          </div>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Résultats</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="mb-4 flex flex-wrap h-auto gap-2 p-2">
+                {RESULT_TABLES.map(table => (
+                  <TabsTrigger key={table.id} value={table.id}>
+                    {table.label.split(':')[0]}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {RESULT_TABLES.map(table => (
+                <TabsContent key={table.id} value={table.id}>
+                   <ResultTable projectId={id} tableName={table.id} />
+                </TabsContent>
+              ))}
+            </Tabs>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
