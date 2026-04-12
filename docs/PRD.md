@@ -216,6 +216,8 @@ MVP 的核心主线：**上传 GTFS → 配置参数 → 异步处理 → 查看
 - 页面重构：LoginPage、RegisterPage、ProjectListPage、ProjectDetailPage（含 ProgressPanel）、UploadForm、ResultTable
 - AppShell：统一顶栏（Logo + 用户信息 + 退出）、最大宽度 1280px 响应式容器
 
+**组件架构**：遵循 Atomic Design 原则（`docs/atomic-design.md`），目录分层 atoms / molecules / organisms / templates / pages；规则强制写入 `CLAUDE.md §前端组件架构`。
+
 **不包含**：品牌视觉设计（logo、插画）、移动端深度优化、i18n
 
 ---

@@ -50,6 +50,33 @@
 
 ---
 
+## 前端组件架构（Atomic Design）
+
+> 完整规范与代码示例见 `docs/atomic-design.md`。
+
+**强制目录结构**（Phase 2 起，所有新建前端组件必须遵守）：
+
+```
+frontend/src/
+├── components/
+│   ├── atoms/        — 单一 HTML 元素级（Button, Input, Badge, Skeleton…）
+│   ├── molecules/    — 2–3 个 atoms 组合（SearchBar, StatCard, FormField…）
+│   ├── organisms/    — 独立功能区块（AppShell, ResultTable, UploadForm…）
+│   └── templates/    — 纯布局骨架，不含具体内容（DashboardLayout, AuthLayout）
+├── pages/            — 完整路由页面，组装 template + organisms
+└── lib/utils.ts      — cn() 工具函数（clsx + tailwind-merge）
+```
+
+**硬规则（违反视为 bug，立即修复）**：
+
+- **A0 — Atom 零依赖**：`atoms/` 下的组件禁止 import 任何自定义组件，只允许 import `cn`、Lucide 图标、React 内置。
+- **A1 — className 穿透**：所有组件必须接受并透传 `className` prop，用 `cn()` 合并。
+- **A2 — 无魔法数字**：样式值只来自 Tailwind 工具类或 `docs/atomic-design.md` 定义的 CSS 变量；禁止 `style={{ color: '#abc' }}` 形式的内联魔法值。
+- **A3 — 复用优先**：新建组件前必须先检查 `atoms/` 和 `molecules/` 是否已有可复用实现。
+- **A4 — 层级疑问查决策树**：不确定放哪一层时，按 `docs/atomic-design.md §层级判断决策树` 依次判断，不得凭感觉放置。
+
+---
+
 ## SOLID 约束
 
 > 完整分析与重构方案见 `docs/SOLID_analysis.md`。
