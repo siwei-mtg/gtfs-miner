@@ -61,8 +61,8 @@ frontend/src/
 ├── components/
 │   ├── atoms/        — 单一 HTML 元素级（Button, Input, Badge, Skeleton…）
 │   ├── molecules/    — 2–3 个 atoms 组合（SearchBar, StatCard, FormField…）
-│   ├── organisms/    — 独立功能区块（AppShell, ResultTable, UploadForm…）
-│   └── templates/    — 纯布局骨架，不含具体内容（DashboardLayout, AuthLayout）
+│   ├── organisms/    — 独立功能区块（AppHeader, ResultTable, UploadForm…）
+│   └── templates/    — 纯布局骨架，不含具体内容（AppShell, AuthLayout, DashboardLayout）
 ├── pages/            — 完整路由页面，组装 template + organisms
 └── lib/utils.ts      — cn() 工具函数（clsx + tailwind-merge）
 ```
