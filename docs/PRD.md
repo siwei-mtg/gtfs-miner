@@ -241,15 +241,13 @@ DWD 层（A_*/B_*/C_*/D_*）  ←  Agent 的计算原料
 
 | 图层 | 说明 |
 |------|------|
-| G_1 子线路轨迹 | 矢量线，按线路着色 |
-| G_2 线路轨迹 | 聚合线路 |
 | E_1 站点通过 | 点图层，每个 AG 以**空间饼状图**标注，扇区 = 途经线路 route_type 构成（按通过次数加权） |
 | E_4 弧段通过 | 线图层，**线宽 = 通过量大小**；具有方向性：A→B 通过量绘制在 A→B 弧段的**右侧**，B→A 通过量绘制在 B→A 弧段的**右侧**（两个方向的弧段在地图上重叠为一条线，通过左右偏移区分方向） |
 
 功能：底图切换（OSM / 空白）、图层开关、要素点击弹窗、**GeoPackage 导出**（含所有矢量图层）
 
 **GeoPackage 导出内存策略**：导出时真正的内存瓶颈在构建 GeoDataFrame（geopandas join + geometry 构造），而非写文件格式本身。对 IDFM 规模（~5 万站点、数千弧段）的数据集，全量一次性构建 GeoDataFrame 峰值内存约 800 MB–1.2 GB。为控制内存：
-- `export_geopackage()` 按图层逐个处理（routes → passage_ag → passage_arc），写完即释放
+- `export_geopackage()` 按图层逐个处理（passage_ag → passage_arc），写完即释放
 - 同一图层数据量过大时按 AG 分批构建（每批 ≤ 500 个 AG），用 `fiona` append 模式追加写入
 - 格式保持 GeoPackage（单文件多图层，MapLibre / QGIS 均原生支持）；不改用 GeoJSON（整体序列化，内存更高）
 
@@ -503,7 +501,6 @@ GTFS_algorithm.py    → 不迁移（legacy，保留备用）
 ---
 
 ### Phase 2 — 地图 + 数据看板（第 4–8 周）
-- [ ] 路线轨迹图层（MapLibre：G_1 子线路 + G_2 线路）
 - [ ] E_1 站点通过图层（AG 空间饼状图：扇区 = route_type 构成，按通过次数加权）
 - [ ] E_4 弧段通过图层（有向线宽图：线宽 = 通过量；A→B 与 B→A 各绘于对应弧段右侧，视觉上合为一条线）
 - [ ] GeoPackage 导出（含所有矢量图层）
