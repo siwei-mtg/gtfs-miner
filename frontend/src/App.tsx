@@ -5,6 +5,7 @@ import { RegisterPage } from './pages/RegisterPage'
 import { ProjectListPage } from './pages/ProjectListPage'
 import { ProjectDetailPage } from './pages/ProjectDetailPage'
 import { UploadForm } from '@/components/organisms/UploadForm'
+import { AppShell } from '@/components/templates/AppShell'
 import { createProject, uploadGtfs } from './api/client'
 import type { ProjectCreate } from './types/api'
 import { useState } from 'react'
@@ -48,30 +49,15 @@ function NewProjectPage() {
   )
 }
 
-function AppHeader() {
-  const { token, user, logout } = useAuth();
-  return (
-    <header className="app-header">
-      <h1>GTFS Miner</h1>
-      {token && (
-        <div className="user-controls">
-          {user && <span className="user-email">{user.email}</span>}
-          <button onClick={logout}>Logout</button>
-        </div>
-      )}
-    </header>
-  );
-}
-
 function App() {
+  const { user, logout } = useAuth()
   return (
     <BrowserRouter>
-      <main>
-        <AppHeader />
+      <AppShell user={user} onLogout={logout}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          
+
           <Route path="/" element={
             <AuthGuard>
               <ProjectListContainer />
@@ -83,21 +69,21 @@ function App() {
               <NewProjectPage />
             </AuthGuard>
           } />
-          
+
           <Route path="/projects/:id" element={
             <AuthGuard>
               <ProjectDetailPage />
             </AuthGuard>
           } />
         </Routes>
-      </main>
+      </AppShell>
     </BrowserRouter>
   )
 }
 
 function ProjectListContainer() {
   const navigate = useNavigate()
-  return <ProjectListPage 
+  return <ProjectListPage
     onNewProjectClick={() => navigate('/new')}
     onProjectClick={(id) => navigate(`/projects/${id}`)}
   />
