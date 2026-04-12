@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ProgressPanel } from '../components/ProgressPanel';
-import { DownloadButton } from '../components/DownloadButton';
-import { ResultTable } from '../components/ResultTable';
+import { ProgressPanel } from '@/components/organisms/ProgressPanel';
+import { DownloadButton } from '@/components/organisms/DownloadButton';
+import { ResultTable } from '@/components/organisms/ResultTable';
 import { useProjectProgress } from '../hooks/useProjectProgress';
 
 const RESULT_TABLES = [

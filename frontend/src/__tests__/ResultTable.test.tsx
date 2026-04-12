@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ResultTable } from '../components/ResultTable';
+import { ResultTable } from '@/components/organisms/ResultTable';
 import * as apiClient from '../api/client';
 
 vi.mock('../api/client', () => ({

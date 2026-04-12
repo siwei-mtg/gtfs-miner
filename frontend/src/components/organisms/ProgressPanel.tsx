@@ -1,4 +1,4 @@
-import type { ProjectStatus, WebSocketMessage } from '../types/api'
+import type { ProjectStatus, WebSocketMessage } from '@/types/api'
 
 interface ProgressPanelProps {
   messages: WebSocketMessage[]

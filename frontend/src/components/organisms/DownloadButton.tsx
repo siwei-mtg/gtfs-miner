@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { downloadProjectResults } from '../api/client'
+import { downloadProjectResults } from '@/api/client'
 
 interface DownloadButtonProps {
   projectId: string | null

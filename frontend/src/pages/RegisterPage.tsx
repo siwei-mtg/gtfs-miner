@@ -13,6 +13,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onSuccess }) => {
   const [password, setPassword] = useState('');
   const [tenantName, setTenantName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Already authenticated → redirect to home
   if (token) return <Navigate to="/" replace />;
@@ -20,6 +21,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onSuccess }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsSubmitting(true);
     try {
       await register({ email, password, tenant_name: tenantName });
       if (onSuccess) {
@@ -29,6 +31,8 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onSuccess }) => {
       }
     } catch (err: any) {
       setError(err.message || 'Registration failed');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -67,7 +71,9 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onSuccess }) => {
             required 
           />
         </div>
-        <button type="submit">Register</button>
+        <button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Inscription…' : 'Register'}
+        </button>
       </form>
       <p>
         Already have an account? <a href="/login">Login here</a>

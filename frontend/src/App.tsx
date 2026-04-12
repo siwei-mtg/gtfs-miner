@@ -4,12 +4,11 @@ import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ProjectListPage } from './pages/ProjectListPage'
 import { ProjectDetailPage } from './pages/ProjectDetailPage'
-import { UploadForm } from './components/UploadForm'
+import { UploadForm } from '@/components/organisms/UploadForm'
 import { createProject, uploadGtfs } from './api/client'
 import type { ProjectCreate } from './types/api'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import './App.css'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { token, isLoading } = useAuth()

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getTableData, downloadTableCsv } from '../api/client';
-import type { TableDataResponse } from '../types/api';
+import { getTableData, downloadTableCsv } from '@/api/client';
+import type { TableDataResponse } from '@/types/api';
 
 interface ResultTableProps {
   projectId: string;

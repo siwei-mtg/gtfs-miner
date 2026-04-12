@@ -123,6 +123,7 @@ out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
 | [TD-002](#td-002) | 🟡 Pending | Low | `.env.example` 模板文件未创建 | Task 2 TODO |
 | [TD-003](#td-003) | 🟡 Pending | Low | `storage.py` 缺 `delete_file()` 实现 | Task 3 TODO |
 | [TD-004](#td-004) | ✅ Resolved | High | Calendar Service 缺定期自动同步（Celery Beat）；XLS 有效数据仅至 2027-12 | Calendar Service 遗留缺口 |
+| [TD-005](#td-005) | 🟡 Pending | Medium | 前端 `npm run build` 因 TS strict 违规失败（5处） | Task 41 发现（Phase 1 遗留） |
 
 ---
 
@@ -153,6 +154,38 @@ out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
 **说明**：Task 3 中标注 TODO，Task 12（存储路径租户前缀化）或项目删除清理时需要。  
 **位置**：`backend/app/services/storage.py`  
 **优先级**：Low（Task 12 时补充）
+
+---
+
+### TD-005
+
+**标题**：前端 `npm run build` 因 TypeScript strict 违规失败（5 处）
+
+**说明**：`tsc -b tsconfig.app.json` 在 Phase 1 遗留代码中发现以下违规，阻止 Vite 生产构建。`npm test` 不受影响（vitest 不通过 tsc）。
+
+| 文件 | 行 | 错误 |
+|------|-----|------|
+| `src/components/organisms/ResultTable.tsx` | 36 | `'err' is declared but its value is never read` (`noUnusedLocals`) |
+| `src/pages/ProjectDetailPage.tsx` | 34 | `'isFailed' is declared but its value is never read` (`noUnusedLocals`) |
+| `src/pages/ProjectListPage.tsx` | 28 | `'err' is declared but its value is never read` (`noUnusedLocals`) |
+| `src/__tests__/api.test.ts` | 2 | `Module '"../api/client"' has no exported member 'getDownloadUrl'` |
+| `src/__tests__/ResultTable.test.tsx` | 24 | `Property 'getTableDownloadUrl' does not exist on type 'typeof import("...api/client")'` |
+
+**根因**：
+- `noUnusedLocals: true` + `noUnusedParameters: true` 在 `tsconfig.app.json` 中启用；Phase 1 代码中存在 catch 块中未使用的 `err` 变量和未使用的 `isFailed` 状态变量。
+- `getDownloadUrl` / `getTableDownloadUrl` 是测试文件中引用但 `api/client.ts` 中从未导出的函数（Phase 1 API 重构遗留）。
+
+**修复方案**：
+- 将 `catch (err)` 改为 `catch (_err)` 或 `catch`（无绑定），或直接 `catch { ... }`。
+- 删除未使用的 `isFailed` 变量（`ProjectDetailPage.tsx:34`）。
+- 在 `api/client.ts` 中补充 `getDownloadUrl` / `getTableDownloadUrl` 导出，或删除测试中的相关引用（按当前实际 API 更新测试）。
+
+**涉及文件**：
+- `frontend/src/components/organisms/ResultTable.tsx`
+- `frontend/src/pages/ProjectDetailPage.tsx`
+- `frontend/src/pages/ProjectListPage.tsx`
+- `frontend/src/__tests__/api.test.ts`
+- `frontend/src/__tests__/ResultTable.test.tsx`
 
 ---
 

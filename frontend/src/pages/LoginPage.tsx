@@ -12,6 +12,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Already authenticated → redirect to home
   if (token) return <Navigate to="/" replace />;
@@ -19,6 +20,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsSubmitting(true);
     try {
       await login(email, password);
       if (onSuccess) {
@@ -28,6 +30,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
       }
     } catch (err: any) {
       setError(err.message || 'Login failed');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -56,7 +60,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
             required
           />
         </div>
-        <button type="submit">Login</button>
+        <button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Connexion…' : 'Login'}
+        </button>
       </form>
       <p>
         Don't have an account? <a href="/register">Register here</a>

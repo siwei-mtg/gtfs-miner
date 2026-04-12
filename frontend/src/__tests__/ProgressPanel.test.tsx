@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { ProgressPanel } from '../components/ProgressPanel'
+import { ProgressPanel } from '@/components/organisms/ProgressPanel'
 import type { WebSocketMessage } from '../types/api'
 
 function makeMsg(step: string, status: WebSocketMessage['status'] = 'processing', elapsed = 1.5): WebSocketMessage {

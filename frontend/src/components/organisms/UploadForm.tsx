@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ProjectCreate } from '../types/api'
+import type { ProjectCreate } from '@/types/api'
 
 interface UploadFormProps {
   onSubmit: (file: File, params: ProjectCreate) => void

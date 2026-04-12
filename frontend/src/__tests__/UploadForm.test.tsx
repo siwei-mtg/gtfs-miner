@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { UploadForm } from '../components/UploadForm'
+import { UploadForm } from '@/components/organisms/UploadForm'
 
 const gtfsFile = new File(['zip-content'], 'gtfs.zip', { type: 'application/zip' })
 
