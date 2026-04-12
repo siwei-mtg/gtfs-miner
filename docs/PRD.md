@@ -200,6 +200,26 @@ MVP 的核心主线：**上传 GTFS → 配置参数 → 异步处理 → 查看
 
 ### 3.2 后续版本路线图
 
+#### F-10：UI/UX 设计系统（Phase 2 前置）
+
+**目标**：内部工具级视觉质量（对标 Retool / Linear：干净、高信息密度、无多余动效），确保 Phase 2 地图与看板组件具备统一的设计基础。
+
+**技术方案**：Tailwind CSS v4 + shadcn/ui（组件按需复制到项目，无版本锁定）
+
+**设计令牌**：
+- 主色（primary）：紫色系（与现有 `--accent: #aa3bff` 对齐）
+- 中性色（neutral）、危险色（destructive）：shadcn 默认
+- 间距、圆角、阴影：Tailwind 默认体系
+
+**交付范围**：
+- 核心 shadcn 组件：Button、Card、Badge、Input、Select、Tabs、Table、Dialog、Sonner（Toast）、Progress
+- 页面重构：LoginPage、RegisterPage、ProjectListPage、ProjectDetailPage（含 ProgressPanel）、UploadForm、ResultTable
+- AppShell：统一顶栏（Logo + 用户信息 + 退出）、最大宽度 1280px 响应式容器
+
+**不包含**：品牌视觉设计（logo、插画）、移动端深度优化、i18n
+
+---
+
 #### F-09：LLM 智能查询与自定义指标派生（Phase 3）
 
 处理结果不再是只能下载的静态 CSV——用户可通过自然语言与数据对话，Agent 自主推导并持久化自定义指标。
@@ -501,6 +521,7 @@ GTFS_algorithm.py    → 不迁移（legacy，保留备用）
 ---
 
 ### Phase 2 — 地图 + 数据看板（第 4–8 周）
+- [ ] **UI 设计系统基础**（Tailwind + shadcn/ui 安装、AppShell、5 个页面/组件重构 — F-10）
 - [ ] E_1 站点通过图层（AG 空间饼状图：扇区 = route_type 构成，按通过次数加权）
 - [ ] E_4 弧段通过图层（有向线宽图：线宽 = 通过量；A→B 与 B→A 各绘于对应弧段右侧，视觉上合为一条线）
 - [ ] GeoPackage 导出（含所有矢量图层）
