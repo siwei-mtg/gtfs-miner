@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { ProjectListPage } from '../pages/ProjectListPage';
 import * as apiClient from '../api/client';
 import type { ProjectResponse } from '../types/api';
+
+const renderWithRouter = (ui: React.ReactElement) =>
+  render(<MemoryRouter>{ui}</MemoryRouter>);
 
 vi.mock('../api/client', () => ({
   listProjects: vi.fn(),
@@ -35,7 +39,7 @@ describe('ProjectListPage', () => {
 
   it('test_renders_project_list', async () => {
     vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
-    render(<ProjectListPage />);
+    renderWithRouter(<ProjectListPage />);
     
     await waitFor(() => {
       expect(screen.getByText('p1')).toBeInTheDocument();
@@ -45,7 +49,7 @@ describe('ProjectListPage', () => {
 
   it('test_shows_status_badges', async () => {
     vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
-    render(<ProjectListPage />);
+    renderWithRouter(<ProjectListPage />);
     
     await waitFor(() => {
       expect(screen.getByText('completed')).toBeInTheDocument();
@@ -57,19 +61,19 @@ describe('ProjectListPage', () => {
     vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
     const onNewProjectClick = vi.fn();
     const user = userEvent.setup();
-    render(<ProjectListPage onNewProjectClick={onNewProjectClick} />);
+    renderWithRouter(<ProjectListPage onNewProjectClick={onNewProjectClick} />);
     
     await waitFor(() => {
       expect(screen.getByText('p1')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: /New Project/i }));
+    await user.click(screen.getByRole('button', { name: /新建项目/i }));
     expect(onNewProjectClick).toHaveBeenCalled();
   });
 
   it('test_empty_state', async () => {
     vi.mocked(apiClient.listProjects).mockResolvedValue([]);
-    render(<ProjectListPage />);
+    renderWithRouter(<ProjectListPage />);
     
     await waitFor(() => {
       expect(screen.getByText(/No projects found/i)).toBeInTheDocument();
@@ -80,7 +84,7 @@ describe('ProjectListPage', () => {
     vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
     const onProjectClick = vi.fn();
     const user = userEvent.setup();
-    render(<ProjectListPage onProjectClick={onProjectClick} />);
+    renderWithRouter(<ProjectListPage onProjectClick={onProjectClick} />);
     
     await waitFor(() => {
       expect(screen.getByText('p1')).toBeInTheDocument();
@@ -88,5 +92,37 @@ describe('ProjectListPage', () => {
 
     await user.click(screen.getByText('p1'));
     expect(onProjectClick).toHaveBeenCalledWith('p1');
+  });
+
+  // Task 43
+  it('test_project_list_badge_completed_green', async () => {
+    vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
+    renderWithRouter(<ProjectListPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('completed')).toBeInTheDocument();
+    });
+
+    // The badge for 'completed' should have the 'default' variant class
+    const completedBadge = screen.getByText('completed');
+    expect(completedBadge.className).toMatch(/bg-primary/);
+  });
+
+  it('test_project_list_search_filters_rows', async () => {
+    vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
+    const user = userEvent.setup();
+    renderWithRouter(<ProjectListPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('p1')).toBeInTheDocument();
+    });
+
+    // Type a non-existent project ID in the search box
+    const searchInput = screen.getByPlaceholderText('搜索项目 ID...');
+    await user.type(searchInput, 'nonexistent-xyz');
+
+    // Both rows should be filtered out
+    expect(screen.queryByText('p1')).not.toBeInTheDocument();
+    expect(screen.queryByText('p2')).not.toBeInTheDocument();
   });
 });

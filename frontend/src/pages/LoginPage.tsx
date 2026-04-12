@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface LoginPageProps {
   onSuccess?: () => void;
@@ -36,37 +45,56 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
   };
 
   return (
-    <div className="login-container">
-      <h2>Login</h2>
-      {error && <div role="alert" className="error-message">{error}</div>}
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
-        <button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Connexion…' : 'Login'}
-        </button>
-      </form>
-      <p>
-        Don't have an account? <a href="/register">Register here</a>
-      </p>
+    <div className="max-w-sm mx-auto mt-24">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-2xl font-semibold">Login</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <Alert variant="destructive" role="alert" className="mb-4">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1">
+              <label htmlFor="email" className="text-sm font-medium">
+                Email
+              </label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="you@example.com"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="password" className="text-sm font-medium">
+                Password
+              </label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+              />
+            </div>
+            <Button type="submit" disabled={isSubmitting} className="w-full">
+              {isSubmitting ? 'Connexion…' : 'Login'}
+            </Button>
+          </form>
+          <p className="mt-4 text-sm text-center text-muted-foreground">
+            Don't have an account?{' '}
+            <a href="/register" className="text-primary underline underline-offset-4 hover:opacity-80">
+              Register here
+            </a>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 };
