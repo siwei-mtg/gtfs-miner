@@ -1,6 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { getTableData, downloadTableCsv } from '@/api/client';
 import type { TableDataResponse } from '@/types/api';
+import {
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+} from '@/components/ui/table';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+  Pagination, PaginationContent, PaginationItem,
+  PaginationPrevious, PaginationNext,
+} from '@/components/ui/pagination';
+import { Button } from '@/components/atoms/button';
+import { ChevronUp, ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ResultTableProps {
   projectId: string;
@@ -17,6 +30,7 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
   const [limit, setLimit] = useState(50);
   const [sortBy, setSortBy] = useState<string | undefined>(undefined);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
   useEffect(() => {
     let mounted = true;
     setIsLoading(true);
@@ -33,7 +47,7 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
           setError(null);
         }
       })
-      .catch(err => {
+      .catch(() => {
         if (mounted) setError('Failed to load table data');
       })
       .finally(() => {
@@ -53,11 +67,15 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
     setSkip(0);
   };
 
+  const isPrevDisabled = skip === 0;
+  const isNextDisabled = data ? skip + limit >= data.total : true;
+
   return (
-    <div className="result-table-container">
-      <div className="controls">
-        <button
-          className="download-button"
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Button
+          variant="outline"
+          size="sm"
           disabled={isDownloading}
           onClick={() => {
             setIsDownloading(true);
@@ -65,67 +83,92 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
           }}
         >
           {isDownloading ? 'Téléchargement…' : 'Download CSV'}
-        </button>
+        </Button>
 
-        <div className="pagination-controls">
-          <select 
-            value={limit} 
-            onChange={e => {
-              setLimit(Number(e.target.value));
-              setSkip(0);
-            }}
-            aria-label="Rows per page"
-          >
-            <option value={50}>50 rows</option>
-            <option value={100}>100 rows</option>
-            <option value={200}>200 rows</option>
-          </select>
-        </div>
+        <Select
+          name="rows-per-page"
+          value={String(limit)}
+          onValueChange={(val) => {
+            setLimit(Number(val));
+            setSkip(0);
+          }}
+        >
+          <SelectTrigger className="w-32" aria-label="Rows per page">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="50">50 rows</SelectItem>
+            <SelectItem value="100">100 rows</SelectItem>
+            <SelectItem value="200">200 rows</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {isLoading && <div className="skeleton-loader" aria-busy="true">Loading table data...</div>}
-      {error && <div role="alert" className="error">{error}</div>}
+      {isLoading && (
+        <div className="text-sm text-muted-foreground" aria-busy="true">
+          Loading table data...
+        </div>
+      )}
+      {error && <div role="alert" className="text-sm text-destructive">{error}</div>}
 
       {!isLoading && !error && data && (
         <>
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  {data.columns.map(col => (
-                    <th key={col} onClick={() => handleSort(col)} style={{ cursor: 'pointer' }}>
-                      {col} {sortBy === col ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {data.rows.map((row, idx) => (
-                  <tr key={idx}>
-                    {data.columns.map(col => (
-                      <td key={col}>{row[col]}</td>
-                    ))}
-                  </tr>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {data.columns.map(col => (
+                  <TableHead key={col}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-0 font-medium hover:bg-transparent"
+                      onClick={() => handleSort(col)}
+                    >
+                      {col}
+                      {sortBy === col && sortOrder === 'asc' && (
+                        <ChevronUp className="ml-1 h-4 w-4" aria-hidden="true" />
+                      )}
+                      {sortBy === col && sortOrder === 'desc' && (
+                        <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
+                      )}
+                    </Button>
+                  </TableHead>
                 ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="table-footer">
-            <span>Total rows: {data.total}</span>
-            <div className="page-navigation">
-              <button 
-                onClick={() => setSkip(Math.max(0, skip - limit))}
-                disabled={skip === 0}
-              >
-                Previous
-              </button>
-              <button 
-                onClick={() => setSkip(skip + limit)}
-                disabled={skip + limit >= data.total}
-              >
-                Next
-              </button>
-            </div>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.rows.map((row, idx) => (
+                <TableRow key={idx}>
+                  {data.columns.map(col => (
+                    <TableCell key={col}>{row[col]}</TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">
+              Total rows: {data.total}
+            </span>
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => setSkip(Math.max(0, skip - limit))}
+                    aria-disabled={isPrevDisabled}
+                    className={cn(isPrevDisabled && 'pointer-events-none opacity-50')}
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => setSkip(skip + limit)}
+                    aria-disabled={isNextDisabled}
+                    className={cn(isNextDisabled && 'pointer-events-none opacity-50')}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         </>
       )}
