@@ -3,7 +3,7 @@
 **版本**：0.7  
 **作者**：Wei SI / Transamo  
 **日期**：2026-04-12  
-**状态**：Phase 0 ✅ 已完成，Phase 1 ✅ 技术完成（待 Transamo 内部试用），Phase 2 🔄 进行中（Task 41-44 ✅）
+**状态**：Phase 0 ✅ 已完成，Phase 1 ✅ 技术完成（待 Transamo 内部试用），Phase 2 🔄 进行中（Task 41-45 ✅ GROUP UI 完成）
 
 ---
 
@@ -528,7 +528,7 @@ GTFS_algorithm.py    → 不迁移（legacy，保留备用）
   - [x] Task 42：AppShell + 全局布局 (2026-04-12)
   - [x] Task 43：LoginPage + RegisterPage + ProjectListPage 重构 (2026-04-12)
   - [x] Task 44：ProjectDetailPage + ProgressPanel + UploadForm 重构 (2026-04-12)
-  - [ ] Task 45：ResultTable 重构（shadcn Table + Pagination）
+  - [x] Task 45：ResultTable 重构（shadcn Table + Pagination）(2026-04-14)
 - [ ] E_1 站点通过图层（AG 空间饼状图：扇区 = route_type 构成，按通过次数加权）
 - [ ] E_4 弧段通过图层（有向线宽图：线宽 = 通过量；A→B 与 B→A 各绘于对应弧段右侧，视觉上合为一条线）
 - [ ] GeoPackage 导出（含所有矢量图层）

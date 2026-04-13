@@ -11,6 +11,9 @@
 | [BUG-001](#bug-001) | ✅ Resolved | High | `test_websocket` — `client_authed` auth bypass 被 function-scoped fixture 清除 → 401 | 2026-04-11 |
 | [BUG-002](#bug-002) | ✅ Resolved | Medium | `test_upload_and_wait` — pipeline 完成但 output 目录不存在 | 2026-04-11 |
 | [BUG-003](#bug-003) | ✅ Resolved | High | 假期区分析时 D2/E1/E4/F1/F3/F4 结果表全部为空 | 2026-04-11 |
+| [BUG-004](#bug-004) | 🔴 Open | Medium | `DownloadButton.test.tsx` — 测试期望 `<a>` 元素但组件渲染 `<button>` | 2026-04-14 |
+| [BUG-005](#bug-005) | 🔴 Open | Medium | `useAuth.test.ts` — 6 个测试因 `useAuthContext must be used within AuthProvider` 全部失败 | 2026-04-14 |
+| [BUG-006](#bug-006) | 🔴 Open | Medium | `App.test.tsx` — 4 个路由测试在 Task 42 AppShell 重构后失败 | 2026-04-14 |
 
 ---
 
@@ -159,33 +162,31 @@ out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
 
 ### TD-005
 
-**标题**：前端 `npm run build` 因 TypeScript strict 违规失败（5 处）
+**标题**：前端 `npm run build` 因 TypeScript strict 违规失败（3 处，Task 45 后）
 
-**说明**：`tsc -b tsconfig.app.json` 在 Phase 1 遗留代码中发现以下违规，阻止 Vite 生产构建。`npm test` 不受影响（vitest 不通过 tsc）。
+**说明**：`tsc -b tsconfig.app.json` 发现以下违规，阻止 Vite 生产构建。`npm test` 不受影响（vitest 不通过 tsc）。Task 45 已修复其中 2 项（`ResultTable.tsx` catch 绑定 + `ResultTable.test.tsx` 非法引用）。
 
-| 文件 | 行 | 错误 |
-|------|-----|------|
-| `src/components/organisms/ResultTable.tsx` | 36 | `'err' is declared but its value is never read` (`noUnusedLocals`) |
-| `src/pages/ProjectDetailPage.tsx` | 34 | `'isFailed' is declared but its value is never read` (`noUnusedLocals`) |
-| `src/pages/ProjectListPage.tsx` | 28 | `'err' is declared but its value is never read` (`noUnusedLocals`) |
-| `src/__tests__/api.test.ts` | 2 | `Module '"../api/client"' has no exported member 'getDownloadUrl'` |
-| `src/__tests__/ResultTable.test.tsx` | 24 | `Property 'getTableDownloadUrl' does not exist on type 'typeof import("...api/client")'` |
+| 文件 | 行 | 错误 | 状态 |
+|------|-----|------|------|
+| ~~`src/components/organisms/ResultTable.tsx`~~ | ~~36~~ | ~~`'err' is declared but its value is never read`~~ | ✅ Task 45 修复 |
+| `src/pages/ProjectDetailPage.tsx` | 34 | `'isFailed' is declared but its value is never read` (`noUnusedLocals`) | 🔴 Open |
+| `src/pages/ProjectListPage.tsx` | 28 | `'err' is declared but its value is never read` (`noUnusedLocals`) | 🔴 Open |
+| `src/__tests__/api.test.ts` | 2 | `Module '"../api/client"' has no exported member 'getDownloadUrl'` | 🔴 Open |
+| ~~`src/__tests__/ResultTable.test.tsx`~~ | ~~24~~ | ~~`Property 'getTableDownloadUrl' does not exist`~~ | ✅ Task 45 修复 |
 
 **根因**：
-- `noUnusedLocals: true` + `noUnusedParameters: true` 在 `tsconfig.app.json` 中启用；Phase 1 代码中存在 catch 块中未使用的 `err` 变量和未使用的 `isFailed` 状态变量。
-- `getDownloadUrl` / `getTableDownloadUrl` 是测试文件中引用但 `api/client.ts` 中从未导出的函数（Phase 1 API 重构遗留）。
+- `noUnusedLocals: true` 在 `tsconfig.app.json` 中启用；Phase 1 代码存在 catch 块中未使用的 `err` 变量和未使用的状态变量。
+- `getDownloadUrl` 是测试中引用但 `api/client.ts` 中从未导出的函数（Phase 1 API 重构遗留）。
 
 **修复方案**：
-- 将 `catch (err)` 改为 `catch (_err)` 或 `catch`（无绑定），或直接 `catch { ... }`。
 - 删除未使用的 `isFailed` 变量（`ProjectDetailPage.tsx:34`）。
-- 在 `api/client.ts` 中补充 `getDownloadUrl` / `getTableDownloadUrl` 导出，或删除测试中的相关引用（按当前实际 API 更新测试）。
+- 将 `catch (err)` 改为 `catch` 或 `catch (_err)`（`ProjectListPage.tsx:28`）。
+- 删除 `api.test.ts` 中 `getDownloadUrl` 相关测试或在 `api/client.ts` 中补充该导出。
 
 **涉及文件**：
-- `frontend/src/components/organisms/ResultTable.tsx`
 - `frontend/src/pages/ProjectDetailPage.tsx`
 - `frontend/src/pages/ProjectListPage.tsx`
 - `frontend/src/__tests__/api.test.ts`
-- `frontend/src/__tests__/ResultTable.test.tsx`
 
 ---
 
@@ -207,3 +208,66 @@ out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
 **修复**：新增 `backend/app/services/calendar_task.py`，注册 `@celery.task(name="gtfs_miner.sync_calendar")`；在 `celery_app.py` 配置 Beat 调度（每周一 03:00）。4 个测试通过（`tests/test_calendar_task.py`）。
 
 **涉及文件**：`backend/app/celery_app.py`、`backend/app/services/calendar_task.py`（新增）、`backend/tests/test_calendar_task.py`（新增）
+
+---
+
+### BUG-004
+
+**标题**：`DownloadButton.test.tsx` — 2 个测试因组件渲染 `<button>` 而非 `<a>` 元素失败
+
+**状态**：🔴 Open  
+**严重度**：Medium（前端 CI 噪音；功能本身可用，仅测试断言与实现不一致）  
+**影响测试**：`frontend/src/__tests__/DownloadButton.test.tsx`  
+- `renders an anchor with correct href when enabled` — `expect('BUTTON').toBe('A')` 失败  
+- `anchor has download attribute` — `expect(element).toHaveAttribute("download")` 失败  
+**错误信息**：
+```
+expected 'BUTTON' to be 'A'
+```
+
+**根因**：Task 41 重构将 `DownloadButton` 迁移至 `organisms/` 后，组件已改为渲染 shadcn `<Button>`（即 `<button>` 元素）并通过 `downloadProjectResults()` API 调用触发下载，但测试仍期望一个带 `href` 和 `download` 属性的原生 `<a>` 元素（Phase 1 旧实现）。
+
+**修复方案**：
+- 方案 A：将测试更新为匹配当前 `<button>` 渲染与 `onClick` 行为（推荐）。
+- 方案 B：将 `DownloadButton` 改回 `<a asChild>` 模式（shadcn Button + `asChild` + `<a href>`），使原生下载属性可用。
+
+**涉及文件**：`frontend/src/__tests__/DownloadButton.test.tsx`
+
+---
+
+### BUG-005
+
+**标题**：`useAuth.test.ts` — 6 个测试因 `useAuthContext must be used within AuthProvider` 失败
+
+**状态**：🔴 Open  
+**严重度**：Medium（auth hook 单元测试完全失效）  
+**影响测试**：`frontend/src/__tests__/useAuth.test.ts`（全部 6 个测试）  
+**错误信息**：
+```
+Error: useAuthContext must be used within AuthProvider
+```
+
+**根因**：Task 42/43 重构将 auth 逻辑从独立 hook 迁移至 `AuthProvider` context。`useAuth.test.ts` 直接调用 `useAuth()` 或 `useAuthContext()` hook，但测试中没有将组件包裹在 `<AuthProvider>` 中，导致 context 读取失败。
+
+**修复方案**：在测试的 `render` 调用中添加 `<AuthProvider>` 包裹，或使用 Testing Library 的 `wrapper` 选项注入 provider。
+
+**涉及文件**：`frontend/src/__tests__/useAuth.test.ts`
+
+---
+
+### BUG-006
+
+**标题**：`App.test.tsx` — 4 个路由测试在 Task 42 AppShell 重构后失败
+
+**状态**：🔴 Open  
+**严重度**：Medium（App 级集成测试回归）  
+**影响测试**：`frontend/src/__tests__/App.test.tsx`  
+- `test_redirects_to_login_if_unauthenticated`  
+- `test_shows_project_list_when_authenticated`  
+- `test_navigates_to_project_detail`  
+- `test_new_project_flow`  
+**根因**：Task 42 将 App.tsx 中的内联 header 替换为 `<AppShell>`，并引入 `<AuthProvider>` 包裹结构变化。测试使用旧的 mock/render 方式未适配新组件树（例如 AppShell 期望 auth context，或路由匹配因 layout wrapper 层级改变而失效）。
+
+**修复方案**：更新 `App.test.tsx` 的 render helper，在测试包裹器中注入 `<AuthProvider>` + `<MemoryRouter>`，并按新路由结构调整 mock。
+
+**涉及文件**：`frontend/src/__tests__/App.test.tsx`
