@@ -264,7 +264,7 @@ DWD 层（A_*/B_*/C_*/D_*）  ←  Agent 的计算原料
 | 图层 | 说明 |
 |------|------|
 | E_1 站点通过 | 点图层，每个 AG 以**空间饼状图**标注，扇区 = 途经线路 route_type 构成（按通过次数加权） |
-| E_4 弧段通过 | 线图层，**线宽 = 通过量大小**；具有方向性：A→B 通过量绘制在 A→B 弧段的**右侧**，B→A 通过量绘制在 B→A 弧段的**右侧**（两个方向的弧段在地图上重叠为一条线，通过左右偏移区分方向） |
+| E_4 弧段通过 | **带宽图**（对齐 AequilibraE Bandwidth on network links）：每条有向弧段渲染为可变宽度矩形，宽度（像素）= `weight × max_width_px`；AB 贴中心线右侧，BA 贴左侧，两侧之间有可调间距 `gap_px`（默认 4px）。矩形可按类别字段（route_type、线路名等）拆分为堆叠子矩形，各子矩形宽度占比 = `fraction_of_direction`。`max_width_px` 和 `gap_px` 均通过前端控件调节。GeoPackage 导出时以固定 scale_m 转为 Polygon 图层，保持 QGIS 兼容性 |
 
 功能：底图切换（OSM / 空白）、图层开关、要素点击弹窗、**GeoPackage 导出**（含所有矢量图层）
 
@@ -530,7 +530,7 @@ GTFS_algorithm.py    → 不迁移（legacy，保留备用）
   - [x] Task 44：ProjectDetailPage + ProgressPanel + UploadForm 重构 (2026-04-12)
   - [x] Task 45：ResultTable 重构（shadcn Table + Pagination）(2026-04-14)
 - [ ] E_1 站点通过图层（AG 空间饼状图：扇区 = route_type 构成，按通过次数加权）
-- [ ] E_4 弧段通过图层（有向线宽图：线宽 = 通过量；A→B 与 B→A 各绘于对应弧段右侧，视觉上合为一条线）
+- [ ] E_4 弧段通过图层（AequilibraE 带宽图：weight × max_width_px px，gap_px 间距，可按 route_type 等分组堆叠；AB 右侧，BA 左侧）
 - [ ] GeoPackage 导出（含所有矢量图层）
 - [ ] 数据看板（F-08）：
   - [ ] 饼状图 / 柱状图（线路模式、班次数、KCC）

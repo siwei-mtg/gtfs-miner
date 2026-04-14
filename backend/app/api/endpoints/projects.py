@@ -13,6 +13,7 @@ from ...db.models import Project, User
 from ...schemas.project import ProjectCreate, ProjectResponse
 from ...services.worker import run_project_task_sync
 from ...services.result_query import TABLE_REGISTRY, query_table
+from ...services.map_builder import build_passage_ag_geojson, build_passage_arc_geojson
 from ...core.config import settings, TEMP_DIR, PROJECT_DIR
 from ...api.deps import get_current_active_user
 
@@ -195,6 +196,60 @@ def download_table_csv(
         media_type="text/csv; charset=utf-8-sig",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/{project_id}/map/passage-ag")
+def get_passage_ag(
+    project_id: str,
+    jour_type: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    E_1 station passage GeoJSON — pie chart data per AG.
+
+    Returns a GeoJSON FeatureCollection where each Point feature represents
+    one generic stop (AG) with its total passage count and a breakdown by
+    transport mode (route_type).
+
+    jour_type parameter is required; omitting it returns HTTP 422.
+    """
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return build_passage_ag_geojson(project_id, jour_type, db)
+
+
+@router.get("/{project_id}/map/passage-arc")
+def get_passage_arc(
+    project_id: str,
+    jour_type: int,
+    split_by: str = "none",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    E_4 arc passage GeoJSON — AequilibraE-style bandwidth data.
+
+    split_by="none": one Feature per arc with weight (0–1 normalised).
+    split_by="route_type": one Feature per (arc × route_type), includes
+    fraction_of_direction and cumulative_fraction_start for stacked rendering.
+
+    Frontend renders pixel-based bandwidth:
+        line_width  = weight × max_width_px
+        line_offset = ±(gap_px/2 + cumulative_start × weight × max_width_px + sub_width/2)
+    max_width_px and gap_px are user-adjustable frontend sliders (default 40px / 4px).
+    """
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return build_passage_arc_geojson(project_id, jour_type, db, split_by)
 
 
 @router.get("/{project_id}/download")
