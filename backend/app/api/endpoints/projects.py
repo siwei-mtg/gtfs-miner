@@ -257,18 +257,18 @@ def export_geopackage_endpoint(
     project_id: str,
     jour_type: int,
     background_tasks: BackgroundTasks,
-    scale_m: float = 5.0,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     Export all map layers to a single GeoPackage file.
 
-    Layers: passage_ag (Point), passage_arc (Polygon, bandwidth),
+    Layers: passage_ag (Point), passage_arc (LineString),
     arrets_generiques (Point), arrets_physiques (Point).
 
-    passage_arc polygons are pre-computed using scale_m (metres per passage
-    unit) so the file can be styled directly in QGIS without pixel scaling.
+    passage_arc carries nb_passage, max_nb_passage, direction (AB/BA).
+    Style in QGIS using data-defined line width and offset with
+    scale_linear("nb_passage", 0, "max_nb_passage", 0, max_width_pixel).
     """
     project = db.query(Project).filter(
         Project.id == project_id,
@@ -277,7 +277,7 @@ def export_geopackage_endpoint(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    gpkg_path = export_geopackage(project_id, jour_type, db, scale_m)
+    gpkg_path = export_geopackage(project_id, jour_type, db)
     # Read into memory so the file handle is closed before deletion (avoids
     # Windows file-lock errors in the background task).
     data = gpkg_path.read_bytes()

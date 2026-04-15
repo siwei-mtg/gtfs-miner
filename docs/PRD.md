@@ -264,7 +264,7 @@ DWD 层（A_*/B_*/C_*/D_*）  ←  Agent 的计算原料
 | 图层 | 说明 |
 |------|------|
 | E_1 站点通过 | 点图层，每个 AG 以**空间饼状图**标注，扇区 = 途经线路 route_type 构成（按通过次数加权） |
-| E_4 弧段通过 | **带宽图**（对齐 AequilibraE Bandwidth on network links）：每条有向弧段渲染为可变宽度矩形，宽度（像素）= `weight × max_width_px`；AB 贴中心线右侧，BA 贴左侧，两侧之间有可调间距 `gap_px`（默认 4px）。矩形可按类别字段（route_type、线路名等）拆分为堆叠子矩形，各子矩形宽度占比 = `fraction_of_direction`。`max_width_px` 和 `gap_px` 均通过前端控件调节。GeoPackage 导出时以固定 scale_m 转为 Polygon 图层，保持 QGIS 兼容性 |
+| E_4 弧段通过 | **带宽图**（对齐 AequilibraE Bandwidth on network links）：每条有向弧段渲染为可变宽度线段，线宽（px）= `weight × max_width_px`；AB 向右偏移 `线宽/2 + 0.1px`，BA 向左对称，两侧视觉不重叠。`max_width_px` 通过前端控件调节。GeoPackage 导出为 **LineString** 图层，携带 `nb_passage`、`max_nb_passage`、`direction` 字段，由 QGIS 数据定义覆盖（`scale_linear` 线宽 + 偏移 + 线型）渲染，无需 Polygon 预计算 |
 
 功能：底图切换（OSM / 空白）、图层开关、要素点击弹窗、**GeoPackage 导出**（含所有矢量图层）
 

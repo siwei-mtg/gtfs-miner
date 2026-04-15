@@ -185,3 +185,27 @@ def test_gpkg_batch_no_duplicate_features(isolated_client_authed, gpkg_data):
         assert count == 2, f"Expected 2 passage_arc features, got {count}"
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def test_gpkg_arc_geometry_is_linestring(isolated_client_authed, gpkg_data):
+    """passage_arc features use LineString geometry (not Polygon)."""
+    tmp = _save_gpkg(isolated_client_authed, BASE_URL, {"jour_type": JOUR_TYPE})
+    try:
+        with fiona.open(str(tmp), layer="passage_arc") as src:
+            geom_types = {f["geometry"]["type"] for f in src}
+        assert geom_types == {"LineString"}, f"Expected LineString, got {geom_types}"
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def test_gpkg_arc_has_max_nb_passage(isolated_client_authed, gpkg_data):
+    """passage_arc has max_nb_passage field equal to the layer-wide maximum."""
+    tmp = _save_gpkg(isolated_client_authed, BASE_URL, {"jour_type": JOUR_TYPE})
+    try:
+        with fiona.open(str(tmp), layer="passage_arc") as src:
+            assert "max_nb_passage" in src.schema["properties"]
+            values = [f["properties"]["max_nb_passage"] for f in src]
+        # Seeded: nb_passage=100 and 40 → max=100
+        assert all(v == 100.0 for v in values), f"Expected max=100.0, got {values}"
+    finally:
+        tmp.unlink(missing_ok=True)

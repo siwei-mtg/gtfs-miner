@@ -4,13 +4,12 @@ map_builder.py — Service functions for Phase 2 map data APIs.
 Builds GeoJSON payloads derived from Phase 1 result tables.
 No schema changes required; all data already exists post-pipeline.
 """
-import math
 import tempfile
 from collections import defaultdict
 from pathlib import Path
 
 import geopandas as gpd
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point, LineString
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -286,49 +285,23 @@ def build_passage_arc_geojson(
 # GeoPackage export (Task 32)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _make_bandwidth_polygon(
-    lat_a: float, lon_a: float,
-    lat_b: float, lon_b: float,
-    width_m: float,
-) -> Polygon:
-    """Build a right-side rectangular Polygon of width_m along the A→B arc.
-
-    The four corners are A, B, B_right, A_right (closed), where *_right are
-    the original points shifted perpendicularly to the right of travel by
-    width_m metres (approximate planar conversion at the midpoint latitude).
-    """
-    lat_mid = math.radians((lat_a + lat_b) / 2)
-    east_m  = (lon_b - lon_a) * 111_000 * math.cos(lat_mid)
-    north_m = (lat_b - lat_a) * 111_000
-    length_m = math.hypot(east_m, north_m)
-    if length_m < 1e-9:
-        return Polygon([(lon_a, lat_a)] * 4)
-    perp_east  =  north_m / length_m
-    perp_north = -east_m  / length_m
-    d_lon = perp_east  * width_m / (111_000 * math.cos(lat_mid))
-    d_lat = perp_north * width_m / 111_000
-    return Polygon([
-        (lon_a,          lat_a        ),
-        (lon_b,          lat_b        ),
-        (lon_b + d_lon,  lat_b + d_lat),
-        (lon_a + d_lon,  lat_a + d_lat),
-        (lon_a,          lat_a        ),
-    ])
-
 
 def export_geopackage(
     project_id: str,
     jour_type: int,
     db: Session,
-    scale_m: float = 5.0,
 ) -> Path:
     """Export map layers to a temporary GeoPackage file.
 
     Layers written (in order):
-        passage_ag        — Point,   E_1 stop passages for jour_type
-        passage_arc       — Polygon, E_4 directed arc bandwidths (AB + BA)
-        arrets_generiques — Point,   A_1 generic stops
-        arrets_physiques  — Point,   A_2 physical stops
+        passage_ag        — Point,      E_1 stop passages for jour_type
+        passage_arc       — LineString, E_4 directed arc passages (AB + BA)
+        arrets_generiques — Point,      A_1 generic stops
+        arrets_physiques  — Point,      A_2 physical stops
+
+    passage_arc fields: nb_passage, max_nb_passage, direction (AB/BA).
+    Render in QGIS with data-defined line width and offset using
+    scale_linear("nb_passage", 0, "max_nb_passage", 0, max_width_pixel).
 
     Memory strategy: each GeoDataFrame is built, written, then deleted
     before the next layer starts.  Large layers are fetched in batches of
@@ -338,7 +311,6 @@ def export_geopackage(
         project_id: tenant-scoped project identifier.
         jour_type:  day-type integer (filters passage layers).
         db:         SQLAlchemy session.
-        scale_m:    metres per passage unit for arc polygon width.
 
     Returns:
         Path to a temporary .gpkg file — caller must delete it when done.
@@ -397,7 +369,7 @@ def export_geopackage(
             gdf.to_file(out_path, layer="passage_ag", driver="GPKG", mode="a")
         del gdf
 
-    # ── 2. passage_arc (Polygon) ──────────────────────────────────────────────
+    # ── 2. passage_arc (LineString) ───────────────────────────────────────────
     e4_rows = (
         db.query(ResultE4PassageArc)
         .filter(
@@ -407,6 +379,8 @@ def export_geopackage(
         .all()
     )
     if e4_rows:
+        max_nb_passage = max((r.nb_passage for r in e4_rows), default=0.0) or 0.0
+
         all_arc_ag_ids = list(
             {r.id_ag_num_a for r in e4_rows} | {r.id_ag_num_b for r in e4_rows}
         )
@@ -444,23 +418,16 @@ def export_geopackage(
             a, b = row.id_ag_num_a, row.id_ag_num_b
             if a not in coords or b not in coords:
                 continue
+            lat_a, lon_a = coords[a]
+            lat_b, lon_b = coords[b]
             direction = "AB" if a <= b else "BA"
-            # AB: polygon on right of A→B; BA: swap coords so polygon is on
-            # right of B→A (= left of A→B), matching the API band layout.
-            if direction == "AB":
-                lat_s, lon_s = coords[a]
-                lat_e, lon_e = coords[b]
-            else:
-                lat_s, lon_s = coords[b]
-                lat_e, lon_e = coords[a]
-            width_m = row.nb_passage * scale_m
             buf.append({
-                "id_ag_num_a": a,
-                "id_ag_num_b": b,
-                "nb_passage":  row.nb_passage,
-                "direction":   direction,
-                "width_m":     round(width_m, 2),
-                "geometry":    _make_bandwidth_polygon(lat_s, lon_s, lat_e, lon_e, width_m),
+                "id_ag_num_a":    a,
+                "id_ag_num_b":    b,
+                "nb_passage":     row.nb_passage,
+                "max_nb_passage": max_nb_passage,
+                "direction":      direction,
+                "geometry":       LineString([(lon_a, lat_a), (lon_b, lat_b)]),
             })
             if len(buf) >= _GPKG_BATCH:
                 _flush_arc()

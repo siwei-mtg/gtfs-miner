@@ -302,8 +302,7 @@ line_offset = sign(direction) × (gap_px/2 + cumulative_fraction_start × weight
 
 ```
 查询参数：
-  jour_type: int          （必填）
-  scale_m: float = 5.0    （可选，单位 m/passage，控制 passage_arc 图层的多边形宽度）
+  jour_type: int   （必填）
 ```
 
 将以下图层写入单个 `.gpkg` 文件，使用 `fiona` 或 `geopandas`：
@@ -311,54 +310,45 @@ line_offset = sign(direction) × (gap_px/2 + cumulative_fraction_start × weight
 | 图层名 | 几何类型 | 数据来源 | 说明 |
 |--------|---------|---------|------|
 | `passage_ag` | Point | E_1 | 站点通过，含 `nb_passage` |
-| `passage_arc` | Polygon | E_4 | **单图层含全部有向弧段**；`direction` 字段区分 AB/BA；几何为带宽矩形（`width_m = nb_passage × scale_m`）；AB 贴 A→B 右侧，BA 贴 B→A 右侧（即 A→B 左侧） |
+| `passage_arc` | LineString | E_4 | **单图层含全部有向弧段**；`direction` 字段区分 AB/BA；含 `nb_passage`、`max_nb_passage` 字段，供 QGIS 数据定义渲染 |
 | `arrets_generiques` | Point | A_1 | 通用站点 |
 | `arrets_physiques` | Point | A_2 | 物理站点 |
 
-> **设计原则**：与 Task 31 API 保持一致——AB 与 BA 同属 `passage_arc` 图层，用 `direction` 字段区分，无需拆分图层。QGIS 用户可通过 `direction` 字段筛选和差异化配色。
+> **设计原则**：AB 与 BA 同属 `passage_arc` 图层，`direction` 字段区分，无需拆分图层。
 
 返回：`StreamingResponse`，Content-Type `application/geopackage+sqlite3`，文件名 `{project_id}.gpkg`
 
-**修改文件**：`backend/app/services/map_builder.py`（新增 `export_geopackage(project_id, jour_type, db, scale_m) → Path`）
+**修改文件**：`backend/app/services/map_builder.py`（`export_geopackage(project_id, jour_type, db) → Path`）
 
 **新增依赖**：`geopandas`、`fiona`（已在 Dockerfile 系统库中）
 
-**`passage_arc` 多边形几何构建**：
+**`passage_arc` LineString 字段说明**：
 
-QGIS 不支持像素单位，导出时用 `scale_m` 将 nb_passage 转换为地理坐标宽度，使用私有函数 `_make_bandwidth_polygon(lat_a, lon_a, lat_b, lon_b, width_m)` 构建闭合矩形 Polygon：
-- AB 行（a ≤ b）：A→B 方向，polygon 贴右侧，`width_m = nb_passage × scale_m`
-- BA 行（a > b）：B→A 方向（交换坐标后），polygon 同样贴右侧（视觉上在 A→B 左侧）
+`passage_arc` 以 LineString 导出，携带以下属性字段，在 QGIS 中通过「数据定义覆盖」渲染带宽效果：
+
+| 字段 | 说明 |
+|------|------|
+| `nb_passage` | 该弧段方向的通过次数 |
+| `max_nb_passage` | 图层全局最大值（所有弧段同值），用于 `scale_linear` 归一化 |
+| `direction` | `"AB"` 或 `"BA"` |
+
+QGIS 数据定义覆盖（线段渲染）：
+- **线宽（px）**：`scale_linear("nb_passage", 0, "max_nb_passage", 0, max_width_pixel)`
+- **偏移量（px）**：`if("direction"='AB', 1, -1) * (scale_linear(...)/2 + 0.1)`
+- **线型**：`if(coalesce("nb_passage", 0) = 0, 'no', 'solid')`
 
 **内存策略（分批计算）**：
 
-GeoPackage 导出的内存瓶颈在 GeoDataFrame 构建（geopandas join + geometry 构造），而非写文件格式本身。IDFM 规模全量一次性构建峰值约 800 MB–1.2 GB，须采用分批策略：
-
-```python
-def export_geopackage(project_id: str, jour_type: int, db: Session, scale_m: float = 5.0) -> Path:
-    out_path = ...
-    # 逐图层处理，写完即释放，避免所有图层同时在内存
-    for layer_name, build_fn in LAYER_BUILDERS:
-        gdf = build_fn(project_id, jour_type, db, ...)   # 单图层 GeoDataFrame
-        gdf.to_file(out_path, layer=layer_name, driver="GPKG")
-        del gdf                                            # 立即释放
-    return out_path
-```
-
-对 `passage_ag` / `passage_arc` 等大图层，`build_fn` 内部按每批 ≤ 500 个 AG 分批构建，使用 `fiona` append 模式追加写入：
-
-```python
-for chunk_ids in chunked(ag_ids, 500):
-    gdf_chunk = _build_chunk(chunk_ids, ...)
-    gdf_chunk.to_file(out_path, layer=layer_name, driver="GPKG", mode="a")
-    del gdf_chunk
-```
+GeoPackage 导出的内存瓶颈在 GeoDataFrame 构建（geopandas join + geometry 构造），而非写文件格式本身。IDFM 规模全量一次性构建峰值约 800 MB–1.2 GB，须采用分批策略：逐图层处理，写完即释放；大图层按每批 ≤ 500 个 AG 分批构建，用 `fiona` append 模式追加写入。
 
 **测试**（`tests/test_geopackage_export.py`）：
 1. `test_gpkg_file_created` — 返回 200，Content-Type 正确
-2. `test_gpkg_contains_expected_layers` — 用 fiona 打开，layer 列表含上表所有图层名（`passage_arc` 而非 AB/BA 分层）
+2. `test_gpkg_contains_expected_layers` — 用 fiona 打开，layer 列表含上表所有图层名
 3. `test_gpkg_passage_ag_has_nb_passage` — `passage_ag` 层含 `nb_passage` 字段且值 > 0
 4. `test_gpkg_arc_single_layer_with_direction` — `passage_arc` 图层含 `direction` 字段，AB 和 BA 行均存在
 5. `test_gpkg_batch_no_duplicate_features` — 分批写入时不产生重复要素（行数 = 预期总行数）
+6. `test_gpkg_arc_geometry_is_linestring` — `passage_arc` 几何类型为 LineString（非 Polygon）
+7. `test_gpkg_arc_has_max_nb_passage` — `max_nb_passage` 字段存在且全行等于图层最大值
 
 **依赖**：Tasks 30–31
 
@@ -410,14 +400,35 @@ for chunk_ids in chunked(ag_ids, 500):
 
 **创建文件**：`frontend/src/components/PassageArcLayer.tsx`
 
-- 调用 `GET /map/passage-arc?jour_type=X`
-- 用 MapLibre `line-width` 表达式按 `nb_passage` 线性/对数缩放线宽
-- AB 与 BA 弧段各自渲染（坐标已由后端偏移，视觉上右侧分离）
+- 调用 `GET /map/passage-arc?jour_type=X`（`split_by="none"`，返回 `weight`、`direction`、`nb_passage`）
+- MapLibre paint 配置（`maxWidthPx` 默认 40，通过 props 传入）：
+
+```json
+{
+  "line-width": ["*", ["get", "weight"], 40],
+  "line-offset": [
+    "*",
+    ["case", ["==", ["get", "direction"], "AB"], 1, -1],
+    ["+", ["*", ["*", ["get", "weight"], 40], 0.5], 0.1]
+  ],
+  "line-opacity": ["case", ["==", ["get", "nb_passage"], 0], 0, 1]
+}
+```
+
+渲染规则：
+- 线宽（px） = `weight × maxWidthPx`（`weight` 已由后端归一化为 0–1）
+- 偏移量（px） = `±(线宽/2 + 0.1)`，AB 向右（+1），BA 向左（−1），视觉上不重叠
+- 无通过次数时隐藏（opacity=0）
+- `maxWidthPx` 通过 props 暴露，可接入前端滑块
+
+> 与 GeoPackage QGIS 公式等价：`weight = nb_passage / max_nb_passage`，两套渲染逻辑一致。
+
 - 鼠标悬停 → tooltip 显示 `nb_passage` 数值
 
 **测试**（`frontend/src/__tests__/PassageArcLayer.test.tsx`）：
 1. `test_renders_ab_and_ba` — mock API，AB 和 BA 方向均有对应要素
 2. `test_hover_shows_tooltip` — 模拟 mouseover，tooltip 出现含 nb_passage
+3. `test_max_width_px_prop` — 传入 `maxWidthPx=20`，验证 paint 配置中线宽表达式使用 20
 
 **依赖**：Task 31、Task 33
 

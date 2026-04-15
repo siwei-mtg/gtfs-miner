@@ -23,7 +23,7 @@ from ..api.websockets.progress import manager
 
 # Import individual pipeline functions (not main, to allow step-by-step progress)
 from .gtfs_core.pipeline import build_dates_table, DEFAULT_TYPE_VAC, CSV_OPTS
-from .gtfs_core.calendar_provider import DBCalendarProvider
+from .gtfs_core.calendar_provider import DBCalendarProvider, TYPE_JOUR_VAC_LABELS
 from .calendar_seeder import ensure_calendar
 from .gtfs_core.gtfs_norm import gtfs_normalize, ligne_generate
 from .gtfs_core.gtfs_reader import read_gtfs_zip
@@ -95,12 +95,20 @@ def _persist_results_to_db(project_id: str, out_dir: Path, db: Session) -> None:
 
         # Melt pivot tables (wide Type_Jour columns → long)
         if id_cols is not None:
-            pivot_cols = [c for c in df.columns if str(c).isdigit()]
             keep = [c for c in id_cols if c in df.columns]
+            # Numeric column names ("1"–"11") — current/normal format
+            pivot_cols = [c for c in df.columns if str(c).isdigit()]
+            if not pivot_cols:
+                # String day-type labels ("Jeudi_Scolaire" etc.) — legacy CSV format
+                pivot_cols = [c for c in df.columns if c in TYPE_JOUR_VAC_LABELS]
             if keep and pivot_cols:
                 df = df[keep + pivot_cols].melt(
                     id_vars=keep, var_name="type_jour", value_name=val_col
                 )
+                # Map string labels → integers; numeric strings cast directly
+                if df["type_jour"].dtype == object:
+                    df["type_jour"] = df["type_jour"].map(TYPE_JOUR_VAC_LABELS)
+                    df = df.dropna(subset=["type_jour"])
                 df["type_jour"] = df["type_jour"].astype(int)
 
         # Idempotency: clear previous results for this project
