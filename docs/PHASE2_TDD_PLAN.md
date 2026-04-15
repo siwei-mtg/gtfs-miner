@@ -2,7 +2,7 @@
 
 **版本**：1.4  
 **日期**：2026-04-15  
-**状态**：进行中（Task 41–45 ✅ 已完成；Task 30–32 ✅ 已完成）
+**状态**：进行中（Task 41–45 ✅ 已完成；Task 30–32 ✅ 已完成；Task 33 ✅ 已完成）
 
 ---
 
@@ -356,23 +356,25 @@ GeoPackage 导出的内存瓶颈在 GeoDataFrame 构建（geopandas join + geome
 
 ## GROUP B：前端地图组件（Task 33–36）
 
-### Task 33：MapLibre 底图组件
+### Task 33：MapLibre 底图组件 ✅ 已完成（2026-04-15）
 
-**创建文件**：`frontend/src/components/MapView.tsx`
+**创建文件**：`frontend/src/components/organisms/MapView.tsx`
+（注：实际路径按 CLAUDE.md Atomic Design 规则放入 `organisms/`，非原计划的 `components/MapView.tsx`）
 
 ```typescript
-// Props：{ projectId: string, jourType: number }
+// Props：{ projectId: string, jourType: number, onStopClick?, className? }
 // 渲染 MapLibre GL JS 地图，OSM 底图
 // 暴露图层开关（E_1/E_4）
 // 点击 AG → 触发 onStopClick(id_ag_num) 回调
 ```
 
-**新增依赖**：`maplibre-gl`、`react-map-gl`（或直接封装 maplibre-gl）
+**新增依赖**：`maplibre-gl@^4`（直接封装；未引入 react-map-gl）
+**CSS**：`maplibre-gl/dist/maplibre-gl.css` 挂载于 `main.tsx`（避免 vitest/jsdom 解析失败）
 
 **测试**（`frontend/src/__tests__/MapView.test.tsx`）：
-1. `test_mapview_renders` — 容器 div 存在
-2. `test_layer_toggles_visible` — 切换图层开关后 checkbox 状态变化
-3. `test_stop_click_callback` — 模拟点击事件，onStopClick 被调用
+1. `test_mapview_renders` ✅ — 容器 div 存在
+2. `test_layer_toggles_visible` ✅ — 切换图层开关后 checkbox 状态变化
+3. `test_stop_click_callback` ✅ — 模拟点击事件，onStopClick 被调用
 
 **依赖**：Task 30（API 契约）
 
