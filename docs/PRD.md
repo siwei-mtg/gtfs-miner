@@ -269,7 +269,7 @@ DWD 层（A_*/B_*/C_*/D_*）  ←  Agent 的计算原料
 功能：底图切换（OSM / 空白）、图层开关、要素点击弹窗、**GeoPackage 导出**（含所有矢量图层）
 
 **GeoPackage 导出内存策略**：导出时真正的内存瓶颈在构建 GeoDataFrame（geopandas join + geometry 构造），而非写文件格式本身。对 IDFM 规模（~5 万站点、数千弧段）的数据集，全量一次性构建 GeoDataFrame 峰值内存约 800 MB–1.2 GB。为控制内存：
-- `export_geopackage()` 按图层逐个处理（passage_ag → passage_arc），写完即释放
+- `export_geopackage()` 按图层逐个处理（passage_ag → passage_arc → arrets），写完即释放
 - 同一图层数据量过大时按 AG 分批构建（每批 ≤ 500 个 AG），用 `fiona` append 模式追加写入
 - 格式保持 GeoPackage（单文件多图层，MapLibre / QGIS 均原生支持）；不改用 GeoJSON（整体序列化，内存更高）
 

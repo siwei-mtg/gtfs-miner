@@ -13,7 +13,7 @@ from ...db.models import Project, User
 from ...schemas.project import ProjectCreate, ProjectResponse
 from ...services.worker import run_project_task_sync
 from ...services.result_query import TABLE_REGISTRY, query_table
-from ...services.map_builder import build_passage_ag_geojson, build_passage_arc_geojson
+from ...services.map_builder import build_passage_ag_geojson, build_passage_arc_geojson, export_geopackage
 from ...core.config import settings, TEMP_DIR, PROJECT_DIR
 from ...api.deps import get_current_active_user
 
@@ -250,6 +250,45 @@ def get_passage_arc(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return build_passage_arc_geojson(project_id, jour_type, db, split_by)
+
+
+@router.get("/{project_id}/export/geopackage")
+def export_geopackage_endpoint(
+    project_id: str,
+    jour_type: int,
+    background_tasks: BackgroundTasks,
+    scale_m: float = 5.0,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Export all map layers to a single GeoPackage file.
+
+    Layers: passage_ag (Point), passage_arc (Polygon, bandwidth),
+    arrets_generiques (Point), arrets_physiques (Point).
+
+    passage_arc polygons are pre-computed using scale_m (metres per passage
+    unit) so the file can be styled directly in QGIS without pixel scaling.
+    """
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    gpkg_path = export_geopackage(project_id, jour_type, db, scale_m)
+    # Read into memory so the file handle is closed before deletion (avoids
+    # Windows file-lock errors in the background task).
+    data = gpkg_path.read_bytes()
+    background_tasks.add_task(gpkg_path.unlink, missing_ok=True)
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/geopackage+sqlite3",
+        headers={
+            "Content-Disposition": f'attachment; filename="{project_id}.gpkg"',
+        },
+    )
 
 
 @router.get("/{project_id}/download")

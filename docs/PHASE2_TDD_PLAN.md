@@ -1,8 +1,8 @@
 # Phase 2 TDD 任务拆解计划
 
-**版本**：1.3  
-**日期**：2026-04-14  
-**状态**：进行中（Task 41–45 ✅ 已完成；Task 30–31 ✅ 已完成）
+**版本**：1.4  
+**日期**：2026-04-15  
+**状态**：进行中（Task 41–45 ✅ 已完成；Task 30–32 ✅ 已完成）
 
 ---
 
@@ -296,38 +296,51 @@ line_offset = sign(direction) × (gap_px/2 + cumulative_fraction_start × weight
 
 ---
 
-### Task 32：GeoPackage 导出 API
+### Task 32：GeoPackage 导出 API ✅ 已完成（2026-04-15）
 
 **新增端点**：`GET /api/v1/projects/{project_id}/export/geopackage`
 
+```
+查询参数：
+  jour_type: int          （必填）
+  scale_m: float = 5.0    （可选，单位 m/passage，控制 passage_arc 图层的多边形宽度）
+```
+
 将以下图层写入单个 `.gpkg` 文件，使用 `fiona` 或 `geopandas`：
 
-| 图层名 | 几何类型 | 数据来源 |
-|--------|---------|---------|
-| `passage_ag` | Point | E_1（站点通过，含 nb_passage） |
-| `passage_arc_AB` | LineString | E_4 方向 AB |
-| `passage_arc_BA` | LineString | E_4 方向 BA |
-| `arrets_generiques` | Point | A_1 |
-| `arrets_physiques` | Point | A_2 |
+| 图层名 | 几何类型 | 数据来源 | 说明 |
+|--------|---------|---------|------|
+| `passage_ag` | Point | E_1 | 站点通过，含 `nb_passage` |
+| `passage_arc` | Polygon | E_4 | **单图层含全部有向弧段**；`direction` 字段区分 AB/BA；几何为带宽矩形（`width_m = nb_passage × scale_m`）；AB 贴 A→B 右侧，BA 贴 B→A 右侧（即 A→B 左侧） |
+| `arrets_generiques` | Point | A_1 | 通用站点 |
+| `arrets_physiques` | Point | A_2 | 物理站点 |
+
+> **设计原则**：与 Task 31 API 保持一致——AB 与 BA 同属 `passage_arc` 图层，用 `direction` 字段区分，无需拆分图层。QGIS 用户可通过 `direction` 字段筛选和差异化配色。
 
 返回：`StreamingResponse`，Content-Type `application/geopackage+sqlite3`，文件名 `{project_id}.gpkg`
 
-**修改文件**：`backend/app/services/map_builder.py`（新增 `export_geopackage(project_id, jour_type, db) → Path`）
+**修改文件**：`backend/app/services/map_builder.py`（新增 `export_geopackage(project_id, jour_type, db, scale_m) → Path`）
 
 **新增依赖**：`geopandas`、`fiona`（已在 Dockerfile 系统库中）
+
+**`passage_arc` 多边形几何构建**：
+
+QGIS 不支持像素单位，导出时用 `scale_m` 将 nb_passage 转换为地理坐标宽度，使用私有函数 `_make_bandwidth_polygon(lat_a, lon_a, lat_b, lon_b, width_m)` 构建闭合矩形 Polygon：
+- AB 行（a ≤ b）：A→B 方向，polygon 贴右侧，`width_m = nb_passage × scale_m`
+- BA 行（a > b）：B→A 方向（交换坐标后），polygon 同样贴右侧（视觉上在 A→B 左侧）
 
 **内存策略（分批计算）**：
 
 GeoPackage 导出的内存瓶颈在 GeoDataFrame 构建（geopandas join + geometry 构造），而非写文件格式本身。IDFM 规模全量一次性构建峰值约 800 MB–1.2 GB，须采用分批策略：
 
 ```python
-def export_geopackage(project_id: str, jour_type: int, db: Session) -> Path:
+def export_geopackage(project_id: str, jour_type: int, db: Session, scale_m: float = 5.0) -> Path:
     out_path = ...
     # 逐图层处理，写完即释放，避免所有图层同时在内存
     for layer_name, build_fn in LAYER_BUILDERS:
-        gdf = build_fn(project_id, jour_type, db)   # 单图层 GeoDataFrame
+        gdf = build_fn(project_id, jour_type, db, ...)   # 单图层 GeoDataFrame
         gdf.to_file(out_path, layer=layer_name, driver="GPKG")
-        del gdf                                       # 立即释放
+        del gdf                                            # 立即释放
     return out_path
 ```
 
@@ -342,9 +355,9 @@ for chunk_ids in chunked(ag_ids, 500):
 
 **测试**（`tests/test_geopackage_export.py`）：
 1. `test_gpkg_file_created` — 返回 200，Content-Type 正确
-2. `test_gpkg_contains_expected_layers` — 用 fiona 打开，layer 列表含上表所有图层名
+2. `test_gpkg_contains_expected_layers` — 用 fiona 打开，layer 列表含上表所有图层名（`passage_arc` 而非 AB/BA 分层）
 3. `test_gpkg_passage_ag_has_nb_passage` — `passage_ag` 层含 `nb_passage` 字段且值 > 0
-4. `test_gpkg_arc_direction_separated` — `passage_arc_AB` 与 `passage_arc_BA` 均存在且行数 > 0
+4. `test_gpkg_arc_single_layer_with_direction` — `passage_arc` 图层含 `direction` 字段，AB 和 BA 行均存在
 5. `test_gpkg_batch_no_duplicate_features` — 分批写入时不产生重复要素（行数 = 预期总行数）
 
 **依赖**：Tasks 30–31
