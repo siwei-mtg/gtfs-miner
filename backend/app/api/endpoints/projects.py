@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import List
 import io
@@ -10,6 +11,7 @@ from pathlib import Path
 
 from ...db.database import get_db
 from ...db.models import Project, User
+from ...db.result_models import ResultA1ArretGenerique
 from ...schemas.project import ProjectCreate, ProjectResponse
 from ...services.worker import run_project_task_sync
 from ...services.result_query import TABLE_REGISTRY, query_table
@@ -250,6 +252,47 @@ def get_passage_arc(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return build_passage_arc_geojson(project_id, jour_type, db, split_by)
+
+
+@router.get("/{project_id}/map/bounds")
+def get_map_bounds(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Bounding box of all generic stops (A1) for a project.
+
+    Returns {min_lng, min_lat, max_lng, max_lat} so the frontend can
+    initialise the map at the correct extent without a wasted flash of
+    the default center (Paris).
+
+    Returns HTTP 404 if the project has no A1 rows yet.
+    """
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    row = db.query(
+        func.min(ResultA1ArretGenerique.stop_lon),
+        func.min(ResultA1ArretGenerique.stop_lat),
+        func.max(ResultA1ArretGenerique.stop_lon),
+        func.max(ResultA1ArretGenerique.stop_lat),
+    ).filter(ResultA1ArretGenerique.project_id == project_id).one()
+
+    min_lng, min_lat, max_lng, max_lat = row
+    if min_lng is None:
+        raise HTTPException(status_code=404, detail="No A1 data for project")
+
+    return {
+        "min_lng": min_lng,
+        "min_lat": min_lat,
+        "max_lng": max_lng,
+        "max_lat": max_lat,
+    }
 
 
 @router.get("/{project_id}/export/geopackage")

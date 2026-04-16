@@ -1,8 +1,8 @@
 # Phase 2 TDD 任务拆解计划
 
-**版本**：1.4  
-**日期**：2026-04-15  
-**状态**：进行中（Task 41–45 ✅ 已完成；Task 30–32 ✅ 已完成；Task 33 ✅ 已完成）
+**版本**：1.5  
+**日期**：2026-04-16  
+**状态**：进行中（Task 41–45 ✅ 已完成；Task 30–32 ✅ 已完成；Task 33 ✅ 已完成；Task 34 ✅ 已完成；Task 35 🔴 待开始 — E_4 弧段图层未渲染的根因）
 
 ---
 
@@ -380,19 +380,24 @@ GeoPackage 导出的内存瓶颈在 GeoDataFrame 构建（geopandas join + geome
 
 ---
 
-### Task 34：E_1 空间饼状图图层
+### Task 34：E_1 空间饼状图图层 ✅ 已完成（2026-04-16 核对发现已实现）
 
-**创建文件**：`frontend/src/components/PassageAGLayer.tsx`
+**创建文件**：`frontend/src/components/PassageAGLayer.tsx`（已存在）
 
 - 调用 `GET /map/passage-ag?jour_type=X`
-- 在每个 AG 坐标处渲染 SVG 饼状图 Marker，扇区颜色 = route_type 配色
-- 饼状图半径与 `nb_passage_total` 对数比例缩放
-- 点击 Marker → 侧面板显示详情
+- 在每个 AG 坐标处渲染 SVG 饼状图 Marker，扇区颜色 = route_type 配色（`frontend/src/lib/map-utils.ts` → `generatePieSvg`、`ROUTE_TYPE_COLORS`）
+- 饼状图半径对数比例缩放：`10 + 5 * log10(nb_passage_total)`
+- 点击 Marker → 触发 `onStopClick(id_ag_num)` 回调（`ProjectDetailPage.tsx:106` 已接入：点击切换到 `viewMode='table'` + 跳转 A1 tab）
+
+**实际实现要点**（与原计划差异）：
+- 通过 `MapContext` 获取 map 实例，通过 `useAuthContext` 获取 JWT，API 请求带 `Authorization: Bearer` header
+- 组件返回 `null`（不渲染 DOM，仅管理 MapLibre Markers）
+- 通过 `MapView` 的 `<div className="hidden">` children wrapper 接入，`visible` prop 从 MapView 的 E_1 checkbox 状态传入
 
 **测试**（`frontend/src/__tests__/PassageAGLayer.test.tsx`）：
-1. `test_renders_markers_for_each_ag` — mock API，markers 数量 = response features 数量
-2. `test_pie_sectors_count` — 每个 marker 的扇区数 = `by_route_type` key 数量
-3. `test_click_opens_side_panel` — 点击 marker → 侧面板出现
+1. `should fetch data with Authorization header and create markers when visible` ✅
+2. `should remove markers on unmount` ✅
+3. `should not fetch data if not visible` ✅
 
 **依赖**：Task 30、Task 33
 

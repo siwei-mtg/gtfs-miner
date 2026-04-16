@@ -1,132 +1,183 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import { cn } from '@/lib/utils';
+import { MapContext } from '@/contexts/MapContext';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { PieChartLegend } from '@/components/molecules/PieChartLegend';
 
 interface MapViewProps {
   projectId: string;
   jourType: number;
-  onStopClick?: (idAgNum: number) => void;
   className?: string;
+  children?: React.ReactNode;
 }
 
 export const MapView: React.FC<MapViewProps> = ({
   projectId,
   jourType,
-  onStopClick,
   className,
+  children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const onStopClickRef = useRef(onStopClick);
+  const { token } = useAuthContext();
+  const [map, setMap] = useState<maplibregl.Map | null>(null);
   const [e1Visible, setE1Visible] = useState(true);
   const [e4Visible, setE4Visible] = useState(true);
+  const [availableRouteTypes, setAvailableRouteTypes] = useState<string[]>([]);
 
-  // Keep callback ref in sync without triggering map re-init
-  useEffect(() => {
-    onStopClickRef.current = onStopClick;
-  }, [onStopClick]);
-
-  // Map initialisation — re-runs only when project or day type changes
-  useEffect(() => {
+  // Map initialisation — re-runs only when project or day type changes.
+  // Bounds are fetched from the backend BEFORE creating the MapLibre instance
+  // so the map opens directly at the project extent (no flash of default Paris).
+  useLayoutEffect(() => {
     if (!containerRef.current) return;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '© OpenStreetMap contributors',
-          },
-        },
-        layers: [{ id: 'osm-layer', type: 'raster', source: 'osm' }],
-      },
-      center: [2.3522, 48.8566],
-      zoom: 11,
-    });
+    let mounted = true;
+    let newMap: maplibregl.Map | null = null;
 
-    mapRef.current = map;
-
-    map.on('load', () => {
-      // E_1 — passage-ag (stop circles)
-      map.addSource('passage-ag', {
-        type: 'geojson',
-        data: `/api/v1/projects/${projectId}/layers/e1?jour_type=${jourType}`,
-      });
-      map.addLayer({
-        id: 'passage-ag-layer',
-        type: 'circle',
-        source: 'passage-ag',
-        paint: { 'circle-radius': 5, 'circle-color': '#3b82f6' },
-      });
-
-      // E_4 — passage-arc (directed arcs)
-      map.addSource('passage-arc', {
-        type: 'geojson',
-        data: `/api/v1/projects/${projectId}/layers/e4?jour_type=${jourType}`,
-      });
-      map.addLayer({
-        id: 'passage-arc-layer',
-        type: 'line',
-        source: 'passage-arc',
-        paint: { 'line-color': '#ef4444', 'line-width': 2 },
-      });
-
-      // Click on AG stop → call consumer callback
-      map.on('click', 'passage-ag-layer', (e) => {
-        const feature = e.features?.[0];
-        if (feature?.properties?.['id_ag_num'] !== undefined) {
-          onStopClickRef.current?.(feature.properties['id_ag_num'] as number);
+    const init = async () => {
+      let bounds: [[number, number], [number, number]] | undefined;
+      try {
+        const res = await fetch(`/api/v1/projects/${projectId}/map/bounds`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const { min_lng, min_lat, max_lng, max_lat } = await res.json();
+          bounds = [[min_lng, min_lat], [max_lng, max_lat]];
         }
+      } catch {
+        // fall through to default center below
+      }
+
+      if (!mounted || !containerRef.current) return;
+
+      const baseOptions: maplibregl.MapOptions = {
+        container: containerRef.current,
+        style: {
+          version: 8,
+          sources: {
+            osm: {
+              type: 'raster',
+              tiles: [
+                'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              ],
+              tileSize: 256,
+              minzoom: 0,
+              maxzoom: 19,
+              attribution: '© OpenStreetMap contributors',
+            },
+          },
+          layers: [{ id: 'osm-layer', type: 'raster', source: 'osm' }],
+        },
+        transformRequest: (url) => {
+          // Automatically inject auth header for API requests
+          if (token && (url.startsWith('/api') || url.includes('/map/'))) {
+            return {
+              url,
+              headers: { 'Authorization': `Bearer ${token}` }
+            };
+          }
+          return { url };
+        },
+      };
+
+      newMap = new maplibregl.Map(
+        bounds
+          ? { ...baseOptions, bounds, fitBoundsOptions: { padding: 50, maxZoom: 14 } }
+          : { ...baseOptions, center: [2.3522, 48.8566], zoom: 11 }
+      );
+
+      newMap.on('load', () => {
+        if (!mounted) return;
+        newMap!.resize(); // force canvas to adopt final CSS dimensions
+
+        // E_4 — passage-arc placeholder (to be replaced in Task 35)
+        newMap!.addSource('passage-arc', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] }
+        });
+        newMap!.addLayer({
+          id: 'passage-arc-layer',
+          type: 'line',
+          source: 'passage-arc',
+          paint: { 'line-color': '#ef4444', 'line-width': 2 },
+        });
+
+        setMap(newMap!);
       });
-    });
+    };
+
+    init();
 
     return () => {
-      map.remove();
-      mapRef.current = null;
+      mounted = false;
+      newMap?.remove();
+      setMap(null);
     };
-  }, [projectId, jourType]);
+  }, [projectId, jourType]); // token excluded intentionally — closure is stable enough
 
-  // Toggle E_1 visibility
+  // Toggle E_4 visibility placeholder
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !map.getLayer('passage-ag-layer')) return;
-    map.setLayoutProperty('passage-ag-layer', 'visibility', e1Visible ? 'visible' : 'none');
-  }, [e1Visible]);
-
-  // Toggle E_4 visibility
-  useEffect(() => {
-    const map = mapRef.current;
     if (!map || !map.getLayer('passage-arc-layer')) return;
     map.setLayoutProperty('passage-arc-layer', 'visibility', e4Visible ? 'visible' : 'none');
-  }, [e4Visible]);
+  }, [map, e4Visible]);
 
   return (
-    <div className={cn('relative w-full h-full', className)} data-testid="map-view">
-      <div ref={containerRef} className="absolute inset-0" />
-      <div className="absolute top-2 right-2 z-10 bg-background border border-border rounded-md p-2 space-y-1 text-sm">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            aria-label="toggle-e1"
-            checked={e1Visible}
-            onChange={(e) => setE1Visible(e.target.checked)}
-          />
-          E_1 passages-ag
-        </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            aria-label="toggle-e4"
-            checked={e4Visible}
-            onChange={(e) => setE4Visible(e.target.checked)}
-          />
-          E_4 passages-arc
-        </label>
+    <MapContext.Provider value={{ map }}>
+      <div className={cn('relative w-full h-full min-h-[400px]', className)} data-testid="map-view">
+        <div ref={containerRef} className="w-full h-full" />
+        
+        {/* Layer Controls */}
+        <div className="absolute top-2 right-2 z-10 bg-background/90 backdrop-blur-sm border border-border rounded-md p-2 space-y-1 text-xs shadow-sm">
+          <label className="flex items-center gap-2 cursor-pointer hover:bg-accent/50 p-1 rounded transition-colors">
+            <input
+              type="checkbox"
+              aria-label="toggle-e1"
+              checked={e1Visible}
+              onChange={(e) => setE1Visible(e.target.checked)}
+              className="accent-primary"
+            />
+            E_1 passages-ag
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer hover:bg-accent/50 p-1 rounded transition-colors">
+            <input
+              type="checkbox"
+              aria-label="toggle-e4"
+              checked={e4Visible}
+              onChange={(e) => setE4Visible(e.target.checked)}
+              className="accent-primary"
+            />
+            E_4 passages-arc
+          </label>
+        </div>
+
+        {/* Legend — lists route_types present in the currently-loaded E_1 data */}
+        {e1Visible && <PieChartLegend routeTypes={availableRouteTypes} />}
+
+        {/* Child Layers (e.g. PassageAGLayer) */}
+        {map && children && (
+          <div className="hidden">
+            {React.Children.map(children, child => {
+              if (React.isValidElement(child)) {
+                // Pass visibility state to known children layers
+                // This is a simple way to sync with the internal checkboxes
+                const childType = (child.type as any).displayName || (child.type as any).name;
+                if (childType === 'PassageAGLayer') {
+                  return React.cloneElement(child as React.ReactElement<any>, {
+                    visible: e1Visible,
+                    projectId,
+                    jourType,
+                    onRouteTypesChange: setAvailableRouteTypes,
+                  });
+                }
+                return React.cloneElement(child as React.ReactElement<any>, { visible: true });
+              }
+              return child;
+            })}
+          </div>
+        )}
       </div>
-    </div>
+    </MapContext.Provider>
   );
 };
