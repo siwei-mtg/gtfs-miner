@@ -1,4 +1,5 @@
 import { render } from '@testing-library/react'
+import { PieChart } from 'recharts'
 import { Button } from '@/components/atoms/button'
 
 test('test_tailwind_classes_applied', () => {
@@ -8,4 +9,8 @@ test('test_tailwind_classes_applied', () => {
 
 test('test_shadcn_button_renders', () => {
   expect(() => render(<Button variant="default">Click</Button>)).not.toThrow()
+})
+
+test('recharts_importable', () => {
+  expect(PieChart).toBeDefined()
 })
