@@ -60,6 +60,9 @@ def map_data(test_engine):
 
     # E1: two AGs on jour_type=1; AG1 also has a jour_type=2 row to verify
     # the D2 filter via direct positive assertion at jour_type=2.
+    # AG3 simulates a project with broken calendar (D2.Type_Jour NULL) — it
+    # has a valid E_1 count but its service has no matching D2 Type_Jour row,
+    # so the breakdown falls back to empty.
     session.add_all([
         ResultE1PassageAG(
             project_id=PROJECT_ID,
@@ -88,6 +91,15 @@ def map_data(test_engine):
             type_jour=2,
             nb_passage=1.0,
         ),
+        ResultE1PassageAG(
+            project_id=PROJECT_ID,
+            id_ag_num=3,
+            stop_name="Stop Gamma (broken D2)",
+            stop_lat=48.87,
+            stop_lon=2.37,
+            type_jour=JOUR_TYPE,
+            nb_passage=5.0,
+        ),
     ])
 
     # B1: 3 lines
@@ -100,21 +112,26 @@ def map_data(test_engine):
     # C2: courses stopping at AGs, each carrying id_service_num.
     # Services 100 (Type_Jour=1) and 200 (Type_Jour=2) segregate operating days.
     # Course 99 (service 200) must be filtered out of jour_type=1 responses.
+    # AG3's course 50 uses service 999 whose D2 row has Type_Jour=NULL —
+    # this simulates the calendar-resolution gap seen in some older projects.
     session.add_all([
         ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=1, id_course_num=10, id_ligne_num=1, id_service_num=100),
         ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=1, id_course_num=11, id_ligne_num=2, id_service_num=100),
         ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=2, id_course_num=10, id_ligne_num=1, id_service_num=100),
         ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=2, id_course_num=12, id_ligne_num=3, id_service_num=100),
         ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=1, id_course_num=99, id_ligne_num=1, id_service_num=200),
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=3, id_course_num=50, id_ligne_num=1, id_service_num=999),
     ])
 
     # D2: service-to-Type_Jour mapping.  Each (id_ligne_num, id_service_num)
     # pair that appears in C2 needs a row here for the D2 JOIN to match.
+    # Service 999 exists but Type_Jour is NULL to exercise the fallback path.
     session.add_all([
         ResultD2ServiceJourtype(project_id=PROJECT_ID, id_ligne_num=1, id_service_num=100, Type_Jour=1),
         ResultD2ServiceJourtype(project_id=PROJECT_ID, id_ligne_num=2, id_service_num=100, Type_Jour=1),
         ResultD2ServiceJourtype(project_id=PROJECT_ID, id_ligne_num=3, id_service_num=100, Type_Jour=1),
         ResultD2ServiceJourtype(project_id=PROJECT_ID, id_ligne_num=1, id_service_num=200, Type_Jour=2),
+        ResultD2ServiceJourtype(project_id=PROJECT_ID, id_ligne_num=1, id_service_num=999, Type_Jour=None),
     ])
 
     session.commit()
@@ -151,7 +168,8 @@ def test_passage_ag_structure(isolated_client_authed, map_data):
     assert r.status_code == 200
     body = r.json()
     assert body["type"] == "FeatureCollection"
-    assert len(body["features"]) == 2
+    # 3 AGs seeded at jour_type=1: AG1, AG2, AG3 (AG3 simulates broken D2).
+    assert len(body["features"]) == 3
     for feature in body["features"]:
         assert feature["type"] == "Feature"
         assert feature["geometry"]["type"] == "Point"
@@ -170,13 +188,53 @@ def test_passage_ag_jour_type_required(isolated_client_authed, map_data):
     assert r.status_code == 422
 
 
-def test_passage_ag_total_equals_sum(isolated_client_authed, map_data):
-    """nb_passage_total equals sum of by_route_type values for every feature."""
+def test_passage_ag_total_authoritative_from_e1(isolated_client_authed, map_data):
+    """nb_passage_total is read directly from E_1 (authoritative).
+    The by_route_type breakdown is best-effort; when the D2 join covers all
+    lines the sum matches the total, otherwise it is a lower bound.
+    """
     r = isolated_client_authed.get(BASE_URL, params={"jour_type": JOUR_TYPE})
     assert r.status_code == 200
+    # E_1 seeds: AG1 nb_passage=2.0, AG2 nb_passage=2.0 at JOUR_TYPE=1.
+    by_ag = {f["properties"]["id_ag_num"]: f["properties"] for f in r.json()["features"]}
+    assert by_ag[1]["nb_passage_total"] == 2
+    assert by_ag[2]["nb_passage_total"] == 2
     for feature in r.json()["features"]:
         props = feature["properties"]
-        assert props["nb_passage_total"] == sum(props["by_route_type"].values())
+        assert sum(props["by_route_type"].values()) <= props["nb_passage_total"]
+
+
+def test_passage_ag_fallback_when_d2_type_jour_null(isolated_client_authed, map_data):
+    """AG3's service has D2 row with Type_Jour=NULL, so the breakdown join
+    returns nothing for it.  `nb_passage_total` must still render from E_1
+    (5.0 → 5), proving the authoritative-E_1 fallback works and the frontend
+    can show a neutral-color circle instead of an invisible marker."""
+    r = isolated_client_authed.get(BASE_URL, params={"jour_type": JOUR_TYPE})
+    assert r.status_code == 200
+    by_ag = {f["properties"]["id_ag_num"]: f["properties"] for f in r.json()["features"]}
+    ag3 = by_ag[3]
+    assert ag3["nb_passage_total"] == 5
+    assert ag3["by_route_type"] == {}
+
+
+def test_jour_types_returns_present_values(isolated_client_authed, map_data):
+    """The /jour-types endpoint returns only jour_types that have E_1 rows,
+    with labels from TYPE_JOUR_VAC_LABELS."""
+    r = isolated_client_authed.get(f"/api/v1/projects/{PROJECT_ID}/map/jour-types")
+    assert r.status_code == 200
+    body = r.json()
+    # Fixture seeds type_jour ∈ {1, 2} (AG1 has both, AG2 has only 1).
+    values = [item["value"] for item in body]
+    assert values == [1, 2]
+    labels_by_value = {item["value"]: item["label"] for item in body}
+    assert labels_by_value[1] == "Lundi_Scolaire"
+    assert labels_by_value[2] == "Mardi_Scolaire"
+
+
+def test_jour_types_missing_project_404(isolated_client_authed):
+    """Unknown project_id → 404."""
+    r = isolated_client_authed.get("/api/v1/projects/does-not-exist/map/jour-types")
+    assert r.status_code == 404
 
 
 def test_passage_ag_counts_respect_jour_type(isolated_client_authed, map_data):

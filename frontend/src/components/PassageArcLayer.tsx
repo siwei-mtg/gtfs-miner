@@ -8,6 +8,7 @@ interface PassageArcLayerProps {
   jourType: number;
   visible?: boolean;
   maxWidthPx?: number;
+  onLoadingChange?: (loading: boolean) => void;
 }
 
 const LAYER_ID = 'passage-arc-layer';
@@ -41,6 +42,7 @@ export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
   jourType,
   visible = true,
   maxWidthPx = 40,
+  onLoadingChange,
 }) => {
   const { map } = useMap();
   const { token } = useAuthContext();
@@ -99,6 +101,7 @@ export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
     map.on('mouseleave', LAYER_ID, onLeave);
 
     const fetchData = async () => {
+      onLoadingChange?.(true);
       try {
         const res = await fetch(
           `/api/v1/projects/${projectId}/map/passage-arc?jour_type=${jourType}&split_by=none`,
@@ -110,6 +113,8 @@ export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
         src?.setData(data);
       } catch (err) {
         console.error('Error loading PassageArcLayer:', err);
+      } finally {
+        onLoadingChange?.(false);
       }
     };
     fetchData();
@@ -120,7 +125,7 @@ export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
       popupRef.current?.remove();
       popupRef.current = null;
     };
-  }, [map, visible, projectId, jourType, maxWidthPx, token]);
+  }, [map, visible, projectId, jourType, maxWidthPx, token, onLoadingChange]);
 
   return null;
 };

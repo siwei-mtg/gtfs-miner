@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ProgressPanel } from '@/components/organisms/ProgressPanel';
 import { DownloadButton } from '@/components/organisms/DownloadButton';
@@ -7,11 +7,13 @@ import { MapView } from '@/components/organisms/MapView';
 import { PassageAGLayer } from '@/components/PassageAGLayer';
 import { PassageArcLayer } from '@/components/PassageArcLayer';
 import { useProjectProgress } from '../hooks/useProjectProgress';
+import { getJourTypes, type JourTypeOption } from '@/api/client';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/atoms/button';
 import { ChevronLeft, Map as MapIcon, Table as TableIcon } from 'lucide-react';
 import { Badge } from '@/components/atoms/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const RESULT_TABLES = [
   { id: 'a1', label: 'A1: Arrêts Génériques' },
@@ -36,10 +38,27 @@ export const ProjectDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(RESULT_TABLES[0].id);
   const [viewMode, setViewMode] = useState<'map' | 'table'>('table');
+  const [jourType, setJourType] = useState<number>(1);
+  const [jourTypeOptions, setJourTypeOptions] = useState<JourTypeOption[]>([]);
 
   const { messages, latestStatus } = useProjectProgress(id || null);
 
   const isCompleted = latestStatus === 'completed';
+
+  useEffect(() => {
+    if (!id || !isCompleted) return;
+    getJourTypes(id)
+      .then((opts) => {
+        setJourTypeOptions(opts);
+        if (opts.length && !opts.some((o) => o.value === jourType)) {
+          setJourType(opts[0].value);
+        }
+      })
+      .catch((err) => console.error('Failed to load jour-types:', err));
+    // Only refetch when the project identity or completion state flips —
+    // keeping the current jourType across reloads is intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isCompleted]);
 
   if (!id) return <div>Invalid Project ID</div>;
 
@@ -101,11 +120,32 @@ export const ProjectDetailPage: React.FC = () => {
         <>
           {viewMode === 'map' ? (
             <Card className="overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-3 border-b bg-muted/30">
+                <label htmlFor="jour-type-select" className="text-sm font-medium">
+                  Jour type :
+                </label>
+                <Select
+                  value={String(jourType)}
+                  onValueChange={(v) => setJourType(Number(v))}
+                  disabled={jourTypeOptions.length === 0}
+                >
+                  <SelectTrigger id="jour-type-select" className="w-60">
+                    <SelectValue placeholder="Chargement..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jourTypeOptions.map((o) => (
+                      <SelectItem key={o.value} value={String(o.value)}>
+                        {o.value} – {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <CardContent className="p-0">
                 <div className="h-[600px] w-full relative">
-                  <MapView projectId={id} jourType={1}>
-                    <PassageAGLayer projectId={id} jourType={1} />
-                    <PassageArcLayer projectId={id} jourType={1} />
+                  <MapView projectId={id} jourType={jourType}>
+                    <PassageAGLayer projectId={id} jourType={jourType} />
+                    <PassageArcLayer projectId={id} jourType={jourType} />
                   </MapView>
                 </div>
               </CardContent>

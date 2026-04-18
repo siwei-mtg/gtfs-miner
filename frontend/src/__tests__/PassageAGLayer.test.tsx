@@ -111,7 +111,7 @@ describe('PassageAGLayer', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('should open native Popup with stop details on marker click', async () => {
+  it('should show Popup on hover and remove on mouse leave', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => mockData });
 
     render(
@@ -122,8 +122,10 @@ describe('PassageAGLayer', () => {
 
     await vi.waitFor(() => expect(maplibregl.Marker).toHaveBeenCalled());
 
+    const el = getMarkerElement();
+
     act(() => {
-      getMarkerElement().click();
+      el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     });
 
     expect(maplibregl.Popup).toHaveBeenCalled();
@@ -135,6 +137,84 @@ describe('PassageAGLayer', () => {
     expect(html).toContain('100');
     expect(html).toContain('Bus');
     expect(html).toContain('Tramway');
+
+    // Hover config must not include a close button or close-on-click behaviour.
+    const popupArgs = vi.mocked(maplibregl.Popup).mock.calls[0][0] as {
+      closeButton?: boolean;
+      closeOnClick?: boolean;
+    };
+    expect(popupArgs.closeButton).toBe(false);
+    expect(popupArgs.closeOnClick).toBe(false);
+
+    // Leaving the marker removes the popup.
+    const removeCallsBefore = mockPopupInstance.remove.mock.calls.length;
+    act(() => {
+      el.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+    });
+    expect(mockPopupInstance.remove.mock.calls.length).toBeGreaterThan(removeCallsBefore);
+  });
+
+  it('should render fallback marker when by_route_type is empty but total > 0', async () => {
+    const fallbackData = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          geometry: { type: 'Point', coordinates: [2.35, 48.85] },
+          properties: {
+            id_ag_num: 42,
+            stop_name: 'Broken Calendar Stop',
+            nb_passage_total: 86,
+            by_route_type: {},
+          },
+        },
+      ],
+    };
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => fallbackData });
+
+    render(
+      <MapContext.Provider value={{ map: mockMap as any }}>
+        <PassageAGLayer projectId="p1" jourType={1} visible={true} />
+      </MapContext.Provider>
+    );
+
+    await vi.waitFor(() => expect(maplibregl.Marker).toHaveBeenCalled());
+
+    // Marker still created (fallback SVG populated)
+    expect(mockMarkerInstance.setLngLat).toHaveBeenCalledWith([2.35, 48.85]);
+
+    // Hover shows a popup with the fallback note
+    const el = getMarkerElement();
+    act(() => {
+      el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+    });
+    const html = mockPopupInstance.setHTML.mock.calls[0][0] as string;
+    expect(html).toContain('Broken Calendar Stop');
+    expect(html).toContain('86');
+    expect(html).toContain('Données calendrier indisponibles');
+  });
+
+  it('should report loading state via onLoadingChange around fetch', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => mockData });
+    const onLoadingChange = vi.fn();
+
+    render(
+      <MapContext.Provider value={{ map: mockMap as any }}>
+        <PassageAGLayer
+          projectId="p1"
+          jourType={1}
+          visible={true}
+          onLoadingChange={onLoadingChange}
+        />
+      </MapContext.Provider>
+    );
+
+    await vi.waitFor(() => expect(maplibregl.Marker).toHaveBeenCalled());
+
+    // Sequence: true (start) → false (finally).
+    expect(onLoadingChange).toHaveBeenCalledWith(true);
+    expect(onLoadingChange).toHaveBeenCalledWith(false);
+    const lastCall = onLoadingChange.mock.calls.at(-1);
+    expect(lastCall?.[0]).toBe(false);
   });
 
   it('should emit unique route_types via onRouteTypesChange after fetch', async () => {

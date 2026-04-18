@@ -33,18 +33,16 @@ def build_passage_ag_geojson(project_id: str, jour_type: int, db: Session) -> di
     Build a GeoJSON FeatureCollection of AG (generic stop) points with
     passage counts disaggregated by route_type.
 
-    Join chain:
-        E1 (filtered by type_jour) → C2 on id_ag_num → B1 on id_ligne_num
-                                                    → D2 on id_service_num + id_ligne_num
-                                                      (filtered by Type_Jour)
-        COUNT(DISTINCT id_course_num) GROUP BY (id_ag_num, route_type)
+    Authoritative total: `nb_passage_total` is read directly from
+    `ResultE1PassageAG.nb_passage` (already correctly grouped by type_jour
+    during the pipeline).  The C2→B1→D2 chain is used only to derive the
+    per-route_type breakdown (`by_route_type`).
 
-    The D2 join is critical: without it, counts aggregate across all operating
-    days, inflating by the service calendar footprint (a hub stop with 2247
-    total courses can correspond to only 598 courses on a given jour_type).
-
-    nb_passage_total == sum(by_route_type.values()) is guaranteed by
-    construction: both values derive from the same course-count query.
+    Invariant: `sum(by_route_type.values()) <= nb_passage_total`.
+    Equality holds when D2.Type_Jour is populated for every service this
+    project touches.  When D2.Type_Jour is NULL (calendar resolution failed
+    for some projects), the breakdown is empty but the total still renders
+    correctly — the frontend falls back to a neutral gray circle.
 
     Args:
         project_id: Project identifier (tenant-scoped by caller).
@@ -67,8 +65,9 @@ def build_passage_ag_geojson(project_id: str, jour_type: int, db: Session) -> di
     if not e1_rows:
         return {"type": "FeatureCollection", "features": []}
 
-    ag_meta: dict[int, tuple[str | None, float | None, float | None]] = {
-        r.id_ag_num: (r.stop_name, r.stop_lat, r.stop_lon)
+    # Fourth element is the authoritative nb_passage from E_1 (per type_jour).
+    ag_meta: dict[int, tuple[str | None, float | None, float | None, float]] = {
+        r.id_ag_num: (r.stop_name, r.stop_lat, r.stop_lon, r.nb_passage or 0)
         for r in e1_rows
     }
     ag_ids = list(ag_meta.keys())
@@ -107,14 +106,14 @@ def build_passage_ag_geojson(project_id: str, jour_type: int, db: Session) -> di
     for ag_num, route_type, count in count_rows:
         by_ag[ag_num][route_type] = count
 
-    # Step 3: assemble GeoJSON features
+    # Step 3: assemble GeoJSON features.  `nb_passage_total` comes straight
+    # from E_1; `by_route_type` may be empty when D2.Type_Jour is NULL.
     features = []
     for ag_num in ag_ids:
-        stop_name, lat, lon = ag_meta[ag_num]
+        stop_name, lat, lon, nb_passage_e1 = ag_meta[ag_num]
         if lat is None or lon is None:
             continue
         by_rt = by_ag.get(ag_num, {})
-        total = sum(by_rt.values())
         features.append(
             {
                 "type": "Feature",
@@ -125,7 +124,7 @@ def build_passage_ag_geojson(project_id: str, jour_type: int, db: Session) -> di
                 "properties": {
                     "id_ag_num": ag_num,
                     "stop_name": stop_name,
-                    "nb_passage_total": total,
+                    "nb_passage_total": int(nb_passage_e1),
                     "by_route_type": {str(k): v for k, v in by_rt.items()},
                 },
             }

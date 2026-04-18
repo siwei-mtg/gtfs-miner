@@ -11,13 +11,17 @@ from pathlib import Path
 
 from ...db.database import get_db
 from ...db.models import Project, User
-from ...db.result_models import ResultA1ArretGenerique
+from ...db.result_models import ResultA1ArretGenerique, ResultE1PassageAG
 from ...schemas.project import ProjectCreate, ProjectResponse
 from ...services.worker import run_project_task_sync
 from ...services.result_query import TABLE_REGISTRY, query_table
 from ...services.map_builder import build_passage_ag_geojson, build_passage_arc_geojson, export_geopackage
+from ...services.gtfs_core.calendar_provider import TYPE_JOUR_VAC_LABELS
 from ...core.config import settings, TEMP_DIR, PROJECT_DIR
 from ...api.deps import get_current_active_user
+
+# Reverse {label: value} → {value: label} for jour_type display.
+_JOUR_TYPE_LABEL_BY_VALUE: dict[int, str] = {v: k for k, v in TYPE_JOUR_VAC_LABELS.items()}
 
 router = APIRouter()
 
@@ -293,6 +297,41 @@ def get_map_bounds(
         "max_lng": max_lng,
         "max_lat": max_lat,
     }
+
+
+@router.get("/{project_id}/map/jour-types")
+def list_jour_types(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    List jour_type values actually present in this project's E_1 data,
+    paired with their French calendar labels (TYPE_JOUR_VAC_LABELS).
+
+    Response: [{"value": 1, "label": "Lundi_Scolaire"}, ...]
+    Only values with at least one E_1 row are returned so the UI does not
+    offer empty options for this particular dataset.
+    """
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    rows = (
+        db.query(ResultE1PassageAG.type_jour)
+        .filter(ResultE1PassageAG.project_id == project_id)
+        .distinct()
+        .order_by(ResultE1PassageAG.type_jour)
+        .all()
+    )
+    return [
+        {"value": r[0], "label": _JOUR_TYPE_LABEL_BY_VALUE.get(r[0], str(r[0]))}
+        for r in rows
+        if r[0] is not None
+    ]
 
 
 @router.get("/{project_id}/export/geopackage")

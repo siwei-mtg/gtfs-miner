@@ -94,3 +94,16 @@ export function generatePieSvg(data: Record<string, number>, radius: number): st
     </svg>
   `;
 }
+
+/**
+ * Neutral-color fallback circle used when a stop has a valid passage total
+ * but the per-route_type breakdown is unavailable (e.g. broken D2 calendar).
+ */
+export function generateFallbackCircleSvg(radius: number, color: string = '#94a3b8'): string {
+  const size = radius * 2;
+  return `
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${radius}" cy="${radius}" r="${radius}" fill="${color}" fill-opacity="0.7" stroke="#475569" stroke-width="1" />
+    </svg>
+  `;
+}

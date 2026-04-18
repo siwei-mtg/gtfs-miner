@@ -1,9 +1,9 @@
 # PRD — GTFS Miner Web（产品需求文档）
 
-**版本**：0.8  
+**版本**：0.9  
 **作者**：Wei SI / Transamo  
 **日期**：2026-04-18  
-**状态**：Phase 0 ✅ 已完成，Phase 1 ✅ 技术完成（待 Transamo 内部试用），Phase 2 🔄 进行中（Task 41-45 ✅ GROUP UI 完成；Task 30-35 ✅ 地图 API + 图层完成）
+**状态**：Phase 0 ✅ 已完成，Phase 1 ✅ 技术完成（待 Transamo 内部试用），Phase 2 🔄 进行中（Task 41-45 ✅ GROUP UI 完成；Task 30-35 ✅ 地图 API + 图层完成；UX 补丁含 D2 容错、加载指示、jour_type 选择器 ✅ 2026-04-18）
 
 ---
 
@@ -263,10 +263,13 @@ DWD 层（A_*/B_*/C_*/D_*）  ←  Agent 的计算原料
 
 | 图层 | 说明 |
 |------|------|
-| E_1 站点通过 | 点图层，每个 AG 以**空间饼状图**标注，扇区 = 途经线路 route_type 构成（按通过次数加权） |
+| E_1 站点通过 | 点图层，每个 AG 以**空间饼状图**标注，扇区 = 途经线路 route_type 构成（按通过次数加权）。当 D2 日历数据缺失时降级为中性灰圆，popup 提示"Données calendrier indisponibles" |
 | E_4 弧段通过 | **带宽图**（对齐 AequilibraE Bandwidth on network links）：每条有向弧段渲染为可变宽度线段，线宽（px）= `weight × max_width_px`；AB 向右偏移 `线宽/2 + 0.1px`，BA 向左对称，两侧视觉不重叠。`max_width_px` 通过前端控件调节。GeoPackage 导出为 **LineString** 图层，携带 `nb_passage`、`max_nb_passage`、`direction` 字段，由 QGIS 数据定义覆盖（`scale_linear` 线宽 + 偏移 + 线型）渲染，无需 Polygon 预计算 |
+| **E_4 jour_type 对比（Phase 2 后续 Task 47）** | 选定基线 jour_type A 与对比 jour_type B，弧段渲染 `Δ = nb_passage(B) − nb_passage(A)`。**绿色 = 减少**、**红色 = 增加**、线宽 = `|Δ|` 全局归一化。用于比较运营日（学期 vs 假期、工作日 vs 周末）通行量差异 |
 
-功能：底图切换（OSM / 空白）、图层开关、要素点击弹窗、**GeoPackage 导出**（含所有矢量图层）
+**共享交互**：jour_type 下拉（基于 `GET /map/jour-types`，标签取自 `TYPE_JOUR_VAC_LABELS`）、hover 弹窗（点击和悬浮统一为悬浮）、MapLibre 原生缩放控件（bottom-left）、加载指示条（顶部中央，数据请求期间显示）
+
+功能：底图切换（OSM / 空白）、图层开关、要素悬浮弹窗、**GeoPackage 导出**（含所有矢量图层）
 
 **GeoPackage 导出内存策略**：导出时真正的内存瓶颈在构建 GeoDataFrame（geopandas join + geometry 构造），而非写文件格式本身。对 IDFM 规模（~5 万站点、数千弧段）的数据集，全量一次性构建 GeoDataFrame 峰值内存约 800 MB–1.2 GB。为控制内存：
 - `export_geopackage()` 按图层逐个处理（passage_ag → passage_arc → arrets），写完即释放
@@ -532,11 +535,13 @@ GTFS_algorithm.py    → 不迁移（legacy，保留备用）
 - [x] MapLibre 底图组件（Task 33：OSM 底图 + E_1/E_4 图层开关 + AG 点击回调）（2026-04-15）
 - [x] E_1 站点通过图层（Task 34：AG 空间饼状图，扇区 = route_type 构成，按通过次数加权；proportional-area 缩放；popup `by_route_type` 按 `jour_type` 过滤）（2026-04-16；popup jour_type 过滤补丁 2026-04-18）
 - [x] E_4 弧段通过图层（Task 35：AequilibraE 带宽图，`weight × maxWidthPx`；后端几何规范化 `min(a,b)→max(a,b)`，`sign(direction)` 偏移分侧；hover tooltip）（2026-04-18）
+- [x] **地图 UX 补丁**：popup 统一悬浮、MapLibre 原生缩放、jour_type 下拉 + `/map/jour-types` 端点、D2 Type_Jour NULL 容错（降级中性灰圆）、加载指示器（2026-04-18）
 - [ ] GeoPackage 导出（含所有矢量图层）
 - [ ] 数据看板（F-08）：
   - [ ] 饼状图 / 柱状图（线路模式、班次数、KCC）
   - [ ] 动态表格字段筛选器（多选下拉 + 数值范围）
   - [ ] 图表 × 表格 × 地图三视图联动筛选
+- [ ] **jour_type 对比模式（Task 47，未排期）**：E_4 弧段显示 Δ = `nb_passage(B) − nb_passage(A)`，绿色减少 / 红色增加，线宽 = `|Δ|` 归一化；用于运营日对比
 
 ---
 

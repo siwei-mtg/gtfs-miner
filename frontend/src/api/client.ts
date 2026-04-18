@@ -129,3 +129,16 @@ export async function getMe(token: string): Promise<UserResponse> {
   if (!res.ok) throw new Error(`getMe failed: ${res.status}`)
   return res.json()
 }
+
+export interface JourTypeOption {
+  value: number
+  label: string
+}
+
+export async function getJourTypes(projectId: string): Promise<JourTypeOption[]> {
+  const res = await fetch(`${BASE}/${projectId}/map/jour-types`, {
+    headers: getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error(`getJourTypes failed: ${res.status}`)
+  return res.json()
+}

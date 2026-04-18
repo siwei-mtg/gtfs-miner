@@ -24,6 +24,8 @@ export const MapView: React.FC<MapViewProps> = ({
   const [e1Visible, setE1Visible] = useState(true);
   const [e4Visible, setE4Visible] = useState(true);
   const [availableRouteTypes, setAvailableRouteTypes] = useState<string[]>([]);
+  const [e1Loading, setE1Loading] = useState(false);
+  const [e4Loading, setE4Loading] = useState(false);
 
   // Map initialisation — re-runs only when project or day type changes.
   // Bounds are fetched from the backend BEFORE creating the MapLibre instance
@@ -91,6 +93,10 @@ export const MapView: React.FC<MapViewProps> = ({
       newMap.on('load', () => {
         if (!mounted) return;
         newMap!.resize(); // force canvas to adopt final CSS dimensions
+        newMap!.addControl(
+          new maplibregl.NavigationControl({ showCompass: false, showZoom: true }),
+          'bottom-left',
+        );
         setMap(newMap!);
       });
     };
@@ -102,7 +108,8 @@ export const MapView: React.FC<MapViewProps> = ({
       newMap?.remove();
       setMap(null);
     };
-  }, [projectId, jourType]); // token excluded intentionally — closure is stable enough
+  }, [projectId]); // Map itself does not depend on jourType; layers re-fetch on jourType change.
+  // token excluded intentionally — closure is stable enough.
 
   return (
     <MapContext.Provider value={{ map }}>
@@ -136,6 +143,17 @@ export const MapView: React.FC<MapViewProps> = ({
         {/* Legend — lists route_types present in the currently-loaded E_1 data */}
         {e1Visible && <PieChartLegend routeTypes={availableRouteTypes} />}
 
+        {/* Loading indicator (top center) — shown while any active layer is fetching */}
+        {(e1Loading || e4Loading) && (
+          <div
+            role="status"
+            className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-background/90 backdrop-blur-sm border border-border rounded-md px-3 py-1.5 text-xs shadow-sm flex items-center gap-2"
+          >
+            <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
+            Chargement des passages…
+          </div>
+        )}
+
         {/* Child Layers (e.g. PassageAGLayer) */}
         {map && children && (
           <div className="hidden">
@@ -150,6 +168,7 @@ export const MapView: React.FC<MapViewProps> = ({
                     projectId,
                     jourType,
                     onRouteTypesChange: setAvailableRouteTypes,
+                    onLoadingChange: setE1Loading,
                   });
                 }
                 if (childType === 'PassageArcLayer') {
@@ -157,6 +176,7 @@ export const MapView: React.FC<MapViewProps> = ({
                     visible: e4Visible,
                     projectId,
                     jourType,
+                    onLoadingChange: setE4Loading,
                   });
                 }
                 return React.cloneElement(child as React.ReactElement<any>, { visible: true });

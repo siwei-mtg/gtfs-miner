@@ -2,13 +2,14 @@ import React, { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import { useMap } from '@/contexts/MapContext';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { generatePieSvg, getRouteTypeColor, getRouteTypeLabel } from '@/lib/map-utils';
+import { generatePieSvg, generateFallbackCircleSvg, getRouteTypeColor, getRouteTypeLabel } from '@/lib/map-utils';
 
 interface PassageAGLayerProps {
   projectId: string;
   jourType: number;
   visible?: boolean;
   onRouteTypesChange?: (routeTypes: string[]) => void;
+  onLoadingChange?: (loading: boolean) => void;
 }
 
 const MIN_RADIUS_PX = 6;
@@ -25,6 +26,7 @@ function buildPopupHTML(
   nb_passage_total: number,
   by_route_type: Record<string, number>,
 ): string {
+  const hasBreakdown = Object.keys(by_route_type).length > 0;
   const rows = Object.entries(by_route_type)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(
@@ -39,11 +41,15 @@ function buildPopupHTML(
       `,
     )
     .join('');
+  const fallbackNote = hasBreakdown
+    ? ''
+    : `<div style="font-size:0.75rem;color:#6b7280;font-style:italic;margin-top:4px;">Données calendrier indisponibles — répartition par ligne non calculable.</div>`;
   return `
     <div style="min-width:180px;">
       <div style="font-weight:600;margin-bottom:2px;">${escapeHtml(stop_name)}</div>
       <div style="font-size:0.75rem;color:#6b7280;margin-bottom:6px;">Total : ${nb_passage_total} passages</div>
       <div style="display:flex;flex-direction:column;gap:2px;">${rows}</div>
+      ${fallbackNote}
     </div>
   `;
 }
@@ -53,6 +59,7 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
   jourType,
   visible = true,
   onRouteTypesChange,
+  onLoadingChange,
 }) => {
   const { map } = useMap();
   const { token } = useAuthContext();
@@ -70,6 +77,7 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
     }
 
     const fetchData = async () => {
+      onLoadingChange?.(true);
       try {
         const response = await fetch(`/api/v1/projects/${projectId}/map/passage-ag?jour_type=${jourType}`, {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {},
@@ -99,7 +107,10 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
             MAX_RADIUS_PX * Math.sqrt(totalVal / maxCount),
           );
 
-          const svgString = generatePieSvg(by_route_type, radius);
+          const hasBreakdown = Object.keys(by_route_type ?? {}).length > 0;
+          const svgString = hasBreakdown
+            ? generatePieSvg(by_route_type, radius)
+            : generateFallbackCircleSvg(radius);
           if (!svgString) return;
 
           const el = document.createElement('div');
@@ -111,18 +122,24 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
             .setLngLat([coordinates[0], coordinates[1]])
             .addTo(map);
 
-          el.addEventListener('click', (e) => {
-            e.stopPropagation();
+          // Hover-triggered popup, consistent with PassageArcLayer.
+          const showPopup = () => {
             popupRef.current?.remove();
             popupRef.current = new maplibregl.Popup({
-              closeButton: true,
-              closeOnClick: true,
+              closeButton: false,
+              closeOnClick: false,
               offset: radius + 4,
             })
               .setLngLat([coordinates[0], coordinates[1]])
               .setHTML(buildPopupHTML(stop_name, nb_passage_total, by_route_type))
               .addTo(map);
-          });
+          };
+          const hidePopup = () => {
+            popupRef.current?.remove();
+            popupRef.current = null;
+          };
+          el.addEventListener('mouseenter', showPopup);
+          el.addEventListener('mouseleave', hidePopup);
 
           markersRef.current.push(marker);
         });
@@ -137,6 +154,8 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
         onRouteTypesChange?.(routeTypes);
       } catch (error) {
         console.error('Error loading PassageAGLayer:', error);
+      } finally {
+        onLoadingChange?.(false);
       }
     };
 
@@ -148,7 +167,7 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
       popupRef.current?.remove();
       popupRef.current = null;
     };
-  }, [map, visible, projectId, jourType, onRouteTypesChange]);
+  }, [map, visible, projectId, jourType, onRouteTypesChange, onLoadingChange]);
 
   return null;
 };

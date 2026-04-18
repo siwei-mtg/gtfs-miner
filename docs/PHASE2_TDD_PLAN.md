@@ -1,8 +1,8 @@
 # Phase 2 TDD 任务拆解计划
 
-**版本**：1.6  
+**版本**：1.7  
 **日期**：2026-04-18  
-**状态**：进行中（Task 41–45 ✅ 已完成；Task 30–32 ✅ 已完成；Task 33 ✅ 已完成；Task 34 ✅ 已完成；Task 35 ✅ 已完成 2026-04-18）
+**状态**：进行中（Task 41–45 ✅ 已完成；Task 30–32 ✅ 已完成；Task 33 ✅ 已完成；Task 34 ✅ 已完成；Task 35 ✅ 已完成 + UX 补丁含 D2 容错/加载指示/jour_type 选择器 2026-04-18；Task 47 jour_type 对比模式已记录未排期）
 
 ---
 
@@ -445,6 +445,19 @@ GeoPackage 导出的内存瓶颈在 GeoDataFrame 构建（geopandas join + geome
 2. **后端几何规范化**（修正原渲染公式的侧效应）：`map_builder.build_passage_arc_geojson` 与 `export_geopackage` 统一把 LineString 方向规范化为 `min(a,b)→max(a,b)`，`direction` 字段独立携带语义流向。否则 AB 与 BA 的几何反向叠加 `sign(direction)` 偏移会把两者折回同侧。新增 `test_passage_arc_geometry_orientation_normalized` 作回归守护。GeoPackage QGIS `if("direction"='AB', 1, -1) * ...` 表达式同样受益。
 3. **修复 Task 34 遗漏的 popup 计数 BUG**（实施 Task 35 时发现）：`build_passage_ag_geojson` step 2（C2→B1 count）原先**未 JOIN D2 过滤 `type_jour`**，导致 popup 显示的 `nb_passage_total` 跨所有运营日累计，实测 AG 10692 显示 2247 而正确值 598（与 `result_e1_passage_ag.nb_passage` 一致）。修复：追加 `D2 JOIN` on `(id_service_num, id_ligne_num, project_id) + Type_Jour == jour_type`；fixture 扩展含 `id_service_num` 和 D2 seed；新增 `test_passage_ag_counts_respect_jour_type` 作回归。
 
+**UX 补丁批次（2026-04-18 commit `<hash>`）**：内部试用反馈引出 5 项改动
+
+1. **交互一致性**：`PassageAGLayer` 从 click-to-popup 迁移到 `mouseenter/mouseleave`，与 `PassageArcLayer` 一致；popup 配置改为 `closeButton: false, closeOnClick: false`（短暂悬浮，非模态），保留富内容 HTML 和 `offset: radius+4` 定位
+2. **缩放控件**：`MapView` 在 `load` 回调内 `addControl(new NavigationControl({showCompass:false}), 'bottom-left')`；原生 MapLibre 实现
+3. **jour_type 选择器**：新增 `GET /map/jour-types` 端点返回 `[{value, label}]`（标签从 `TYPE_JOUR_VAC_LABELS` 反查，只返回 E_1 中实际存在的 jour_type）；`ProjectDetailPage` 增 `jourType` state + shadcn `Select`，仅 map 视图显示，驱动 E_1/E_4 两个图层；移除硬编码 `{1}`
+4. **MapView useLayoutEffect 去抖**：依赖从 `[projectId, jourType]` 改为 `[projectId]` 避免切换日类型时重建整个 map 实例（原来会触发 `newMap.remove()` + `setMap(null)` + 子组件卸载挂载链，在某些项目上引发白屏竞态）
+5. **D2 容错 + 加载指示**（用户发现项目 `c6545e8b` passage_ag 图层不显示后）：
+   - 根因：`result_d2_service_jourtype.Type_Jour` 对部分项目全 NULL（pipeline 日历解析未完全覆盖），D2 JOIN + `Type_Jour==jour_type` 过滤把所有计数归零 → `by_route_type={}` → `generatePieSvg` 返回空字符串 → marker 不可见
+   - 后端修复：`nb_passage_total` 直接读 `ResultE1PassageAG.nb_passage`（E_1 为权威来源，已正确按 type_jour 分组）；`by_route_type` 仍通过 D2 JOIN 尽力生成，允许空。新不变量 `sum(by_route_type.values()) <= nb_passage_total`，D2 健全时等号成立
+   - 前端降级：`map-utils.ts` 新增 `generateFallbackCircleSvg(radius, color='#94a3b8')`；`PassageAGLayer` 在 `by_route_type` 空且 `total > 0` 时渲染中性灰圆而非空 SVG；popup 加"Données calendrier indisponibles"提示
+   - 加载指示器：`PassageAGLayer` 和 `PassageArcLayer` 新增 `onLoadingChange?: (bool) => void` prop，fetch 的 `try/finally` 报告；`MapView` 维护 `e1Loading/e4Loading`，合并后在地图顶部中央渲染 frosted-glass 小条"Chargement des passages…"（含脉冲点）
+   - 测试：`test_passage_ag_total_authoritative_from_e1`（替换原 `test_passage_ag_total_equals_sum`，断言 E_1 权威 + `sum <= total`）、`test_passage_ag_fallback_when_d2_type_jour_null`（seed AG3 + 服务 999 的 D2 `Type_Jour=NULL`，验证 fallback 生效）、前端 `should render fallback marker when by_route_type is empty but total > 0`、`should report loading state via onLoadingChange around fetch`
+
 ---
 
 ### Task 36：GeoPackage 下载按钮
@@ -622,3 +635,38 @@ Task 33 ─────────┘
 - Tasks 33–40（所有前端组件）**依赖 Task 45 完成**
 
 GROUP A（Tasks 30–32）与 GROUP UI 并行；看板联动（Task 39）依赖所有子组件（Tasks 33–38）就绪。
+
+---
+
+## 未来功能（未排期）
+
+### Task 47：jour_type 对比模式（E_4 差值带宽）
+
+**背景**：运营分析常见需求是比较两个日类型（基线 vs 对比）的弧段通过数变化，例如「学期工作日 vs 假期工作日」「周一 vs 周六」。当前地图只能查看单一 jour_type，对比需手动切换并记忆，效率低。
+
+**功能目标**：
+- Map 视图增一个模式切换：**单一 jour_type** ↔ **对比模式**
+- 对比模式下显示 **2 个 Select**（基线 A / 对比 B）
+- E_4 弧段渲染 `Δ = nb_passage(B) − nb_passage(A)`
+  - **绿色**（`#22c55e`）：Δ < 0（通过数下降）
+  - **红色**（`#ef4444`）：Δ > 0（通过数上升）
+  - Δ == 0 或缺失：隐藏
+- **线宽** = `|Δ| / max(|Δ|) × maxWidthPx`（全局归一化）
+- Popup：基线值、对比值、Δ（带正负号与百分比）
+
+**后端**：新增 `GET /{project_id}/map/passage-arc-delta?baseline=X&compare=Y` 返回 Δ GeoJSON
+- 复用 `build_passage_arc_geojson` 的几何规范化（`min(a,b)→max(a,b)`）
+- 新 properties：`delta: float`、`nb_passage_baseline: float`、`nb_passage_compare: float`、`weight: |Δ|/max(|Δ|)`
+
+**前端**：新组件 `PassageArcDeltaLayer.tsx`（或 `PassageArcLayer` 多态扩展）
+- paint `line-color` 用 `case`：`Δ < 0 → green`, `Δ > 0 → red`
+- paint `line-width` 表达式同 `PassageArcLayer`，基于 `weight`
+- 保留 `sign(direction)` offset 逻辑
+
+**E_1 对比（可选扩展）**：同日类型对比也可应用于站点饼图，但语义不如弧段直接（站点是多线路聚合，差值方向不明显），本任务先聚焦 E_4。
+
+**依赖**：Task 35（E_4 基础图层与几何规范化）
+
+**测试**：
+- 后端：`test_passage_arc_delta_returns_signed_deltas`、`test_passage_arc_delta_zero_filtered_out`
+- 前端：`test_delta_color_by_sign`、`test_delta_width_normalized`
