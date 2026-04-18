@@ -2,8 +2,8 @@
 
 **版本**：0.9  
 **作者**：Wei SI / Transamo  
-**日期**：2026-04-18  
-**状态**：Phase 0 ✅ 已完成，Phase 1 ✅ 技术完成（待 Transamo 内部试用），Phase 2 🔄 进行中（Task 41-45 ✅ GROUP UI 完成；Task 30-35 ✅ 地图 API + 图层完成；UX 补丁含 D2 容错、加载指示、jour_type 选择器 ✅ 2026-04-18）
+**日期**：2026-04-19  
+**状态**：Phase 0 ✅ 已完成，Phase 1 ✅ 技术完成（待 Transamo 内部试用），Phase 2 🔄 进行中（Task 41-45 ✅ GROUP UI 完成；Task 30-35 ✅ 地图 API + 图层完成；UX 补丁含 D2 容错、加载指示、jour_type 选择器 ✅ 2026-04-18；Task 36 ✅ GeoPackage 下载按钮 + 跨域文件名修复 2026-04-19）
 
 ---
 
@@ -536,7 +536,7 @@ GTFS_algorithm.py    → 不迁移（legacy，保留备用）
 - [x] E_1 站点通过图层（Task 34：AG 空间饼状图，扇区 = route_type 构成，按通过次数加权；proportional-area 缩放；popup `by_route_type` 按 `jour_type` 过滤）（2026-04-16；popup jour_type 过滤补丁 2026-04-18）
 - [x] E_4 弧段通过图层（Task 35：AequilibraE 带宽图，`weight × maxWidthPx`；后端几何规范化 `min(a,b)→max(a,b)`，`sign(direction)` 偏移分侧；hover tooltip）（2026-04-18）
 - [x] **地图 UX 补丁**：popup 统一悬浮、MapLibre 原生缩放、jour_type 下拉 + `/map/jour-types` 端点、D2 Type_Jour NULL 容错（降级中性灰圆）、加载指示器（2026-04-18）
-- [ ] GeoPackage 导出（含所有矢量图层）
+- [x] GeoPackage 导出（Task 36：地图工具栏「Exporter GeoPackage」按钮，随 `jour_type` 联动；连带修复 CORS `expose_headers` 使跨域下载能读取 `Content-Disposition` 获取 `{project_id}.gpkg` 文件名）（2026-04-19）
 - [ ] 数据看板（F-08）：
   - [ ] 饼状图 / 柱状图（线路模式、班次数、KCC）
   - [ ] 动态表格字段筛选器（多选下拉 + 数值范围）

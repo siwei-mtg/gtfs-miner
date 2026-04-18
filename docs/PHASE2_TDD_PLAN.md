@@ -1,8 +1,8 @@
 # Phase 2 TDD 任务拆解计划
 
-**版本**：1.7  
-**日期**：2026-04-18  
-**状态**：进行中（Task 41–45 ✅ 已完成；Task 30–32 ✅ 已完成；Task 33 ✅ 已完成；Task 34 ✅ 已完成；Task 35 ✅ 已完成 + UX 补丁含 D2 容错/加载指示/jour_type 选择器 2026-04-18；Task 47 jour_type 对比模式已记录未排期）
+**版本**：1.8  
+**日期**：2026-04-19  
+**状态**：进行中（Task 41–45 ✅ 已完成；Task 30–32 ✅ 已完成；Task 33 ✅ 已完成；Task 34 ✅ 已完成；Task 35 ✅ 已完成 + UX 补丁含 D2 容错/加载指示/jour_type 选择器 2026-04-18；Task 36 ✅ 已完成 2026-04-19；Task 47 jour_type 对比模式已记录未排期）
 
 ---
 
@@ -460,15 +460,22 @@ GeoPackage 导出的内存瓶颈在 GeoDataFrame 构建（geopandas join + geome
 
 ---
 
-### Task 36：GeoPackage 下载按钮 ✅ 已完成（2026-04-19）
+### Task 36：GeoPackage 下载按钮 ✅ 已完成（2026-04-19，commit `cc292e5`）
 
-**修改文件**：`frontend/src/pages/ProjectDetailPage.tsx`
+**修改文件**：`frontend/src/pages/ProjectDetailPage.tsx`、`frontend/src/api/client.ts`、`backend/app/main.py`（CORS）
 
 在地图工具栏（`jour_type` 选择器右侧，`ml-auto`）添加「Exporter GeoPackage」按钮：
-- 触发 `GET /export/geopackage?jour_type=X`（复用 `api/client.ts` 现有 `fetchBlob` + `triggerBlobDownload` 链路，自动解析 `Content-Disposition` 拿到文件名 `{project_id}.gpkg`）
+- 触发 `GET /export/geopackage?jour_type=X`（复用 `api/client.ts` 现有 `fetchBlob` + `triggerBlobDownload` 链路）
 - 新组件 `components/organisms/GeoPackageDownloadButton.tsx`（shadcn `Button variant="outline" size="sm"` + Lucide `Download` 图标；加载中切换为「Téléchargement…」；`aria-label="download-geopackage-button"`）
 - 仅在地图视图可见，随 `jour_type` 联动；`jourTypeOptions` 为空时禁用
 - 未扩展现有 `DownloadButton` 组件以避免回归其 `ProgressPanel` 用法
+
+**修复（实施中发现）**：跨域下载文件名丢失
+- 症状：下载文件名为 `download`（无后缀），应为 `{project_id}.gpkg`
+- 根因：`CORSMiddleware` 未设置 `expose_headers`，浏览器对跨域响应默认隐藏 `Content-Disposition`，前端 `fetchBlob` 正则匹配失败后 fallback 为 `'download'`。此 Bug 同样潜在影响 `downloadProjectResults` / `downloadTableCsv`（Dev Vite proxy 同源时掩盖，生产 `VITE_API_URL` 跨域时暴露）
+- 修复（双保险）：
+  1. **后端根因修复**：`backend/app/main.py` 的 `CORSMiddleware` 追加 `expose_headers=["Content-Disposition"]`，让所有 blob 下载（ZIP/CSV/GPKG）在跨域场景都能读到文件名
+  2. **前端显式兜底**：`downloadGeoPackage` 直接把 `${projectId}.gpkg` 传给 `triggerBlobDownload`，不依赖响应头解析；即使未来 CORS 回归也不会再退化为 `download` 无后缀文件
 
 **测试**（`frontend/src/__tests__/ProjectDetailPage.test.tsx`，全部通过）：
 1. `test_gpkg_button_exists` ✅ — 切换至地图视图后按钮存在
