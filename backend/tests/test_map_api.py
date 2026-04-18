@@ -7,13 +7,17 @@ Fixtures: isolated_client_authed (function-scoped, in-memory DB, auth bypassed)
 Seed layout:
   - 1 Project (proj-t30, completed, tenant_id=test-tenant-id)
   - 2 E1 rows for AG 1 and AG 2, type_jour=1
-  - 4 C2 rows: AG1 served by courses 10 (ligne 1) and 11 (ligne 2);
-               AG2 served by courses 10 (ligne 1) and 12 (ligne 3)
+  - 5 C2 rows with id_service_num:
+      service 100 (Type_Jour=1): AG1-course 10 (ligne 1), AG1-course 11 (ligne 2),
+                                 AG2-course 10 (ligne 1), AG2-course 12 (ligne 3)
+      service 200 (Type_Jour=2): AG1-course 99 (ligne 1)   ← must NOT leak into jour_type=1
   - 3 B1 rows: ligne 1 → route_type=3 (bus), ligne 2 → route_type=0 (tram),
                          ligne 3 → route_type=3 (bus)
+  - 2 D2 rows: (service 100 → Type_Jour=1), (service 200 → Type_Jour=2)
 
-Expected by_route_type for AG1: {"3": 1, "0": 1}  → total 2
-Expected by_route_type for AG2: {"3": 2}           → total 2
+Expected for jour_type=1:
+  AG1 by_route_type = {"3": 1, "0": 1}  → total 2  (course 99 filtered out)
+  AG2 by_route_type = {"3": 2}          → total 2
 """
 import pytest
 from sqlalchemy.orm import sessionmaker
@@ -28,6 +32,7 @@ from app.db.result_models import (
     ResultA1ArretGenerique,
     ResultC3ItineraireArc,
     ResultD1ServiceDate,
+    ResultD2ServiceJourtype,
 )
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -53,7 +58,8 @@ def map_data(test_engine):
     )
     session.add(project)
 
-    # E1: two AGs, same jour_type
+    # E1: two AGs on jour_type=1; AG1 also has a jour_type=2 row to verify
+    # the D2 filter via direct positive assertion at jour_type=2.
     session.add_all([
         ResultE1PassageAG(
             project_id=PROJECT_ID,
@@ -73,6 +79,15 @@ def map_data(test_engine):
             type_jour=JOUR_TYPE,
             nb_passage=2.0,
         ),
+        ResultE1PassageAG(
+            project_id=PROJECT_ID,
+            id_ag_num=1,
+            stop_name="Stop Alpha",
+            stop_lat=48.85,
+            stop_lon=2.35,
+            type_jour=2,
+            nb_passage=1.0,
+        ),
     ])
 
     # B1: 3 lines
@@ -82,14 +97,24 @@ def map_data(test_engine):
         ResultB1Ligne(project_id=PROJECT_ID, id_ligne_num=3, route_type=3),  # bus
     ])
 
-    # C2: courses stopping at AGs
-    # AG1: course 10 via ligne 1 (bus), course 11 via ligne 2 (tram)
-    # AG2: course 10 via ligne 1 (bus), course 12 via ligne 3 (bus)
+    # C2: courses stopping at AGs, each carrying id_service_num.
+    # Services 100 (Type_Jour=1) and 200 (Type_Jour=2) segregate operating days.
+    # Course 99 (service 200) must be filtered out of jour_type=1 responses.
     session.add_all([
-        ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=1, id_course_num=10, id_ligne_num=1),
-        ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=1, id_course_num=11, id_ligne_num=2),
-        ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=2, id_course_num=10, id_ligne_num=1),
-        ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=2, id_course_num=12, id_ligne_num=3),
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=1, id_course_num=10, id_ligne_num=1, id_service_num=100),
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=1, id_course_num=11, id_ligne_num=2, id_service_num=100),
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=2, id_course_num=10, id_ligne_num=1, id_service_num=100),
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=2, id_course_num=12, id_ligne_num=3, id_service_num=100),
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ag_num=1, id_course_num=99, id_ligne_num=1, id_service_num=200),
+    ])
+
+    # D2: service-to-Type_Jour mapping.  Each (id_ligne_num, id_service_num)
+    # pair that appears in C2 needs a row here for the D2 JOIN to match.
+    session.add_all([
+        ResultD2ServiceJourtype(project_id=PROJECT_ID, id_ligne_num=1, id_service_num=100, Type_Jour=1),
+        ResultD2ServiceJourtype(project_id=PROJECT_ID, id_ligne_num=2, id_service_num=100, Type_Jour=1),
+        ResultD2ServiceJourtype(project_id=PROJECT_ID, id_ligne_num=3, id_service_num=100, Type_Jour=1),
+        ResultD2ServiceJourtype(project_id=PROJECT_ID, id_ligne_num=1, id_service_num=200, Type_Jour=2),
     ])
 
     session.commit()
@@ -98,6 +123,9 @@ def map_data(test_engine):
     yield
 
     session = Session()
+    session.query(ResultD2ServiceJourtype).filter(
+        ResultD2ServiceJourtype.project_id == PROJECT_ID
+    ).delete(synchronize_session=False)
     session.query(ResultC2Itineraire).filter(
         ResultC2Itineraire.project_id == PROJECT_ID
     ).delete(synchronize_session=False)
@@ -149,6 +177,33 @@ def test_passage_ag_total_equals_sum(isolated_client_authed, map_data):
     for feature in r.json()["features"]:
         props = feature["properties"]
         assert props["nb_passage_total"] == sum(props["by_route_type"].values())
+
+
+def test_passage_ag_counts_respect_jour_type(isolated_client_authed, map_data):
+    """Counts must be filtered by jour_type via D2.
+
+    Regression guard: the fixture seeds course 99 on AG1 under service 200
+    (Type_Jour=2). A query for jour_type=1 must NOT include it.
+    Before the D2 join fix, AG1 totals incorrectly included course 99,
+    inflating the bus count from 1 to 2.
+    """
+    r1 = isolated_client_authed.get(BASE_URL, params={"jour_type": 1})
+    r2 = isolated_client_authed.get(BASE_URL, params={"jour_type": 2})
+    assert r1.status_code == 200 and r2.status_code == 200
+
+    by_ag_1 = {f["properties"]["id_ag_num"]: f["properties"] for f in r1.json()["features"]}
+    by_ag_2 = {f["properties"]["id_ag_num"]: f["properties"] for f in r2.json()["features"]}
+
+    # jour_type=1: only service-100 courses (10, 11, 12) count.
+    assert by_ag_1[1]["by_route_type"] == {"3": 1, "0": 1}
+    assert by_ag_1[1]["nb_passage_total"] == 2
+    assert by_ag_1[2]["by_route_type"] == {"3": 2}
+    assert by_ag_1[2]["nb_passage_total"] == 2
+
+    # jour_type=2: only AG1 has an E1 row for day 2; only course 99 (bus) counts.
+    assert 1 in by_ag_2 and 2 not in by_ag_2
+    assert by_ag_2[1]["by_route_type"] == {"3": 1}
+    assert by_ag_2[1]["nb_passage_total"] == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -335,6 +390,28 @@ def test_passage_arc_geometry_is_linestring(isolated_client_authed, arc_data):
         geom = feature["geometry"]
         assert geom["type"] == "LineString"
         assert len(geom["coordinates"]) == 2
+
+
+def test_passage_arc_geometry_orientation_normalized(isolated_client_authed, arc_data):
+    """AB and BA features for the same AG pair share the same LineString
+    orientation (lower→higher AG id), so renderer offset expressions with
+    `sign(direction)` can place them on opposite sides of the centerline."""
+    r = isolated_client_authed.get(BASE_URL_ARC, params={"jour_type": JOUR_TYPE_ARC})
+    assert r.status_code == 200
+    # Group coordinates by the unordered AG pair; all features sharing a pair
+    # must have identical coordinates (same orientation).
+    by_pair: dict[tuple[int, int], set[tuple]] = {}
+    for f in r.json()["features"]:
+        a = f["properties"]["id_ag_num_a"]
+        b = f["properties"]["id_ag_num_b"]
+        key = tuple(sorted((a, b)))
+        by_pair.setdefault(key, set()).add(
+            tuple(tuple(c) for c in f["geometry"]["coordinates"])
+        )
+    for key, coord_sets in by_pair.items():
+        assert len(coord_sets) == 1, (
+            f"AB and BA geometries diverge for pair {key}: {coord_sets}"
+        )
 
 
 def test_passage_arc_weight_normalized(isolated_client_authed, arc_data):

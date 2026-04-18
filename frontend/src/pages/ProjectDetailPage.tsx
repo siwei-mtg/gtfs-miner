@@ -5,6 +5,7 @@ import { DownloadButton } from '@/components/organisms/DownloadButton';
 import { ResultTable } from '@/components/organisms/ResultTable';
 import { MapView } from '@/components/organisms/MapView';
 import { PassageAGLayer } from '@/components/PassageAGLayer';
+import { PassageArcLayer } from '@/components/PassageArcLayer';
 import { useProjectProgress } from '../hooks/useProjectProgress';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/atoms/button';
@@ -104,6 +105,7 @@ export const ProjectDetailPage: React.FC = () => {
                 <div className="h-[600px] w-full relative">
                   <MapView projectId={id} jourType={1}>
                     <PassageAGLayer projectId={id} jourType={1} />
+                    <PassageArcLayer projectId={id} jourType={1} />
                   </MapView>
                 </div>
               </CardContent>

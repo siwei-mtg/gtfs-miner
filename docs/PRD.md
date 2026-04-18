@@ -1,9 +1,9 @@
 # PRD — GTFS Miner Web（产品需求文档）
 
-**版本**：0.7  
+**版本**：0.8  
 **作者**：Wei SI / Transamo  
-**日期**：2026-04-12  
-**状态**：Phase 0 ✅ 已完成，Phase 1 ✅ 技术完成（待 Transamo 内部试用），Phase 2 🔄 进行中（Task 41-45 ✅ GROUP UI 完成）
+**日期**：2026-04-18  
+**状态**：Phase 0 ✅ 已完成，Phase 1 ✅ 技术完成（待 Transamo 内部试用），Phase 2 🔄 进行中（Task 41-45 ✅ GROUP UI 完成；Task 30-35 ✅ 地图 API + 图层完成）
 
 ---
 
@@ -530,8 +530,8 @@ GTFS_algorithm.py    → 不迁移（legacy，保留备用）
   - [x] Task 44：ProjectDetailPage + ProgressPanel + UploadForm 重构 (2026-04-12)
   - [x] Task 45：ResultTable 重构（shadcn Table + Pagination）(2026-04-14)
 - [x] MapLibre 底图组件（Task 33：OSM 底图 + E_1/E_4 图层开关 + AG 点击回调）（2026-04-15）
-- [ ] E_1 站点通过图层（AG 空间饼状图：扇区 = route_type 构成，按通过次数加权）
-- [ ] E_4 弧段通过图层（AequilibraE 带宽图：weight × max_width_px px，gap_px 间距，可按 route_type 等分组堆叠；AB 右侧，BA 左侧）
+- [x] E_1 站点通过图层（Task 34：AG 空间饼状图，扇区 = route_type 构成，按通过次数加权；proportional-area 缩放；popup `by_route_type` 按 `jour_type` 过滤）（2026-04-16；popup jour_type 过滤补丁 2026-04-18）
+- [x] E_4 弧段通过图层（Task 35：AequilibraE 带宽图，`weight × maxWidthPx`；后端几何规范化 `min(a,b)→max(a,b)`，`sign(direction)` 偏移分侧；hover tooltip）（2026-04-18）
 - [ ] GeoPackage 导出（含所有矢量图层）
 - [ ] 数据看板（F-08）：
   - [ ] 饼状图 / 柱状图（线路模式、班次数、KCC）

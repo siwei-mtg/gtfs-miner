@@ -1,8 +1,8 @@
 # Phase 2 TDD 任务拆解计划
 
-**版本**：1.5  
-**日期**：2026-04-16  
-**状态**：进行中（Task 41–45 ✅ 已完成；Task 30–32 ✅ 已完成；Task 33 ✅ 已完成；Task 34 ✅ 已完成；Task 35 🔴 待开始 — E_4 弧段图层未渲染的根因）
+**版本**：1.6  
+**日期**：2026-04-18  
+**状态**：进行中（Task 41–45 ✅ 已完成；Task 30–32 ✅ 已完成；Task 33 ✅ 已完成；Task 34 ✅ 已完成；Task 35 ✅ 已完成 2026-04-18）
 
 ---
 
@@ -403,7 +403,7 @@ GeoPackage 导出的内存瓶颈在 GeoDataFrame 构建（geopandas join + geome
 
 ---
 
-### Task 35：E_4 有向弧段图层
+### Task 35：E_4 有向弧段图层 ✅ 已完成（2026-04-18）
 
 **创建文件**：`frontend/src/components/PassageArcLayer.tsx`
 
@@ -438,6 +438,12 @@ GeoPackage 导出的内存瓶颈在 GeoDataFrame 构建（geopandas join + geome
 3. `test_max_width_px_prop` — 传入 `maxWidthPx=20`，验证 paint 配置中线宽表达式使用 20
 
 **依赖**：Task 31、Task 33
+
+**实际实现要点**（与原计划差异及补丁）：
+
+1. **架构决策**：让 `PassageArcLayer` 独占 `passage-arc` 源+图层的完整生命周期（幂等创建、组件卸载不移除，随 MapView `map.remove()` 统一清理）。MapView 删除原 E_4 占位源/图层和独立可见性 `useEffect`，通过 `cloneElement` 注入 `visible=e4Visible`。
+2. **后端几何规范化**（修正原渲染公式的侧效应）：`map_builder.build_passage_arc_geojson` 与 `export_geopackage` 统一把 LineString 方向规范化为 `min(a,b)→max(a,b)`，`direction` 字段独立携带语义流向。否则 AB 与 BA 的几何反向叠加 `sign(direction)` 偏移会把两者折回同侧。新增 `test_passage_arc_geometry_orientation_normalized` 作回归守护。GeoPackage QGIS `if("direction"='AB', 1, -1) * ...` 表达式同样受益。
+3. **修复 Task 34 遗漏的 popup 计数 BUG**（实施 Task 35 时发现）：`build_passage_ag_geojson` step 2（C2→B1 count）原先**未 JOIN D2 过滤 `type_jour`**，导致 popup 显示的 `nb_passage_total` 跨所有运营日累计，实测 AG 10692 显示 2247 而正确值 598（与 `result_e1_passage_ag.nb_passage` 一致）。修复：追加 `D2 JOIN` on `(id_service_num, id_ligne_num, project_id) + Type_Jour == jour_type`；fixture 扩展含 `id_service_num` 和 D2 seed；新增 `test_passage_ag_counts_respect_jour_type` 作回归。
 
 ---
 

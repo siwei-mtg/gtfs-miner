@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import { cn } from '@/lib/utils';
 import { MapContext } from '@/contexts/MapContext';
@@ -91,19 +91,6 @@ export const MapView: React.FC<MapViewProps> = ({
       newMap.on('load', () => {
         if (!mounted) return;
         newMap!.resize(); // force canvas to adopt final CSS dimensions
-
-        // E_4 — passage-arc placeholder (to be replaced in Task 35)
-        newMap!.addSource('passage-arc', {
-          type: 'geojson',
-          data: { type: 'FeatureCollection', features: [] }
-        });
-        newMap!.addLayer({
-          id: 'passage-arc-layer',
-          type: 'line',
-          source: 'passage-arc',
-          paint: { 'line-color': '#ef4444', 'line-width': 2 },
-        });
-
         setMap(newMap!);
       });
     };
@@ -116,12 +103,6 @@ export const MapView: React.FC<MapViewProps> = ({
       setMap(null);
     };
   }, [projectId, jourType]); // token excluded intentionally — closure is stable enough
-
-  // Toggle E_4 visibility placeholder
-  useEffect(() => {
-    if (!map || !map.getLayer('passage-arc-layer')) return;
-    map.setLayoutProperty('passage-arc-layer', 'visibility', e4Visible ? 'visible' : 'none');
-  }, [map, e4Visible]);
 
   return (
     <MapContext.Provider value={{ map }}>
@@ -169,6 +150,13 @@ export const MapView: React.FC<MapViewProps> = ({
                     projectId,
                     jourType,
                     onRouteTypesChange: setAvailableRouteTypes,
+                  });
+                }
+                if (childType === 'PassageArcLayer') {
+                  return React.cloneElement(child as React.ReactElement<any>, {
+                    visible: e4Visible,
+                    projectId,
+                    jourType,
                   });
                 }
                 return React.cloneElement(child as React.ReactElement<any>, { visible: true });

@@ -21,6 +21,7 @@ from ..db.result_models import (
     ResultA1ArretGenerique,
     ResultC3ItineraireArc,
     ResultD1ServiceDate,
+    ResultD2ServiceJourtype,
     ResultA2ArretPhysique,
 )
 
@@ -34,7 +35,13 @@ def build_passage_ag_geojson(project_id: str, jour_type: int, db: Session) -> di
 
     Join chain:
         E1 (filtered by type_jour) → C2 on id_ag_num → B1 on id_ligne_num
+                                                    → D2 on id_service_num + id_ligne_num
+                                                      (filtered by Type_Jour)
         COUNT(DISTINCT id_course_num) GROUP BY (id_ag_num, route_type)
+
+    The D2 join is critical: without it, counts aggregate across all operating
+    days, inflating by the service calendar footprint (a hub stop with 2247
+    total courses can correspond to only 598 courses on a given jour_type).
 
     nb_passage_total == sum(by_route_type.values()) is guaranteed by
     construction: both values derive from the same course-count query.
@@ -66,8 +73,9 @@ def build_passage_ag_geojson(project_id: str, jour_type: int, db: Session) -> di
     }
     ag_ids = list(ag_meta.keys())
 
-    # Step 2: count distinct courses per (id_ag_num, route_type).
-    # C2 links courses to lines (id_ligne_num); B1 carries route_type.
+    # Step 2: count distinct courses per (id_ag_num, route_type) filtered by
+    # jour_type via D2.  C2 links courses to lines (id_ligne_num) and services
+    # (id_service_num); B1 carries route_type; D2 maps services to Type_Jour.
     count_rows = (
         db.query(
             ResultC2Itineraire.id_ag_num,
@@ -79,9 +87,16 @@ def build_passage_ag_geojson(project_id: str, jour_type: int, db: Session) -> di
             (ResultB1Ligne.id_ligne_num == ResultC2Itineraire.id_ligne_num)
             & (ResultB1Ligne.project_id == ResultC2Itineraire.project_id),
         )
+        .join(
+            ResultD2ServiceJourtype,
+            (ResultD2ServiceJourtype.id_service_num == ResultC2Itineraire.id_service_num)
+            & (ResultD2ServiceJourtype.id_ligne_num == ResultC2Itineraire.id_ligne_num)
+            & (ResultD2ServiceJourtype.project_id == ResultC2Itineraire.project_id),
+        )
         .filter(
             ResultC2Itineraire.project_id == project_id,
             ResultC2Itineraire.id_ag_num.in_(ag_ids),
+            ResultD2ServiceJourtype.Type_Jour == jour_type,
         )
         .group_by(ResultC2Itineraire.id_ag_num, ResultB1Ligne.route_type)
         .all()
@@ -235,11 +250,20 @@ def build_passage_arc_geojson(
             continue
         lat_a, lon_a = coords[a]
         lat_b, lon_b = coords[b]
-        direction = "AB" if a <= b else "BA"
+        # Geometry is always oriented from the lower AG id to the higher so
+        # that MapLibre / QGIS offset expressions can use sign(direction) to
+        # place AB and BA on opposite sides of the centerline. The semantic
+        # flow direction is carried by the `direction` field.
+        if a <= b:
+            direction = "AB"
+            line_coords = [[lon_a, lat_a], [lon_b, lat_b]]
+        else:
+            direction = "BA"
+            line_coords = [[lon_b, lat_b], [lon_a, lat_a]]
         weight    = round(nb_passage / max_passage, 6)
         geom      = {
             "type": "LineString",
-            "coordinates": [[lon_a, lat_a], [lon_b, lat_b]],
+            "coordinates": line_coords,
         }
 
         if split_by == "route_type" and (a, b) in arc_rt_counts:
@@ -420,14 +444,22 @@ def export_geopackage(
                 continue
             lat_a, lon_a = coords[a]
             lat_b, lon_b = coords[b]
-            direction = "AB" if a <= b else "BA"
+            # Normalize LineString to always go from lower AG id to higher so
+            # QGIS data-defined offset `if("direction"='AB', 1, -1)` places AB
+            # and BA on opposite sides of the shared centerline.
+            if a <= b:
+                direction = "AB"
+                line_coords = [(lon_a, lat_a), (lon_b, lat_b)]
+            else:
+                direction = "BA"
+                line_coords = [(lon_b, lat_b), (lon_a, lat_a)]
             buf.append({
                 "id_ag_num_a":    a,
                 "id_ag_num_b":    b,
                 "nb_passage":     row.nb_passage,
                 "max_nb_passage": max_nb_passage,
                 "direction":      direction,
-                "geometry":       LineString([(lon_a, lat_a), (lon_b, lat_b)]),
+                "geometry":       LineString(line_coords),
             })
             if len(buf) >= _GPKG_BATCH:
                 _flush_arc()
