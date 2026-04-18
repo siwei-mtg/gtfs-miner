@@ -99,6 +99,11 @@ export async function downloadTableCsv(projectId: string, tableName: string): Pr
   triggerBlobDownload(blob, filename)
 }
 
+export async function downloadGeoPackage(projectId: string, jourType: number): Promise<void> {
+  const { blob } = await fetchBlob(`${BASE}/${projectId}/export/geopackage?jour_type=${jourType}`)
+  triggerBlobDownload(blob, `${projectId}.gpkg`)
+}
+
 export async function register(data: UserCreate): Promise<Token> {
   const res = await fetch(`${AUTH_BASE}/register`, {
     method: 'POST',

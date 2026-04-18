@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ProgressPanel } from '@/components/organisms/ProgressPanel';
 import { DownloadButton } from '@/components/organisms/DownloadButton';
+import { GeoPackageDownloadButton } from '@/components/organisms/GeoPackageDownloadButton';
 import { ResultTable } from '@/components/organisms/ResultTable';
 import { MapView } from '@/components/organisms/MapView';
 import { PassageAGLayer } from '@/components/PassageAGLayer';
@@ -140,6 +141,13 @@ export const ProjectDetailPage: React.FC = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="ml-auto">
+                  <GeoPackageDownloadButton
+                    projectId={id}
+                    jourType={jourType}
+                    disabled={jourTypeOptions.length === 0}
+                  />
+                </div>
               </div>
               <CardContent className="p-0">
                 <div className="h-[600px] w-full relative">

@@ -460,17 +460,21 @@ GeoPackage 导出的内存瓶颈在 GeoDataFrame 构建（geopandas join + geome
 
 ---
 
-### Task 36：GeoPackage 下载按钮
+### Task 36：GeoPackage 下载按钮 ✅ 已完成（2026-04-19）
 
 **修改文件**：`frontend/src/pages/ProjectDetailPage.tsx`
 
-在地图区域旁添加「导出 GeoPackage」按钮：
-- 触发 `GET /export/geopackage?jour_type=X`
-- 下载文件名：`{project_id}.gpkg`
+在地图工具栏（`jour_type` 选择器右侧，`ml-auto`）添加「Exporter GeoPackage」按钮：
+- 触发 `GET /export/geopackage?jour_type=X`（复用 `api/client.ts` 现有 `fetchBlob` + `triggerBlobDownload` 链路，自动解析 `Content-Disposition` 拿到文件名 `{project_id}.gpkg`）
+- 新组件 `components/organisms/GeoPackageDownloadButton.tsx`（shadcn `Button variant="outline" size="sm"` + Lucide `Download` 图标；加载中切换为「Téléchargement…」；`aria-label="download-geopackage-button"`）
+- 仅在地图视图可见，随 `jour_type` 联动；`jourTypeOptions` 为空时禁用
+- 未扩展现有 `DownloadButton` 组件以避免回归其 `ProgressPanel` 用法
 
-**测试**（追加到 `frontend/src/__tests__/ProjectDetailPage.test.tsx`，或新建）：
-1. `test_gpkg_button_exists` — 按钮存在
-2. `test_gpkg_button_triggers_download` — 点击后发出正确 GET 请求
+**测试**（`frontend/src/__tests__/ProjectDetailPage.test.tsx`，全部通过）：
+1. `test_gpkg_button_exists` ✅ — 切换至地图视图后按钮存在
+2. `test_gpkg_button_triggers_download` ✅ — 点击按钮调用 `downloadGeoPackage(projectId, jourType)`
+
+> 实现同时将既有 `test_project_detail_back_button` 纳入同一套 mocks（通过 `useProjectProgressMock` 顶层句柄支持按用例切换 `latestStatus`），原有用例保持通过。
 
 **依赖**：Task 32
 
