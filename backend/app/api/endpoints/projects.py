@@ -16,6 +16,7 @@ from ...schemas.project import ProjectCreate, ProjectResponse
 from ...services.worker import run_project_task_sync
 from ...services.result_query import TABLE_REGISTRY, query_table
 from ...services.map_builder import build_passage_ag_geojson, build_passage_arc_geojson, export_geopackage
+from ...services.charts_builder import build_peak_offpeak
 from ...services.gtfs_core.calendar_provider import TYPE_JOUR_VAC_LABELS
 from ...core.config import settings, TEMP_DIR, PROJECT_DIR
 from ...api.deps import get_current_active_user
@@ -332,6 +333,31 @@ def list_jour_types(
         for r in rows
         if r[0] is not None
     ]
+
+
+@router.get("/{project_id}/charts/peak-offpeak")
+def get_peak_offpeak(
+    project_id: str,
+    jour_type: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    AG passages bucketed into peak / off-peak for a given jour_type.
+
+    Peak windows (French operations convention):
+      07:00–09:00 (HPM) and 16:30–19:00 (HPS).
+    Everything else (incl. FM / FS / HC midday) is off-peak.
+
+    jour_type parameter is required; omitting it returns HTTP 422.
+    """
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return build_peak_offpeak(project_id, jour_type, db)
 
 
 @router.get("/{project_id}/export/geopackage")
