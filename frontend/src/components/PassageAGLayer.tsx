@@ -122,24 +122,19 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
             .setLngLat([coordinates[0], coordinates[1]])
             .addTo(map);
 
-          // Hover-triggered popup, consistent with PassageArcLayer.
-          const showPopup = () => {
+          // Click-triggered popup, dismissed by close button or map click.
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
             popupRef.current?.remove();
             popupRef.current = new maplibregl.Popup({
-              closeButton: false,
-              closeOnClick: false,
+              closeButton: true,
+              closeOnClick: true,
               offset: radius + 4,
             })
               .setLngLat([coordinates[0], coordinates[1]])
               .setHTML(buildPopupHTML(stop_name, nb_passage_total, by_route_type))
               .addTo(map);
-          };
-          const hidePopup = () => {
-            popupRef.current?.remove();
-            popupRef.current = null;
-          };
-          el.addEventListener('mouseenter', showPopup);
-          el.addEventListener('mouseleave', hidePopup);
+          });
 
           markersRef.current.push(marker);
         });

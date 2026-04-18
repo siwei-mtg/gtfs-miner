@@ -62,6 +62,8 @@ function createMockMap(): MockMap {
     m.__handlers![key] = handler;
   });
   m.off = vi.fn();
+  // Cursor-affordance handlers read getCanvas().style during hover + cleanup.
+  (m as any).getCanvas = () => ({ style: {} as CSSStyleDeclaration });
 
   return m as MockMap;
 }
@@ -125,7 +127,7 @@ describe('PassageArcLayer', () => {
     expect(directions).toContain('BA');
   });
 
-  it('should show tooltip with nb_passage on hover', async () => {
+  it('should show popup with nb_passage on click', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => mockData });
     const map = createMockMap();
 
@@ -137,10 +139,10 @@ describe('PassageArcLayer', () => {
 
     await vi.waitFor(() => expect(map.__source.setData).toHaveBeenCalled());
 
-    const enterHandler = map.__handlers['mouseenter:passage-arc-layer'];
-    expect(enterHandler).toBeDefined();
+    const clickHandler = map.__handlers['click:passage-arc-layer'];
+    expect(clickHandler).toBeDefined();
 
-    enterHandler({
+    clickHandler({
       lngLat: { lng: 2.375, lat: 48.865 },
       features: [
         { properties: { nb_passage: 100, direction: 'AB' } },
@@ -148,6 +150,12 @@ describe('PassageArcLayer', () => {
     });
 
     expect(maplibregl.Popup).toHaveBeenCalled();
+    const popupArgs = vi.mocked(maplibregl.Popup).mock.calls[0][0] as {
+      closeButton?: boolean;
+      closeOnClick?: boolean;
+    };
+    expect(popupArgs.closeButton).toBe(true);
+    expect(popupArgs.closeOnClick).toBe(true);
     expect(mockPopupInstance.setLngLat).toHaveBeenCalledWith({ lng: 2.375, lat: 48.865 });
     const html = mockPopupInstance.setHTML.mock.calls[0][0] as string;
     expect(html).toContain('100');

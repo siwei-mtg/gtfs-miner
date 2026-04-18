@@ -80,23 +80,28 @@ export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
       return;
     }
 
-    const onEnter = (e: maplibregl.MapLayerMouseEvent) => {
+    // Click opens the popup; hover only toggles the pointer cursor as an
+    // affordance that the arc is interactive.
+    const onClick = (e: maplibregl.MapLayerMouseEvent) => {
       if (!e.features?.length) return;
       const f = e.features[0];
       const nb = f.properties?.nb_passage;
       const dir = f.properties?.direction;
       popupRef.current?.remove();
-      popupRef.current = new maplibregl.Popup({ closeButton: false, closeOnClick: false })
+      popupRef.current = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
         .setLngLat(e.lngLat)
         .setHTML(
           `<div style="font-size:0.8125rem;"><strong>${escapeHtml(String(dir ?? ''))}</strong> · ${nb} passages</div>`,
         )
         .addTo(map);
     };
-    const onLeave = () => {
-      popupRef.current?.remove();
-      popupRef.current = null;
+    const onEnter = () => {
+      map.getCanvas().style.cursor = 'pointer';
     };
+    const onLeave = () => {
+      map.getCanvas().style.cursor = '';
+    };
+    map.on('click', LAYER_ID, onClick);
     map.on('mouseenter', LAYER_ID, onEnter);
     map.on('mouseleave', LAYER_ID, onLeave);
 
@@ -120,8 +125,10 @@ export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
     fetchData();
 
     return () => {
+      map.off('click', LAYER_ID, onClick);
       map.off('mouseenter', LAYER_ID, onEnter);
       map.off('mouseleave', LAYER_ID, onLeave);
+      map.getCanvas().style.cursor = '';
       popupRef.current?.remove();
       popupRef.current = null;
     };

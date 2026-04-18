@@ -111,7 +111,7 @@ describe('PassageAGLayer', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('should show Popup on hover and remove on mouse leave', async () => {
+  it('should open native Popup with stop details on marker click', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => mockData });
 
     render(
@@ -122,10 +122,8 @@ describe('PassageAGLayer', () => {
 
     await vi.waitFor(() => expect(maplibregl.Marker).toHaveBeenCalled());
 
-    const el = getMarkerElement();
-
     act(() => {
-      el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      getMarkerElement().click();
     });
 
     expect(maplibregl.Popup).toHaveBeenCalled();
@@ -138,20 +136,13 @@ describe('PassageAGLayer', () => {
     expect(html).toContain('Bus');
     expect(html).toContain('Tramway');
 
-    // Hover config must not include a close button or close-on-click behaviour.
+    // Click popup is modal-like: close button + close on map click.
     const popupArgs = vi.mocked(maplibregl.Popup).mock.calls[0][0] as {
       closeButton?: boolean;
       closeOnClick?: boolean;
     };
-    expect(popupArgs.closeButton).toBe(false);
-    expect(popupArgs.closeOnClick).toBe(false);
-
-    // Leaving the marker removes the popup.
-    const removeCallsBefore = mockPopupInstance.remove.mock.calls.length;
-    act(() => {
-      el.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
-    });
-    expect(mockPopupInstance.remove.mock.calls.length).toBeGreaterThan(removeCallsBefore);
+    expect(popupArgs.closeButton).toBe(true);
+    expect(popupArgs.closeOnClick).toBe(true);
   });
 
   it('should render fallback marker when by_route_type is empty but total > 0', async () => {
@@ -182,10 +173,9 @@ describe('PassageAGLayer', () => {
     // Marker still created (fallback SVG populated)
     expect(mockMarkerInstance.setLngLat).toHaveBeenCalledWith([2.35, 48.85]);
 
-    // Hover shows a popup with the fallback note
-    const el = getMarkerElement();
+    // Click shows a popup with the fallback note
     act(() => {
-      el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      getMarkerElement().click();
     });
     const html = mockPopupInstance.setHTML.mock.calls[0][0] as string;
     expect(html).toContain('Broken Calendar Stop');
