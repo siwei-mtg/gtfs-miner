@@ -43,11 +43,14 @@ export interface UserCreate {
   tenant_name: string
 }
 
+export type Plan = 'free' | 'pro' | 'enterprise'
+
 export interface UserResponse {
   id: string
   email: string
   role: string
   tenant_id: string
+  plan: Plan
   created_at: string
 }
 

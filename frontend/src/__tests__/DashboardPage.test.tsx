@@ -3,11 +3,23 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { DashboardPage } from '@/pages/DashboardPage'
 import * as apiClient from '@/api/client'
+import * as usePlanModule from '@/hooks/usePlan'
 
 // Avoid pulling in MapLibre / recharts / AuthContext transitive deps during
 // unit tests — we only care about the wiring Dashboard ↔ its children.
 vi.mock('@/api/client', () => ({
   getJourTypes: vi.fn(),
+}))
+
+vi.mock('@/hooks/usePlan', () => ({
+  usePlan: vi.fn(() => ({
+    plan: 'pro',
+    isFree: false,
+    isPro: true,
+    isEnterprise: false,
+    hasAtLeast: (_p: 'free' | 'pro' | 'enterprise') => true,
+  })),
+  PLAN_ORDER: { free: 0, pro: 1, enterprise: 2 },
 }))
 
 vi.mock('@/components/organisms/MapView', () => ({
@@ -160,6 +172,24 @@ describe('DashboardPage', () => {
       const filters = JSON.parse(screen.getByTestId('mock-charts').dataset.filters!)
       expect(filters.routeTypes).toEqual(['0'])
     })
+  })
+
+  it('free-plan users see the map upgrade fallback and no MapView is mounted', async () => {
+    vi.mocked(usePlanModule.usePlan).mockReturnValueOnce({
+      plan: 'free',
+      isFree: true,
+      isPro: false,
+      isEnterprise: false,
+      hasAtLeast: (p: 'free' | 'pro' | 'enterprise') => p === 'free',
+    })
+    renderAt()
+
+    await waitFor(() => expect(screen.getByTestId('dashboard-page')).toBeInTheDocument())
+    expect(screen.getByTestId('dashboard-map-upgrade')).toBeInTheDocument()
+    expect(screen.queryByTestId('mock-map')).not.toBeInTheDocument()
+    // Charts + Table still render — only the map is gated.
+    expect(screen.getByTestId('mock-charts')).toBeInTheDocument()
+    expect(screen.getByTestId('mock-table')).toBeInTheDocument()
   })
 
   it('jour-type select change dispatches SET_JOUR_TYPE and re-renders children with new jourType', async () => {

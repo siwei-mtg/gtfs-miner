@@ -22,6 +22,7 @@ import { MapView } from '@/components/organisms/MapView';
 import { PassageAGLayer } from '@/components/PassageAGLayer';
 import { PassageArcLayer } from '@/components/PassageArcLayer';
 import { ResultTable } from '@/components/organisms/ResultTable';
+import { PlanGate } from '@/components/molecules/PlanGate';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -141,21 +142,40 @@ function DashboardShell({ projectId, jourTypeOptions, bootError }: ShellProps) {
       )}
 
       <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] xl:h-[calc(100vh-10rem)]">
-        {/* Map pane (spans both rows on xl) */}
+        {/* Map pane (spans both rows on xl) — locked behind Pro+ */}
         <section
           data-testid="dashboard-map"
           className="xl:row-span-2 min-h-[400px] rounded-lg border overflow-hidden"
         >
-          <MapView
-            projectId={projectId}
-            jourType={state.jourType}
-            onStopClick={(agId, shiftKey) =>
-              dispatch({ type: 'TOGGLE_AG_ID', payload: agId, shift: shiftKey })
+          <PlanGate
+            plan="pro"
+            fallback={
+              <div
+                data-testid="dashboard-map-upgrade"
+                className="flex h-full min-h-[400px] flex-col items-center justify-center gap-3 p-8 text-center"
+              >
+                <h3 className="text-base font-semibold">Couche cartographique verrouillée</h3>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  La visualisation des passages AG / arcs (E_1, E_4) est réservée aux
+                  forfaits <strong>Pro</strong> et <strong>Enterprise</strong>.
+                </p>
+                <Button variant="default" size="sm" disabled>
+                  Mettre à niveau (bientôt)
+                </Button>
+              </div>
             }
           >
-            <PassageAGLayer projectId={projectId} jourType={state.jourType} />
-            <PassageArcLayer projectId={projectId} jourType={state.jourType} />
-          </MapView>
+            <MapView
+              projectId={projectId}
+              jourType={state.jourType}
+              onStopClick={(agId, shiftKey) =>
+                dispatch({ type: 'TOGGLE_AG_ID', payload: agId, shift: shiftKey })
+              }
+            >
+              <PassageAGLayer projectId={projectId} jourType={state.jourType} />
+              <PassageArcLayer projectId={projectId} jourType={state.jourType} />
+            </MapView>
+          </PlanGate>
         </section>
 
         {/* Charts pane */}

@@ -1,6 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+
+// maplibre-gl executes `window.URL.createObjectURL(new Blob(...))` at module
+// load time, which jsdom does not support.  Stub it before App (which
+// transitively imports MapView) is imported.  vi.mock is hoisted.
+vi.mock('maplibre-gl', () => ({
+  default: {
+    Map: vi.fn(() => ({
+      on: vi.fn(), addSource: vi.fn(), addLayer: vi.fn(), getLayer: vi.fn(() => true),
+      setLayoutProperty: vi.fn(), remove: vi.fn(), addControl: vi.fn(), resize: vi.fn(),
+    })),
+    NavigationControl: vi.fn(),
+    Marker: vi.fn(() => ({ setLngLat: vi.fn().mockReturnThis(), addTo: vi.fn().mockReturnThis(), remove: vi.fn() })),
+    Popup: vi.fn(() => ({ setLngLat: vi.fn().mockReturnThis(), setHTML: vi.fn().mockReturnThis(), addTo: vi.fn().mockReturnThis(), remove: vi.fn() })),
+  },
+}))
+
 import App from '../App'
 import * as client from '../api/client'
 import * as useProjectProgressModule from '../hooks/useProjectProgress'
@@ -11,7 +27,8 @@ vi.mock('../api/client', () => ({
   uploadGtfs: vi.fn(),
   listProjects: vi.fn(),
   getTableData: vi.fn(),
-  getTableDownloadUrl: vi.fn()
+  getTableDownloadUrl: vi.fn(),
+  getJourTypes: vi.fn().mockResolvedValue([]),
 }))
 
 vi.mock('../hooks/useProjectProgress', () => ({
@@ -97,6 +114,19 @@ describe('App Routing & State Machine', () => {
 
     await user.click(screen.getByRole('button', { name: /Logout/i }))
     expect(logoutMock).toHaveBeenCalled()
+  })
+
+  it('test_dashboard_route_redirects_unauthenticated', async () => {
+    vi.mocked(useAuthModule.useAuth).mockReturnValue({
+      token: null, isLoading: false, user: null, login: vi.fn(), logout: vi.fn(), register: vi.fn(),
+    } as any)
+    window.history.pushState({}, '', '/projects/p1/dashboard')
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /Login/i })).toBeInTheDocument()
+    })
   })
 
   it('test_new_project_flow', async () => {

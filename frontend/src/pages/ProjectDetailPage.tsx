@@ -11,7 +11,7 @@ import { useProjectProgress } from '../hooks/useProjectProgress';
 import { getJourTypes, type JourTypeOption } from '@/api/client';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/atoms/button';
-import { ChevronLeft, Map as MapIcon, Table as TableIcon } from 'lucide-react';
+import { ChevronLeft, Map as MapIcon, Table as TableIcon, LayoutDashboard } from 'lucide-react';
 import { Badge } from '@/components/atoms/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -78,24 +78,36 @@ export const ProjectDetailPage: React.FC = () => {
           </div>
         </div>
         {isCompleted && (
-          <div className="flex items-center gap-2 bg-muted p-1 rounded-lg">
-            <Button 
-              variant={viewMode === 'table' ? 'default' : 'ghost'} 
-              size="sm" 
-              onClick={() => setViewMode('table')}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-muted p-1 rounded-lg">
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+                className="gap-2"
+              >
+                <TableIcon className="h-4 w-4" />
+                Tableaux
+              </Button>
+              <Button
+                variant={viewMode === 'map' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('map')}
+                className="gap-2"
+              >
+                <MapIcon className="h-4 w-4" />
+                Carte
+              </Button>
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => navigate(`/projects/${id}/dashboard`)}
               className="gap-2"
+              aria-label="open-dashboard"
             >
-              <TableIcon className="h-4 w-4" />
-              Tableaux
-            </Button>
-            <Button 
-              variant={viewMode === 'map' ? 'default' : 'ghost'} 
-              size="sm" 
-              onClick={() => setViewMode('map')}
-              className="gap-2"
-            >
-              <MapIcon className="h-4 w-4" />
-              Carte
+              <LayoutDashboard className="h-4 w-4" />
+              Tableau de bord
             </Button>
           </div>
         )}
