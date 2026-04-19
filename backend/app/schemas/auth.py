@@ -33,6 +33,7 @@ class UserResponse(BaseModel):
     email: str
     role: str
     tenant_id: str
+    plan: str  # Task 40A: tenant plan surfaced so the frontend can gate premium features
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

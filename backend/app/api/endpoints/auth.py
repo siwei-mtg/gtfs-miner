@@ -49,5 +49,22 @@ def login(
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_active_user)):
-    return current_user
+def get_me(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Return the current user enriched with their tenant's plan.
+
+    Plan drives frontend feature gating (usePlan / PlanGate); falling back to
+    'free' for orphaned users avoids an implicit 500 if a tenant row was
+    somehow deleted while the JWT is still valid.
+    """
+    tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        role=current_user.role,
+        tenant_id=current_user.tenant_id,
+        plan=tenant.plan if tenant else "free",
+        created_at=current_user.created_at,
+    )

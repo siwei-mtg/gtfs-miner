@@ -61,6 +61,48 @@ def test_me_authenticated(fresh_client):
     assert r.json()["email"] == REGISTER_PAYLOAD["email"]
 
 
+def test_me_returns_plan_free_by_default(fresh_client):
+    """Task 40A: /auth/me exposes the tenant's plan so the frontend can gate
+    premium features.  New tenants default to the 'free' plan (see Tenant
+    model).  Frontend usePlan() reads this."""
+    token = _register(fresh_client).json()["access_token"]
+    r = fresh_client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "plan" in body
+    assert body["plan"] == "free"
+
+
+def test_me_returns_plan_pro_when_tenant_upgraded(fresh_client):
+    """Upgrade the tenant directly in the DB (simulating an admin upgrade
+    flow not yet in scope), then confirm /auth/me reflects the new plan."""
+    from app.db.models import Tenant, User
+    from app.db.database import SessionLocal  # noqa: F401 — imported for side-effect path
+
+    token = _register(fresh_client).json()["access_token"]
+    # Reach into the fresh_client's in-memory DB via the dependency override.
+    from app.db.database import get_db
+    from app.main import app
+    db_gen = app.dependency_overrides[get_db]()
+    db = next(db_gen)
+    try:
+        user = db.query(User).filter(User.email == REGISTER_PAYLOAD["email"]).first()
+        assert user is not None
+        tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+        assert tenant is not None
+        tenant.plan = "pro"
+        db.commit()
+    finally:
+        try:
+            next(db_gen)
+        except StopIteration:
+            pass
+
+    r = fresh_client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    assert r.json()["plan"] == "pro"
+
+
 def test_me_no_token(fresh_client):
     r = fresh_client.get("/api/v1/auth/me")
     assert r.status_code == 401
