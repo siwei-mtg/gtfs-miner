@@ -2,7 +2,8 @@
 result_query.py — Service layer for querying GTFS Miner result tables (Task 19).
 
 Provides TABLE_REGISTRY mapping short table keys to SQLAlchemy model classes,
-and query_table() which handles pagination, sorting, and text search.
+and query_table() which handles pagination, sorting, text search, and
+(since Task 38A) per-column enum multi-select + numeric range filtering.
 """
 from sqlalchemy import String, asc, desc, or_
 from sqlalchemy.orm import Session
@@ -46,6 +47,44 @@ TABLE_REGISTRY: dict[str, type] = {
 _INTERNAL_COLS = {"id", "project_id"}
 
 
+class ResultQueryError(ValueError):
+    """Raised when caller-supplied query arguments refer to unknown columns
+    or otherwise cannot be honored.  Callers translate this to HTTP 400."""
+
+
+def _resolve_column(model: type, field: str):
+    """Return the SQLAlchemy Column for `field`, or raise ResultQueryError.
+
+    Internal columns (`id`, `project_id`) are refused so tenants cannot be
+    tricked into filtering across foreign projects via the public API.
+    """
+    if field in _INTERNAL_COLS or field not in model.__table__.columns:
+        raise ResultQueryError(f"Unknown field: {field}")
+    return model.__table__.columns[field]
+
+
+def _coerce_filter_values(col, values: list[str]) -> list:
+    """Cast raw string query values to the column's Python type.
+
+    SQLAlchemy types expose `python_type`; we catch conversion errors and
+    re-raise them as ResultQueryError so the endpoint returns 400 instead
+    of leaking a generic 500.
+    """
+    try:
+        py_type = col.type.python_type
+    except NotImplementedError:
+        py_type = str
+    coerced: list = []
+    for raw in values:
+        try:
+            coerced.append(py_type(raw))
+        except (ValueError, TypeError) as exc:
+            raise ResultQueryError(
+                f"Invalid value {raw!r} for {col.name}: {exc}"
+            ) from exc
+    return coerced
+
+
 def query_table(
     db: Session,
     model: type,
@@ -55,12 +94,31 @@ def query_table(
     sort_by: str | None,
     sort_order: str,
     q: str | None,
+    *,
+    filter_field: str | None = None,
+    filter_values: list[str] | None = None,
+    range_field: str | None = None,
+    range_min: float | None = None,
+    range_max: float | None = None,
 ) -> dict:
-    """Query a result table with pagination, sorting, and text search.
+    """Query a result table with pagination, sorting, text search, and
+    optional column-level filters (Task 38A).
+
+    Args:
+        filter_field / filter_values:
+            SQL `IN (...)` on an enum-like column.  Values are cast to the
+            column's Python type (e.g. "3" → int(3) on a route_type column).
+        range_field / range_min / range_max:
+            Numeric range [min, max] inclusive.  Either bound may be omitted
+            to apply only a lower or upper bound.
 
     Returns:
         {"total": int, "rows": list[dict], "columns": list[str]}
         columns and row dicts exclude internal fields (id, project_id).
+
+    Raises:
+        ResultQueryError: unknown column name or bad value coercion.  Callers
+        should translate to HTTP 400.
     """
     limit = min(limit, 200)
 
@@ -75,6 +133,19 @@ def query_table(
             query = query.filter(
                 or_(*[col.like(f"%{q}%") for col in str_cols])
             )
+
+    if filter_field is not None:
+        col = _resolve_column(model, filter_field)
+        if filter_values:  # empty list → no-op (return everything)
+            coerced = _coerce_filter_values(col, filter_values)
+            query = query.filter(col.in_(coerced))
+
+    if range_field is not None:
+        col = _resolve_column(model, range_field)
+        if range_min is not None:
+            query = query.filter(col >= range_min)
+        if range_max is not None:
+            query = query.filter(col <= range_max)
 
     if sort_by and sort_by in model.__table__.columns:
         col = model.__table__.columns[sort_by]

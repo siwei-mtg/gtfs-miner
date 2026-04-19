@@ -14,7 +14,7 @@ from ...db.models import Project, User
 from ...db.result_models import ResultA1ArretGenerique, ResultE1PassageAG
 from ...schemas.project import ProjectCreate, ProjectResponse
 from ...services.worker import run_project_task_sync
-from ...services.result_query import TABLE_REGISTRY, query_table
+from ...services.result_query import TABLE_REGISTRY, ResultQueryError, query_table
 from ...services.map_builder import build_passage_ag_geojson, build_passage_arc_geojson, export_geopackage
 from ...services.charts_builder import build_peak_offpeak
 from ...services.gtfs_core.calendar_provider import TYPE_JOUR_VAC_LABELS
@@ -140,6 +140,11 @@ def get_table_data(
     sort_by: str | None = None,
     sort_order: str = "asc",
     q: str | None = None,
+    filter_field: str | None = None,
+    filter_values: str | None = None,
+    range_field: str | None = None,
+    range_min: float | None = None,
+    range_max: float | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -147,6 +152,10 @@ def get_table_data(
     获取项目处理完成后的特定 CSV 表格的分页数据。
 
     返回：{"total": int, "rows": list[dict], "columns": list[str]}
+
+    Task 38A adds optional filtering:
+      - filter_field + filter_values (comma-separated): SQL IN (...)
+      - range_field + range_min / range_max: numeric [min, max] inclusive
     """
     if table_name not in TABLE_REGISTRY:
         raise HTTPException(status_code=404, detail="Table not found")
@@ -160,8 +169,20 @@ def get_table_data(
     if project.status != "completed":
         raise HTTPException(status_code=400, detail="Project data not ready")
 
-    return query_table(db, TABLE_REGISTRY[table_name], project_id,
-                       skip, limit, sort_by, sort_order, q)
+    values_list = filter_values.split(",") if filter_values else None
+
+    try:
+        return query_table(
+            db, TABLE_REGISTRY[table_name], project_id,
+            skip, limit, sort_by, sort_order, q,
+            filter_field=filter_field,
+            filter_values=values_list,
+            range_field=range_field,
+            range_min=range_min,
+            range_max=range_max,
+        )
+    except ResultQueryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @router.get("/{project_id}/tables/{table_name}/download")
 def download_table_csv(

@@ -11,7 +11,11 @@ from sqlalchemy.orm import sessionmaker
 
 import app.db.result_models  # noqa: F401 — registers result table models with Base
 from app.db.models import Project
-from app.db.result_models import ResultA1ArretGenerique
+from app.db.result_models import (
+    ResultA1ArretGenerique,
+    ResultB1Ligne,
+    ResultF1CourseLigne,
+)
 
 # ── Test constants ──────────────────────────────────────────────────────────
 PROJECT_ID = "proj-t19"
@@ -43,15 +47,31 @@ def result_data(test_engine):
         for i in range(1, 6)
     ]
     session.add_all(rows)
+
+    # B_1 rows for Task 38A enum-filter tests.  route_type values: 3, 3, 0
+    # so filter_values="3" returns 2 rows, filter_values="3,0" returns 3 rows.
+    session.add_all([
+        ResultB1Ligne(project_id=PROJECT_ID, id_ligne_num=1, route_short_name="L1", route_type=3),
+        ResultB1Ligne(project_id=PROJECT_ID, id_ligne_num=2, route_short_name="L2", route_type=3),
+        ResultB1Ligne(project_id=PROJECT_ID, id_ligne_num=3, route_short_name="T3", route_type=0),
+    ])
+
+    # F_1 rows for Task 38A range-filter tests.
+    # nb_course values: 10, 25, 50, 80, 150 (single type_jour=1 for simplicity).
+    session.add_all([
+        ResultF1CourseLigne(project_id=PROJECT_ID, id_ligne_num=i, route_short_name=f"L{i}",
+                             type_jour=1, nb_course=v)
+        for i, v in enumerate([10.0, 25.0, 50.0, 80.0, 150.0], start=1)
+    ])
+
     session.commit()
     session.close()
 
     yield
 
     session = Session()
-    session.query(ResultA1ArretGenerique).filter(
-        ResultA1ArretGenerique.project_id == PROJECT_ID
-    ).delete(synchronize_session=False)
+    for model in (ResultF1CourseLigne, ResultB1Ligne, ResultA1ArretGenerique):
+        session.query(model).filter(model.project_id == PROJECT_ID).delete(synchronize_session=False)
     session.query(Project).filter(
         Project.id.in_([PROJECT_ID, OTHER_PROJECT_ID])
     ).delete(synchronize_session=False)
@@ -143,3 +163,72 @@ def test_single_table_csv_columns(isolated_client_authed, result_data):
     # domain columns must be present
     for col in ("id_ag", "stop_name", "stop_lat", "stop_lon", "id_ag_num"):
         assert col in csv_cols
+
+
+# ── Task 38A: enum multi-select + numeric range filters ─────────────────────
+
+def test_filter_values_single_value(isolated_client_authed, result_data):
+    """filter_field=route_type&filter_values=3 returns only the matching rows."""
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/b1?filter_field=route_type&filter_values=3"
+    )
+    assert r.status_code == 200
+    rows = r.json()["rows"]
+    assert len(rows) == 2
+    assert all(row["route_type"] == 3 for row in rows)
+
+
+def test_filter_values_csv_list(isolated_client_authed, result_data):
+    """filter_values accepts a comma-separated list — SQL IN (...) semantics."""
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/b1?filter_field=route_type&filter_values=3,0"
+    )
+    assert r.status_code == 200
+    rows = r.json()["rows"]
+    assert len(rows) == 3
+    assert all(row["route_type"] in (3, 0) for row in rows)
+
+
+def test_range_filter(isolated_client_authed, result_data):
+    """range_min / range_max clip rows to [min, max] inclusive."""
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/f1?range_field=nb_course&range_min=20&range_max=100"
+    )
+    assert r.status_code == 200
+    rows = r.json()["rows"]
+    # Fixture values 10, 25, 50, 80, 150 → inside [20, 100] = 25, 50, 80
+    assert {row["nb_course"] for row in rows} == {25.0, 50.0, 80.0}
+
+
+def test_range_filter_min_only(isolated_client_authed, result_data):
+    """Supplying only range_min applies a lower bound without an upper bound."""
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/f1?range_field=nb_course&range_min=50"
+    )
+    assert r.status_code == 200
+    rows = r.json()["rows"]
+    assert {row["nb_course"] for row in rows} == {50.0, 80.0, 150.0}
+
+
+def test_invalid_filter_field_returns_400(isolated_client_authed, result_data):
+    """Requesting filter_field=<unknown column> must error out with 400."""
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/b1?filter_field=nonexistent&filter_values=x"
+    )
+    assert r.status_code == 400
+
+
+def test_invalid_range_field_returns_400(isolated_client_authed, result_data):
+    """Requesting range_field=<unknown column> must error out with 400."""
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/f1?range_field=nonexistent&range_min=0"
+    )
+    assert r.status_code == 400
+
+
+def test_internal_field_not_filterable(isolated_client_authed, result_data):
+    """project_id / id must never be filterable via the public API (tenant leak)."""
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/b1?filter_field=project_id&filter_values={PROJECT_ID}"
+    )
+    assert r.status_code == 400
