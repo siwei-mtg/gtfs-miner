@@ -30,9 +30,17 @@ interface ResultTableProps {
   /** Called whenever local filter state changes; emits the subset of FilterState
    *  this table contributes to (e.g. { routeTypes: ['3'] } when filtering B_1). */
   onFilterChange?: (filters: Partial<FilterState>) => void;
+  /** When provided, the primary-enum filter is controlled from outside (e.g.
+   *  the Dashboard context); local selection mirrors the prop on change. */
+  externalEnumValues?: string[];
 }
 
-export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName, onFilterChange }) => {
+export const ResultTable: React.FC<ResultTableProps> = ({
+  projectId,
+  tableName,
+  onFilterChange,
+  externalEnumValues,
+}) => {
   const [data, setData] = useState<TableDataResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +62,15 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName, 
     setRangeValue({});
     setSkip(0);
   }, [tableName]);
+
+  // When the Dashboard pushes down a new selection (e.g. user clicked a Pie
+  // sector) mirror it locally so the filter chip and backend request update.
+  const externalKey = externalEnumValues ? externalEnumValues.join(',') : null;
+  useEffect(() => {
+    if (externalEnumValues === undefined) return;
+    setEnumValues(externalEnumValues);
+    setSkip(0);
+  }, [externalKey, externalEnumValues]);
 
   useEffect(() => {
     let mounted = true;

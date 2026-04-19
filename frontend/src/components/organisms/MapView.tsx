@@ -10,6 +10,9 @@ interface MapViewProps {
   jourType: number;
   className?: string;
   children?: React.ReactNode;
+  /** Injected into PassageAGLayer via cloneElement so the dashboard can
+   *  dispatch TOGGLE_AG_ID / SET_AG_IDS from AG marker clicks. */
+  onStopClick?: (idAgNum: number, shiftKey: boolean) => void;
 }
 
 export const MapView: React.FC<MapViewProps> = ({
@@ -17,6 +20,7 @@ export const MapView: React.FC<MapViewProps> = ({
   jourType,
   className,
   children,
+  onStopClick,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { token } = useAuthContext();
@@ -169,6 +173,7 @@ export const MapView: React.FC<MapViewProps> = ({
                     jourType,
                     onRouteTypesChange: setAvailableRouteTypes,
                     onLoadingChange: setE1Loading,
+                    onStopClick,
                   });
                 }
                 if (childType === 'PassageArcLayer') {

@@ -10,6 +10,9 @@ interface PassageAGLayerProps {
   visible?: boolean;
   onRouteTypesChange?: (routeTypes: string[]) => void;
   onLoadingChange?: (loading: boolean) => void;
+  /** Fired when the user clicks a marker.  shiftKey lets the Dashboard
+   *  discriminate additive (Shift) vs replace-single selection. */
+  onStopClick?: (idAgNum: number, shiftKey: boolean) => void;
 }
 
 const MIN_RADIUS_PX = 6;
@@ -60,6 +63,7 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
   visible = true,
   onRouteTypesChange,
   onLoadingChange,
+  onStopClick,
 }) => {
   const { map } = useMap();
   const { token } = useAuthContext();
@@ -99,7 +103,7 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
 
         data.features.forEach((feature: any) => {
           const { coordinates } = feature.geometry;
-          const { by_route_type, nb_passage_total, stop_name } = feature.properties;
+          const { id_ag_num, by_route_type, nb_passage_total, stop_name } = feature.properties;
 
           const totalVal = Math.max(1, nb_passage_total);
           const radius = Math.max(
@@ -134,6 +138,10 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
               .setLngLat([coordinates[0], coordinates[1]])
               .setHTML(buildPopupHTML(stop_name, nb_passage_total, by_route_type))
               .addTo(map);
+
+            if (typeof id_ag_num === 'number') {
+              onStopClick?.(id_ag_num, e.shiftKey);
+            }
           });
 
           markersRef.current.push(marker);

@@ -33,6 +33,9 @@ interface Props {
   jourType: number
   filters?: Partial<FilterState>
   className?: string
+  /** Fired when the user clicks a Pie slice; the Dashboard maps it to
+   *  TOGGLE_ROUTE_TYPE so the other panels re-filter. */
+  onRouteTypeClick?: (routeType: string) => void
 }
 
 interface RouteTypeDatum { name: string; value: number; color: string; route_type: string }
@@ -47,7 +50,7 @@ interface PeakDatum      { name: string; id_ag_num: number; peak: number; offpea
  */
 const MAX_ROWS = 200
 
-export function DashboardCharts({ projectId, jourType, filters, className }: Props) {
+export function DashboardCharts({ projectId, jourType, filters, className, onRouteTypeClick }: Props) {
   const [routeTypeData, setRouteTypeData] = useState<RouteTypeDatum[]>([])
   const [topCourses, setTopCourses] = useState<LigneDatum[]>([])
   const [topKcc, setTopKcc] = useState<LigneDatum[]>([])
@@ -143,9 +146,25 @@ export function DashboardCharts({ projectId, jourType, filters, className }: Pro
         <CardContent className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={routeTypeData} dataKey="value" nameKey="name" outerRadius={80} label>
+              <Pie
+                data={routeTypeData}
+                dataKey="value"
+                nameKey="name"
+                outerRadius={80}
+                label
+                onClick={(datum: { payload?: RouteTypeDatum } | RouteTypeDatum) => {
+                  const rt = 'payload' in datum && datum.payload
+                    ? datum.payload.route_type
+                    : (datum as RouteTypeDatum).route_type
+                  if (rt && onRouteTypeClick) onRouteTypeClick(rt)
+                }}
+              >
                 {routeTypeData.map((entry) => (
-                  <Cell key={entry.route_type} fill={entry.color} />
+                  <Cell
+                    key={entry.route_type}
+                    fill={entry.color}
+                    cursor={onRouteTypeClick ? 'pointer' : 'default'}
+                  />
                 ))}
               </Pie>
               <Tooltip />
