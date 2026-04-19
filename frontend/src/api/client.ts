@@ -75,10 +75,25 @@ export async function downloadProjectResults(projectId: string): Promise<void> {
   triggerBlobDownload(blob, filename)
 }
 
+export interface TableQueryParams {
+  skip?: number
+  limit?: number
+  sort_by?: string
+  sort_order?: string
+  q?: string
+  /** Task 38A: SQL IN (...) on an enum-like column. */
+  filter_field?: string
+  filter_values?: string[]
+  /** Task 38A: inclusive numeric range [min, max]. */
+  range_field?: string
+  range_min?: number
+  range_max?: number
+}
+
 export async function getTableData(
   projectId: string,
   tableName: string,
-  params: { skip?: number; limit?: number; sort_by?: string; sort_order?: string; q?: string }
+  params: TableQueryParams,
 ): Promise<TableDataResponse> {
   const query = new URLSearchParams()
   if (params.skip !== undefined) query.append('skip', params.skip.toString())
@@ -86,6 +101,15 @@ export async function getTableData(
   if (params.sort_by) query.append('sort_by', params.sort_by)
   if (params.sort_order) query.append('sort_order', params.sort_order)
   if (params.q) query.append('q', params.q)
+  if (params.filter_field && params.filter_values && params.filter_values.length > 0) {
+    query.append('filter_field', params.filter_field)
+    query.append('filter_values', params.filter_values.join(','))
+  }
+  if (params.range_field && (params.range_min !== undefined || params.range_max !== undefined)) {
+    query.append('range_field', params.range_field)
+    if (params.range_min !== undefined) query.append('range_min', params.range_min.toString())
+    if (params.range_max !== undefined) query.append('range_max', params.range_max.toString())
+  }
 
   const res = await fetch(`${BASE}/${projectId}/tables/${tableName}?${query.toString()}`, {
     headers: getAuthHeaders(),

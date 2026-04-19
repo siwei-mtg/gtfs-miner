@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getTableData, downloadTableCsv } from '@/api/client';
 import type { TableDataResponse } from '@/types/api';
 import {
@@ -14,13 +14,25 @@ import {
 import { Button } from '@/components/atoms/button';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MultiSelectFilter } from '@/components/molecules/MultiSelectFilter';
+import { RangeFilter, type RangeValue } from '@/components/molecules/RangeFilter';
+import {
+  ENUM_FIELD_TO_FILTER_STATE_KEY,
+  PRIMARY_ENUM_FIELD,
+  PRIMARY_NUMERIC_FIELD,
+  getEnumOptions,
+} from '@/lib/table-filter-config';
+import type { FilterState } from '@/hooks/useDashboardSync';
 
 interface ResultTableProps {
   projectId: string;
   tableName: string;
+  /** Called whenever local filter state changes; emits the subset of FilterState
+   *  this table contributes to (e.g. { routeTypes: ['3'] } when filtering B_1). */
+  onFilterChange?: (filters: Partial<FilterState>) => void;
 }
 
-export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }) => {
+export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName, onFilterChange }) => {
   const [data, setData] = useState<TableDataResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +43,18 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
   const [sortBy, setSortBy] = useState<string | undefined>(undefined);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
+  const enumField = PRIMARY_ENUM_FIELD[tableName];
+  const numericField = PRIMARY_NUMERIC_FIELD[tableName];
+  const [enumValues, setEnumValues] = useState<string[]>([]);
+  const [rangeValue, setRangeValue] = useState<RangeValue>({});
+
+  // Reset filters when switching between tables so stale values don't leak.
+  useEffect(() => {
+    setEnumValues([]);
+    setRangeValue({});
+    setSkip(0);
+  }, [tableName]);
+
   useEffect(() => {
     let mounted = true;
     setIsLoading(true);
@@ -40,6 +64,14 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
       limit,
       sort_by: sortBy,
       sort_order: sortOrder,
+      filter_field: enumField && enumValues.length > 0 ? enumField : undefined,
+      filter_values: enumField && enumValues.length > 0 ? enumValues : undefined,
+      range_field:
+        numericField && (rangeValue.min !== undefined || rangeValue.max !== undefined)
+          ? numericField
+          : undefined,
+      range_min: rangeValue.min,
+      range_max: rangeValue.max,
     })
       .then(res => {
         if (mounted) {
@@ -55,7 +87,28 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
       });
 
     return () => { mounted = false; };
-  }, [projectId, tableName, skip, limit, sortBy, sortOrder]);
+  }, [projectId, tableName, skip, limit, sortBy, sortOrder, enumField, enumValues, numericField, rangeValue]);
+
+  // Lift filter state up to the parent dashboard, but only for enum columns
+  // that map onto the global FilterState (route_type, id_ligne_num, id_ag_num).
+  const onFilterChangeRef = useRef(onFilterChange);
+  onFilterChangeRef.current = onFilterChange;
+  useEffect(() => {
+    if (!onFilterChangeRef.current) return;
+    if (!enumField) return;
+    const key = ENUM_FIELD_TO_FILTER_STATE_KEY[enumField];
+    if (!key) return;
+    const coerced =
+      key === 'routeTypes'
+        ? enumValues
+        : (enumValues.map((v) => Number(v)).filter((n) => Number.isFinite(n)) as Array<string | number>);
+    onFilterChangeRef.current({ [key]: coerced } as unknown as Partial<FilterState>);
+  }, [enumField, enumValues]);
+
+  const enumOptions = useMemo(
+    () => (enumField ? getEnumOptions(enumField, data?.rows.map((r) => r[enumField]) ?? []) : []),
+    [enumField, data],
+  );
 
   const handleSort = (col: string) => {
     if (sortBy === col) {
@@ -72,18 +125,42 @@ export const ResultTable: React.FC<ResultTableProps> = ({ projectId, tableName }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isDownloading}
-          onClick={() => {
-            setIsDownloading(true);
-            downloadTableCsv(projectId, tableName).finally(() => setIsDownloading(false));
-          }}
-        >
-          {isDownloading ? 'Téléchargement…' : 'Download CSV'}
-        </Button>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isDownloading}
+            onClick={() => {
+              setIsDownloading(true);
+              downloadTableCsv(projectId, tableName).finally(() => setIsDownloading(false));
+            }}
+          >
+            {isDownloading ? 'Téléchargement…' : 'Download CSV'}
+          </Button>
+
+          {enumField && (
+            <MultiSelectFilter
+              field={enumField}
+              options={enumOptions}
+              selected={enumValues}
+              onChange={(next) => {
+                setEnumValues(next);
+                setSkip(0);
+              }}
+            />
+          )}
+          {numericField && (
+            <RangeFilter
+              field={numericField}
+              value={rangeValue}
+              onChange={(next) => {
+                setRangeValue(next);
+                setSkip(0);
+              }}
+            />
+          )}
+        </div>
 
         <Select
           name="rows-per-page"

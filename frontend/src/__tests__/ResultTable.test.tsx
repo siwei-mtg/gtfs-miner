@@ -177,4 +177,106 @@ describe('ResultTable', () => {
       expect(screen.getByLabelText(/Go to next page/i)).toBeInTheDocument();
     });
   });
+
+  // ── New tests for Task 38B: filter UI ──────────────────────────────────
+
+  it('test_multi_select_filter_renders_for_enum_columns', async () => {
+    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    render(<ResultTable projectId="p1" tableName="b1" />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('route_type-filter-trigger')).toBeInTheDocument();
+    });
+  });
+
+  it('test_range_filter_renders_for_numeric_columns', async () => {
+    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    render(<ResultTable projectId="p1" tableName="f1" />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('nb_course min')).toBeInTheDocument();
+      expect(screen.getByLabelText('nb_course max')).toBeInTheDocument();
+    });
+  });
+
+  it('test_enum_selection_triggers_api_call_with_filter_values', async () => {
+    const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const user = userEvent.setup();
+    render(<ResultTable projectId="p1" tableName="b1" />);
+
+    await waitFor(() => expect(getTableMock).toHaveBeenCalled());
+
+    const checkbox = screen.getByLabelText('route_type-option-3');
+    await user.click(checkbox);
+
+    await waitFor(() => {
+      expect(getTableMock).toHaveBeenLastCalledWith(
+        'p1',
+        'b1',
+        expect.objectContaining({
+          filter_field: 'route_type',
+          filter_values: ['3'],
+        }),
+      );
+    });
+  });
+
+  it('test_range_input_triggers_api_call_with_range_params', async () => {
+    const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const user = userEvent.setup();
+    render(<ResultTable projectId="p1" tableName="f1" />);
+
+    await waitFor(() => expect(getTableMock).toHaveBeenCalled());
+
+    const minInput = screen.getByLabelText('nb_course min');
+    await user.clear(minInput);
+    await user.type(minInput, '25');
+
+    await waitFor(() => {
+      expect(getTableMock).toHaveBeenLastCalledWith(
+        'p1',
+        'f1',
+        expect.objectContaining({
+          range_field: 'nb_course',
+          range_min: 25,
+        }),
+      );
+    });
+  });
+
+  it('test_on_filter_change_callback_emits_route_types', async () => {
+    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const user = userEvent.setup();
+    const onFilterChange = vi.fn();
+    render(<ResultTable projectId="p1" tableName="b1" onFilterChange={onFilterChange} />);
+
+    await waitFor(() => expect(screen.getByLabelText('route_type-filter-trigger')).toBeInTheDocument());
+
+    const checkbox = screen.getByLabelText('route_type-option-3');
+    await user.click(checkbox);
+
+    await waitFor(() => {
+      expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ routeTypes: ['3'] }));
+    });
+  });
+
+  it('test_filter_state_resets_when_table_name_changes', async () => {
+    const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const user = userEvent.setup();
+    const { rerender } = render(<ResultTable projectId="p1" tableName="b1" />);
+
+    await waitFor(() => expect(screen.getByLabelText('route_type-option-3')).toBeInTheDocument());
+    await user.click(screen.getByLabelText('route_type-option-3'));
+    await waitFor(() =>
+      expect(getTableMock).toHaveBeenLastCalledWith('p1', 'b1', expect.objectContaining({ filter_values: ['3'] })),
+    );
+
+    // Switch tables — filter should be cleared, no filter_values on next call.
+    rerender(<ResultTable projectId="p1" tableName="f1" />);
+    await waitFor(() => {
+      const lastCall = getTableMock.mock.calls[getTableMock.mock.calls.length - 1];
+      expect(lastCall[1]).toBe('f1');
+      expect(lastCall[2]).toEqual(expect.objectContaining({ filter_values: undefined }));
+    });
+  });
 });
