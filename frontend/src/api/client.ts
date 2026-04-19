@@ -147,3 +147,22 @@ export async function getJourTypes(projectId: string): Promise<JourTypeOption[]>
   if (!res.ok) throw new Error(`getJourTypes failed: ${res.status}`)
   return res.json()
 }
+
+export interface PeakOffpeakRow {
+  id_ag_num: number
+  stop_name: string
+  peak_count: number
+  offpeak_count: number
+}
+
+export async function getPeakOffpeak(
+  projectId: string,
+  jourType: number,
+): Promise<{ rows: PeakOffpeakRow[] }> {
+  const res = await fetch(
+    `${BASE}/${projectId}/charts/peak-offpeak?jour_type=${jourType}`,
+    { headers: getAuthHeaders() },
+  )
+  if (!res.ok) throw new Error(`getPeakOffpeak failed: ${res.status}`)
+  return res.json()
+}
