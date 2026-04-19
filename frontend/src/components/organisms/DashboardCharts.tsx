@@ -93,14 +93,19 @@ export function DashboardCharts({ projectId, jourType, filters, className, onRou
         })),
       )
 
-      type F1Row = { id_ligne_num: number; route_short_name: string | null; type_jour: number; nb_course: number }
-      const top20 = (rows: F1Row[], valueKey: 'nb_course' | 'kcc') =>
+      type LigneBase = {
+        id_ligne_num: number
+        route_short_name: string | null
+        type_jour: number
+      }
+      const top20 = <T extends LigneBase>(rows: T[], valueKey: keyof T) =>
         rows
           .filter((r) => r.type_jour === jourType)
           .filter((r) => selectedLigneIds.length === 0 || selectedLigneIds.includes(r.id_ligne_num))
-          .sort((a, b) => (b as unknown as Record<string, number>)[valueKey] - (a as unknown as Record<string, number>)[valueKey])
+          .sort((a, b) => Number(b[valueKey]) - Number(a[valueKey]))
           .slice(0, 20)
 
+      type F1Row = LigneBase & { nb_course: number }
       const f1Top = top20(f1.rows as F1Row[], 'nb_course')
       setTopCourses(
         f1Top.map((r) => ({
@@ -110,8 +115,8 @@ export function DashboardCharts({ projectId, jourType, filters, className, onRou
         })),
       )
 
-      type F3Row = F1Row & { kcc: number }
-      const f3Top = top20(f3.rows as unknown as F3Row[], 'kcc')
+      type F3Row = LigneBase & { kcc: number }
+      const f3Top = top20(f3.rows as F3Row[], 'kcc')
       setTopKcc(
         f3Top.map((r) => ({
           name: r.route_short_name ?? `#${r.id_ligne_num}`,

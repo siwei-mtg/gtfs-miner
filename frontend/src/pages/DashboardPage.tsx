@@ -23,6 +23,7 @@ import { PassageAGLayer } from '@/components/PassageAGLayer';
 import { PassageArcLayer } from '@/components/PassageArcLayer';
 import { ResultTable } from '@/components/organisms/ResultTable';
 import { PlanGate } from '@/components/molecules/PlanGate';
+import { ErrorBoundary } from '@/components/molecules/ErrorBoundary';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -72,13 +73,15 @@ export const DashboardPage: React.FC = () => {
   }
 
   return (
-    <DashboardSyncProvider initialJourType={initialJourType}>
-      <DashboardShell
-        projectId={projectId}
-        jourTypeOptions={jourTypeOptions}
-        bootError={error}
-      />
-    </DashboardSyncProvider>
+    <ErrorBoundary scope="DashboardPage">
+      <DashboardSyncProvider initialJourType={initialJourType}>
+        <DashboardShell
+          projectId={projectId}
+          jourTypeOptions={jourTypeOptions}
+          bootError={error}
+        />
+      </DashboardSyncProvider>
+    </ErrorBoundary>
   );
 };
 
@@ -147,35 +150,37 @@ function DashboardShell({ projectId, jourTypeOptions, bootError }: ShellProps) {
           data-testid="dashboard-map"
           className="xl:row-span-2 min-h-[400px] rounded-lg border overflow-hidden"
         >
-          <PlanGate
-            plan="pro"
-            fallback={
-              <div
-                data-testid="dashboard-map-upgrade"
-                className="flex h-full min-h-[400px] flex-col items-center justify-center gap-3 p-8 text-center"
-              >
-                <h3 className="text-base font-semibold">Couche cartographique verrouillée</h3>
-                <p className="max-w-sm text-sm text-muted-foreground">
-                  La visualisation des passages AG / arcs (E_1, E_4) est réservée aux
-                  forfaits <strong>Pro</strong> et <strong>Enterprise</strong>.
-                </p>
-                <Button variant="default" size="sm" disabled>
-                  Mettre à niveau (bientôt)
-                </Button>
-              </div>
-            }
-          >
-            <MapView
-              projectId={projectId}
-              jourType={state.jourType}
-              onStopClick={(agId, shiftKey) =>
-                dispatch({ type: 'TOGGLE_AG_ID', payload: agId, shift: shiftKey })
+          <ErrorBoundary scope="Map pane">
+            <PlanGate
+              plan="pro"
+              fallback={
+                <div
+                  data-testid="dashboard-map-upgrade"
+                  className="flex h-full min-h-[400px] flex-col items-center justify-center gap-3 p-8 text-center"
+                >
+                  <h3 className="text-base font-semibold">Couche cartographique verrouillée</h3>
+                  <p className="max-w-sm text-sm text-muted-foreground">
+                    La visualisation des passages AG / arcs (E_1, E_4) est réservée aux
+                    forfaits <strong>Pro</strong> et <strong>Enterprise</strong>.
+                  </p>
+                  <Button variant="default" size="sm" disabled>
+                    Mettre à niveau (bientôt)
+                  </Button>
+                </div>
               }
             >
-              <PassageAGLayer projectId={projectId} jourType={state.jourType} />
-              <PassageArcLayer projectId={projectId} jourType={state.jourType} />
-            </MapView>
-          </PlanGate>
+              <MapView
+                projectId={projectId}
+                jourType={state.jourType}
+                onStopClick={(agId, shiftKey) =>
+                  dispatch({ type: 'TOGGLE_AG_ID', payload: agId, shift: shiftKey })
+                }
+              >
+                <PassageAGLayer projectId={projectId} jourType={state.jourType} />
+                <PassageArcLayer projectId={projectId} jourType={state.jourType} />
+              </MapView>
+            </PlanGate>
+          </ErrorBoundary>
         </section>
 
         {/* Charts pane */}
@@ -183,12 +188,14 @@ function DashboardShell({ projectId, jourTypeOptions, bootError }: ShellProps) {
           data-testid="dashboard-charts"
           className="rounded-lg border p-3 overflow-auto"
         >
-          <DashboardCharts
-            projectId={projectId}
-            jourType={state.jourType}
-            filters={state}
-            onRouteTypeClick={(rt) => dispatch({ type: 'TOGGLE_ROUTE_TYPE', payload: rt })}
-          />
+          <ErrorBoundary scope="Charts pane">
+            <DashboardCharts
+              projectId={projectId}
+              jourType={state.jourType}
+              filters={state}
+              onRouteTypeClick={(rt) => dispatch({ type: 'TOGGLE_ROUTE_TYPE', payload: rt })}
+            />
+          </ErrorBoundary>
         </section>
 
         {/* Table pane (with tabs) */}
@@ -196,25 +203,27 @@ function DashboardShell({ projectId, jourTypeOptions, bootError }: ShellProps) {
           data-testid="dashboard-table"
           className="rounded-lg border p-3 overflow-auto"
         >
-          <Tabs value={activeTable} onValueChange={setActiveTable}>
-            <TabsList className="flex-wrap h-auto">
-              {RESULT_TABLES.map((t) => (
-                <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-          <div className="mt-3">
-            <ResultTable
-              projectId={projectId}
-              tableName={activeTable}
-              externalEnumValues={routeTypesForTable}
-              onFilterChange={(f) => {
-                if (f.routeTypes !== undefined) {
-                  dispatch({ type: 'SET_ROUTE_TYPES', payload: f.routeTypes });
-                }
-              }}
-            />
-          </div>
+          <ErrorBoundary scope="Table pane">
+            <Tabs value={activeTable} onValueChange={setActiveTable}>
+              <TabsList className="flex-wrap h-auto">
+                {RESULT_TABLES.map((t) => (
+                  <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <div className="mt-3">
+              <ResultTable
+                projectId={projectId}
+                tableName={activeTable}
+                externalEnumValues={routeTypesForTable}
+                onFilterChange={(f) => {
+                  if (f.routeTypes !== undefined) {
+                    dispatch({ type: 'SET_ROUTE_TYPES', payload: f.routeTypes });
+                  }
+                }}
+              />
+            </div>
+          </ErrorBoundary>
         </section>
       </div>
     </div>

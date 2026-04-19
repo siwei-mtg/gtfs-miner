@@ -10,7 +10,6 @@
  */
 import {
   createContext,
-  createElement,
   useContext,
   useMemo,
   useReducer,
@@ -100,7 +99,7 @@ export function DashboardSyncProvider({
     agIds: [],
   })
   const value = useMemo(() => ({ state, dispatch }), [state])
-  return createElement(DashboardSyncContext.Provider, { value }, children)
+  return <DashboardSyncContext.Provider value={value}>{children}</DashboardSyncContext.Provider>
 }
 
 export function useDashboardSync(): ContextValue {
