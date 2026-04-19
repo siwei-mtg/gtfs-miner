@@ -65,12 +65,22 @@ export const ResultTable: React.FC<ResultTableProps> = ({
 
   // When the Dashboard pushes down a new selection (e.g. user clicked a Pie
   // sector) mirror it locally so the filter chip and backend request update.
-  const externalKey = externalEnumValues ? externalEnumValues.join(',') : null;
+  //
+  // CRITICAL: depend only on the CSV-joined key (primitive string), not on
+  // `externalEnumValues` (array reference).  The parent dispatches a new
+  // array every render even when content is unchanged; using the array as
+  // an effect dep creates a render → setEnumValues → onFilterChange emit →
+  // dispatch → new state object → render feedback loop that tripped
+  // "Maximum update depth exceeded" in production.  The `null` sentinel
+  // distinguishes "prop not provided" (uncontrolled) from "prop is []"
+  // (controlled, empty).
+  const externalKey = externalEnumValues === undefined ? null : externalEnumValues.join(',');
   useEffect(() => {
-    if (externalEnumValues === undefined) return;
-    setEnumValues(externalEnumValues);
+    if (externalKey === null) return;
+    const parsed = externalKey === '' ? [] : externalKey.split(',');
+    setEnumValues(parsed);
     setSkip(0);
-  }, [externalKey, externalEnumValues]);
+  }, [externalKey]);
 
   useEffect(() => {
     let mounted = true;

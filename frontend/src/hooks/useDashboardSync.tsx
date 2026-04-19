@@ -41,6 +41,20 @@ function toggleInArray<T>(arr: T[], value: T): T[] {
   return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value]
 }
 
+/**
+ * Shallow equality on ordered arrays of primitives.  Used by the SET_*
+ * reducer cases to avoid returning a fresh state reference when the caller
+ * dispatches with identical content — without this, a two-way sync path
+ * (ResultTable ↔ context ↔ ResultTable) re-fires every render and React
+ * throws "Maximum update depth exceeded".
+ */
+function sameArray<T>(a: readonly T[], b: readonly T[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
+}
+
 export function dashboardSyncReducer(state: FilterState, action: FilterAction): FilterState {
   switch (action.type) {
     case 'SET_JOUR_TYPE':
@@ -51,9 +65,11 @@ export function dashboardSyncReducer(state: FilterState, action: FilterAction): 
       return { ...state, routeTypes: toggleInArray(state.routeTypes, action.payload) }
 
     case 'SET_ROUTE_TYPES':
+      if (sameArray(state.routeTypes, action.payload)) return state
       return { ...state, routeTypes: action.payload }
 
     case 'SET_LIGNE_IDS':
+      if (sameArray(state.ligneIds, action.payload)) return state
       return { ...state, ligneIds: action.payload }
 
     case 'TOGGLE_AG_ID':
@@ -68,6 +84,7 @@ export function dashboardSyncReducer(state: FilterState, action: FilterAction): 
       }
 
     case 'SET_AG_IDS':
+      if (sameArray(state.agIds, action.payload)) return state
       return { ...state, agIds: action.payload }
 
     case 'CLEAR_FILTERS':
