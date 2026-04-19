@@ -63,11 +63,11 @@ export function DashboardCharts({ projectId, jourType, filters, className }: Pro
 
     async function load() {
       const [b1, f1, f3, peak] = await Promise.all([
-        getTableData(projectId, 'b1_lignes', { skip: 0, limit: MAX_ROWS }),
-        getTableData(projectId, 'f1_nb_courses_lignes', {
+        getTableData(projectId, 'b1', { skip: 0, limit: MAX_ROWS }),
+        getTableData(projectId, 'f1', {
           skip: 0, limit: MAX_ROWS, sort_by: 'nb_course', sort_order: 'desc',
         }),
-        getTableData(projectId, 'f3_kcc_lignes', {
+        getTableData(projectId, 'f3', {
           skip: 0, limit: MAX_ROWS, sort_by: 'kcc', sort_order: 'desc',
         }),
         getPeakOffpeak(projectId, jourType),

@@ -54,13 +54,13 @@ function buildPeakRows() {
 beforeEach(() => {
   vi.clearAllMocks()
   mockedGetTableData.mockImplementation(async (_pid, tableName) => {
-    if (tableName === 'b1_lignes') {
+    if (tableName === 'b1') {
       return { total: 3, rows: buildB1Rows(), columns: ['id_ligne_num', 'route_type'] }
     }
-    if (tableName === 'f1_nb_courses_lignes') {
+    if (tableName === 'f1') {
       return { total: 3, rows: buildF1Rows(), columns: ['id_ligne_num', 'type_jour', 'nb_course'] }
     }
-    if (tableName === 'f3_kcc_lignes') {
+    if (tableName === 'f3') {
       return { total: 2, rows: buildF3Rows(), columns: ['id_ligne_num', 'type_jour', 'kcc'] }
     }
     return { total: 0, rows: [], columns: [] }
@@ -85,9 +85,9 @@ describe('DashboardCharts', () => {
 
     await waitFor(() => expect(mockedGetTableData).toHaveBeenCalledTimes(3))
     const calledTables = mockedGetTableData.mock.calls.map((c) => c[1])
-    expect(calledTables).toContain('b1_lignes')
-    expect(calledTables).toContain('f1_nb_courses_lignes')
-    expect(calledTables).toContain('f3_kcc_lignes')
+    expect(calledTables).toContain('b1')
+    expect(calledTables).toContain('f1')
+    expect(calledTables).toContain('f3')
 
     expect(mockedGetPeakOffpeak).toHaveBeenCalledWith('p1', 1)
   })
@@ -109,7 +109,7 @@ describe('DashboardCharts', () => {
   it('sorts F_1 request with nb_course desc and caps limit at 200', async () => {
     render(<DashboardCharts projectId="p1" jourType={1} />)
     await waitFor(() => expect(mockedGetTableData).toHaveBeenCalled())
-    const f1Call = mockedGetTableData.mock.calls.find((c) => c[1] === 'f1_nb_courses_lignes')
+    const f1Call = mockedGetTableData.mock.calls.find((c) => c[1] === 'f1')
     expect(f1Call).toBeDefined()
     expect(f1Call![2]).toMatchObject({
       sort_by: 'nb_course',
