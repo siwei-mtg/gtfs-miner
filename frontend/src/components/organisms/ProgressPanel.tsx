@@ -17,10 +17,12 @@ const STEP_LABELS = [
   '生成线路与子线路',
   '生成服务日期与日类型',
   '计算通过次数与 KCC 指标',
+  '将结果写入数据库',
+  '构建查询数据库（DWD）',
 ]
 
 function getStepIndex(step: string): number {
-  const match = step.match(/^\[(\d)\/7\]/)
+  const match = step.match(/^\[(\d+)\/(\d+)\]/)
   return match ? parseInt(match[1], 10) - 1 : -1
 }
 
@@ -44,7 +46,8 @@ export function ProgressPanel({ messages, status }: ProgressPanelProps) {
 
   const currentStepMsg = latest.status === 'processing' ? getStepIndex(latest.step) : -1
 
-  const progressPercentage = status === 'completed' ? 100 : Math.round((completedSteps.size / STEP_LABELS.length) * 100)
+  const computed = Math.round((completedSteps.size / STEP_LABELS.length) * 100)
+  const progressPercentage = status === 'completed' ? 100 : Math.min(99, computed)
 
   return (
     <div aria-label="progress-panel" className="space-y-6">
