@@ -13,6 +13,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch
 
+import pandas as pd
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -21,7 +22,7 @@ from sqlalchemy.pool import StaticPool
 import app.db.result_models  # noqa: F401 — ensure result tables are registered
 from app.db.database import Base
 from app.db.models import Project
-from app.services.worker import run_project_task_sync
+from app.services.worker import _persist_results_to_db, run_project_task_sync
 
 GTFS_ZIP = Path(__file__).parent / "Resources" / "raw" / "SEM-GTFS(2).zip"
 
@@ -123,3 +124,84 @@ def test_idempotent_reprocess(mem_engine, mem_session_factory, tmp_path):
     assert count_second == count_first, (
         f"Row count changed after re-run: {count_first} → {count_second} (idempotency violation)"
     )
+
+
+# ── Regression tests for BUG-007 — melt path handling ────────────────────────
+# e7be33f split melt into two paths (numeric vs legacy labels) but let the
+# legacy-label .map() run on the numeric path too, silently wiping all rows.
+
+def _write_e1_csv(path: Path, columns: list[str], rows: list[tuple]) -> None:
+    """Write a minimal E_1_Nombre_Passage_AG.csv with the given pivot columns."""
+    id_cols = ["id_ag_num", "stop_name", "stop_lat", "stop_lon"]
+    df = pd.DataFrame(rows, columns=id_cols + columns)
+    df.to_csv(path / "E_1_Nombre_Passage_AG.csv", sep=";", index=False, encoding="utf-8-sig")
+
+
+def test_persist_melts_numeric_columns(mem_engine, mem_session_factory, tmp_path):
+    """Current CSV format: pivot columns named "1"–"11" must be melted into E_1."""
+    pid = str(uuid.uuid4())
+    _make_project(mem_session_factory, pid)
+
+    cols = ["1", "2", "3", "4", "5", "6", "7"]
+    rows = [
+        (10001, "STOP_A", 47.0, 5.5, 10, 10, 10, 10, 10, 5, 0),
+        (10002, "STOP_B", 47.1, 5.6, 20, 20, 20, 20, 20, 0, 0),
+    ]
+    _write_e1_csv(tmp_path, cols, rows)
+
+    db = mem_session_factory()
+    try:
+        _persist_results_to_db(pid, tmp_path, db)
+    finally:
+        db.close()
+
+    with mem_engine.connect() as conn:
+        count = conn.execute(
+            text("SELECT COUNT(*) FROM result_e1_passage_ag WHERE project_id = :pid"),
+            {"pid": pid},
+        ).scalar()
+        type_jours = set(
+            r[0] for r in conn.execute(
+                text("SELECT DISTINCT type_jour FROM result_e1_passage_ag WHERE project_id = :pid"),
+                {"pid": pid},
+            )
+        )
+    assert count == len(rows) * len(cols), (
+        f"Expected {len(rows) * len(cols)} melted rows, got {count}"
+    )
+    assert type_jours == {1, 2, 3, 4, 5, 6, 7}
+
+
+def test_persist_melts_legacy_label_columns(mem_engine, mem_session_factory, tmp_path):
+    """Legacy CSV format: French label columns must map to ints 1–11 via TYPE_JOUR_VAC_LABELS."""
+    pid = str(uuid.uuid4())
+    _make_project(mem_session_factory, pid)
+
+    cols = ["Lundi_Scolaire", "Samedi_Vacances", "Ferie"]  # → 1, 9, 11
+    rows = [
+        (10001, "STOP_A", 47.0, 5.5, 10, 5, 2),
+        (10002, "STOP_B", 47.1, 5.6, 20, 10, 4),
+    ]
+    _write_e1_csv(tmp_path, cols, rows)
+
+    db = mem_session_factory()
+    try:
+        _persist_results_to_db(pid, tmp_path, db)
+    finally:
+        db.close()
+
+    with mem_engine.connect() as conn:
+        count = conn.execute(
+            text("SELECT COUNT(*) FROM result_e1_passage_ag WHERE project_id = :pid"),
+            {"pid": pid},
+        ).scalar()
+        type_jours = set(
+            r[0] for r in conn.execute(
+                text("SELECT DISTINCT type_jour FROM result_e1_passage_ag WHERE project_id = :pid"),
+                {"pid": pid},
+            )
+        )
+    assert count == len(rows) * len(cols), (
+        f"Expected {len(rows) * len(cols)} melted rows, got {count}"
+    )
+    assert type_jours == {1, 9, 11}

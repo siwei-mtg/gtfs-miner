@@ -98,15 +98,16 @@ def _persist_results_to_db(project_id: str, out_dir: Path, db: Session) -> None:
             keep = [c for c in id_cols if c in df.columns]
             # Numeric column names ("1"–"11") — current/normal format
             pivot_cols = [c for c in df.columns if str(c).isdigit()]
+            is_legacy_labels = False
             if not pivot_cols:
                 # String day-type labels ("Jeudi_Scolaire" etc.) — legacy CSV format
                 pivot_cols = [c for c in df.columns if c in TYPE_JOUR_VAC_LABELS]
+                is_legacy_labels = True
             if keep and pivot_cols:
                 df = df[keep + pivot_cols].melt(
                     id_vars=keep, var_name="type_jour", value_name=val_col
                 )
-                # Map string labels → integers; numeric strings cast directly
-                if df["type_jour"].dtype == object:
+                if is_legacy_labels:
                     df["type_jour"] = df["type_jour"].map(TYPE_JOUR_VAC_LABELS)
                     df = df.dropna(subset=["type_jour"])
                 df["type_jour"] = df["type_jour"].astype(int)

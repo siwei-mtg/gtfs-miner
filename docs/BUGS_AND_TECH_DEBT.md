@@ -14,6 +14,7 @@
 | [BUG-004](#bug-004) | 🔴 Open | Medium | `DownloadButton.test.tsx` — 测试期望 `<a>` 元素但组件渲染 `<button>` | 2026-04-14 |
 | [BUG-005](#bug-005) | 🔴 Open | Medium | `useAuth.test.ts` — 6 个测试因 `useAuthContext must be used within AuthProvider` 全部失败 | 2026-04-14 |
 | [BUG-006](#bug-006) | 🔴 Open | Medium | `App.test.tsx` — 4 个路由测试在 Task 42 AppShell 重构后失败 | 2026-04-14 |
+| [BUG-007](#bug-007) | ✅ Resolved | High | `e7be33f` 双路径 melt 在数字列名下误触发 label map → E1/E4/F1/F3/F4 再次为空 | 2026-04-22 |
 
 ---
 
@@ -115,6 +116,59 @@ out_dir = PROJECT_DIR / project.tenant_id / project_id / "output"
 - `backend/app/services/worker.py`  
 - `backend/app/db/models.py`（新增 `CalendarDate`）  
 - `backend/app/services/calendar_seeder.py`（新增）
+
+**后续回归**：该问题在 commit `e7be33f`（2026-04-15）被无意回归，详见 [BUG-007](#bug-007)。
+
+---
+
+### BUG-007
+
+**标题**：`e7be33f` 双路径 melt 在数字列名下误触发 label map → E1/E4/F1/F3/F4 再次为空
+
+**状态**：✅ Resolved（2026-04-22）  
+**严重度**：High（BUG-003 回归；新上传 GTFS 的 E/F 表 DB 写入 0 行，前端显示全空，F2 不受影响）  
+**影响范围**：在 `e7be33f` 之后上传的所有项目（数字列 `"1"`–`"11"` 格式，当前/正常路径）
+
+**根因**：  
+commit `e7be33f` 为了兼容旧 CSV 的法语标签列（`Jeudi_Scolaire` 等）在 `_persist_results_to_db()` 的 melt 步骤加入 `.map(TYPE_JOUR_VAC_LABELS)`，但**没有区分两条路径**：
+
+```python
+pivot_cols = [c for c in df.columns if str(c).isdigit()]       # 路径 A：数字列
+if not pivot_cols:
+    pivot_cols = [c for c in df.columns if c in TYPE_JOUR_VAC_LABELS]  # 路径 B：法语标签
+...
+df = df[keep + pivot_cols].melt(...)
+if df["type_jour"].dtype == object:       # ← 两条路径 melt 后都是 object 类型
+    df["type_jour"] = df["type_jour"].map(TYPE_JOUR_VAC_LABELS)  # 路径 A 下 "1"/"2"/"11" 不在字典 → 全 NaN
+    df = df.dropna(subset=["type_jour"])   # ← 抹掉所有行
+```
+
+路径 A（新 CSV，数字列）melt 后 `type_jour` 是 `"1"/"2"/…/"11"` 字符串，这些 key 不在 `TYPE_JOUR_VAC_LABELS` 字典（只含 `Lundi_Scolaire` 等法语标签），`.map()` 全部返回 NaN，`dropna()` 抹除所有行 → 空表写入 DB。
+
+**为什么 F2 幸免**：`_CSV_TO_TABLE` 中 F_2 的 `id_cols=None`，跳过整个 melt 分支，CSV 原样入库。
+
+**复现**：上传任一 GTFS ZIP 触发 pipeline，查 `result_e1_passage_ag WHERE project_id=?` 为 0 行，但磁盘 CSV 大小正常。
+
+**修复方案**：用 `is_legacy_labels` 布尔标记区分两条路径，只在法语标签路径下执行 `.map()`：
+
+```python
+pivot_cols = [c for c in df.columns if str(c).isdigit()]
+is_legacy_labels = False
+if not pivot_cols:
+    pivot_cols = [c for c in df.columns if c in TYPE_JOUR_VAC_LABELS]
+    is_legacy_labels = True
+...
+if is_legacy_labels:
+    df["type_jour"] = df["type_jour"].map(TYPE_JOUR_VAC_LABELS)
+    df = df.dropna(subset=["type_jour"])
+df["type_jour"] = df["type_jour"].astype(int)
+```
+
+**恢复历史数据**：对受影响项目跑 `python backend/repersist_project.py <project_id>`（idempotent）。
+
+**涉及文件**：  
+- `backend/app/services/worker.py`（`_persist_results_to_db`）  
+- `backend/tests/test_result_persistence.py`（新增 `test_persist_melts_numeric_columns` 和 `test_persist_melts_legacy_label_columns` 回归测试，覆盖两条路径）
 
 ---
 
