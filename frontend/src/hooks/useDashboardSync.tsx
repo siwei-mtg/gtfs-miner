@@ -1,12 +1,13 @@
 /**
- * useDashboardSync — global filter state shared between Map, Charts, and Table
- * panels on the Dashboard page (Task 39A).
+ * useDashboardSync — global filter state shared between Map, Charts, KPIs,
+ * and Table panels on the Dashboard page.
  *
  * FilterState lives in a React Context so each pane can dispatch changes and
  * subscribe to others' changes without prop-drilling:
- *   - Map pie-click      → TOGGLE_AG_ID          → Charts + Table re-query
- *   - Chart sector click → TOGGLE_ROUTE_TYPE     → Map + Table re-query
- *   - Table filter UI    → SET_ROUTE_TYPES / SET_LIGNE_IDS
+ *   - Map pie-click         → TOGGLE_AG_ID          → Charts + KPI + Tables re-query
+ *   - jour_type bar click   → SET_JOUR_TYPE         → everything re-queries
+ *   - hour bar click        → TOGGLE_HOUR           → (C_1-based) table filters
+ *   - Table filter UI       → SET_ROUTE_TYPES / SET_LIGNE_IDS
  */
 import {
   createContext,
@@ -20,12 +21,17 @@ import {
 export interface FilterState {
   /** Active jour_type (required everywhere — maps / charts / tables). */
   jourType: number
+  /** Initial jour_type recorded at provider boot so the header badge can tell
+   *  "user customised this" from "still on the default". */
+  initialJourType: number
   /** route_type values (as strings: "0", "3", …) the user has opted into. */
   routeTypes: string[]
   /** id_ligne_num values the user has opted into. */
   ligneIds: number[]
   /** id_ag_num values the user has opted into (map pie-chart click selection). */
   agIds: number[]
+  /** Hours of day (0..23) the user has opted into via the hourly bar chart. */
+  hoursSelected: number[]
 }
 
 export type FilterAction =
@@ -35,6 +41,7 @@ export type FilterAction =
   | { type: 'SET_LIGNE_IDS'; payload: number[] }
   | { type: 'TOGGLE_AG_ID'; payload: number; shift: boolean }
   | { type: 'SET_AG_IDS'; payload: number[] }
+  | { type: 'TOGGLE_HOUR'; payload: number }
   | { type: 'CLEAR_FILTERS' }
 
 function toggleInArray<T>(arr: T[], value: T): T[] {
@@ -46,7 +53,7 @@ function toggleInArray<T>(arr: T[], value: T): T[] {
  * reducer cases to avoid returning a fresh state reference when the caller
  * dispatches with identical content — without this, a two-way sync path
  * (ResultTable ↔ context ↔ ResultTable) re-fires every render and React
- * throws "Maximum update depth exceeded".
+ * throws "Maximum update depth exceeded" (see commit 98decec for history).
  */
 function sameArray<T>(a: readonly T[], b: readonly T[]): boolean {
   if (a === b) return true
@@ -87,12 +94,58 @@ export function dashboardSyncReducer(state: FilterState, action: FilterAction): 
       if (sameArray(state.agIds, action.payload)) return state
       return { ...state, agIds: action.payload }
 
+    case 'TOGGLE_HOUR': {
+      const next = toggleInArray(state.hoursSelected, action.payload)
+      if (sameArray(state.hoursSelected, next)) return state
+      return { ...state, hoursSelected: next }
+    }
+
     case 'CLEAR_FILTERS':
-      return { ...state, routeTypes: [], ligneIds: [], agIds: [] }
+      return {
+        ...state,
+        jourType: state.initialJourType,
+        routeTypes: [],
+        ligneIds: [],
+        agIds: [],
+        hoursSelected: [],
+      }
 
     default:
       return state
   }
+}
+
+/** Total number of independently-set filter dimensions — powers the reset badge. */
+export function activeFilterCount(state: FilterState): number {
+  let n = 0
+  if (state.jourType !== state.initialJourType) n += 1
+  if (state.routeTypes.length > 0) n += 1
+  if (state.ligneIds.length > 0) n += 1
+  if (state.agIds.length > 0) n += 1
+  if (state.hoursSelected.length > 0) n += 1
+  return n
+}
+
+/**
+ * Tell the sidebar which table should show a funnel icon given the current
+ * filters.  Mapping is taken straight from DASHBOARD_REFONTE_PLAN.md §
+ * "筛选维度 → 表格 映射".
+ */
+const TABLES_AFFECTED: Record<keyof Omit<FilterState, 'jourType' | 'initialJourType'> | 'jourType', string[]> = {
+  routeTypes: ['b1', 'b2', 'f1', 'f3', 'e1', 'e4'],
+  ligneIds: ['b1', 'b2', 'f1', 'f3'],
+  agIds: ['a1', 'e1', 'e4'],
+  hoursSelected: ['f1', 'e1', 'e4'],
+  jourType: ['f1', 'f3', 'e1', 'e4'],
+}
+
+export function isTableFiltered(state: FilterState, tableId: string): boolean {
+  if (state.routeTypes.length > 0 && TABLES_AFFECTED.routeTypes.includes(tableId)) return true
+  if (state.ligneIds.length > 0 && TABLES_AFFECTED.ligneIds.includes(tableId)) return true
+  if (state.agIds.length > 0 && TABLES_AFFECTED.agIds.includes(tableId)) return true
+  if (state.hoursSelected.length > 0 && TABLES_AFFECTED.hoursSelected.includes(tableId)) return true
+  if (state.jourType !== state.initialJourType && TABLES_AFFECTED.jourType.includes(tableId)) return true
+  return false
 }
 
 interface ContextValue {
@@ -111,9 +164,11 @@ export function DashboardSyncProvider({
 }) {
   const [state, dispatch] = useReducer(dashboardSyncReducer, {
     jourType: initialJourType,
+    initialJourType,
     routeTypes: [],
     ligneIds: [],
     agIds: [],
+    hoursSelected: [],
   })
   const value = useMemo(() => ({ state, dispatch }), [state])
   return <DashboardSyncContext.Provider value={value}>{children}</DashboardSyncContext.Provider>

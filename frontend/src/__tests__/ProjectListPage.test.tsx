@@ -67,16 +67,16 @@ describe('ProjectListPage', () => {
       expect(screen.getByText('p1')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: /新建项目/i }));
+    await user.click(screen.getByRole('button', { name: /Nouveau projet/i }));
     expect(onNewProjectClick).toHaveBeenCalled();
   });
 
   it('test_empty_state', async () => {
     vi.mocked(apiClient.listProjects).mockResolvedValue([]);
     renderWithRouter(<ProjectListPage />);
-    
+
     await waitFor(() => {
-      expect(screen.getByText(/No projects found/i)).toBeInTheDocument();
+      expect(screen.getByText(/Aucun projet/i)).toBeInTheDocument();
     });
   });
 
@@ -94,18 +94,16 @@ describe('ProjectListPage', () => {
     expect(onProjectClick).toHaveBeenCalledWith('p1');
   });
 
-  // Task 43
-  it('test_project_list_badge_completed_green', async () => {
+  // Refonte : le badge de statut est maintenant une Pastille éditoriale
+  // adjacente au libellé. Vérifie juste que le libellé s'affiche distinctement.
+  it('test_project_list_status_rendered', async () => {
     vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
     renderWithRouter(<ProjectListPage />);
 
     await waitFor(() => {
       expect(screen.getByText('completed')).toBeInTheDocument();
+      expect(screen.getByText('processing')).toBeInTheDocument();
     });
-
-    // The badge for 'completed' should have the 'default' variant class
-    const completedBadge = screen.getByText('completed');
-    expect(completedBadge.className).toMatch(/bg-primary/);
   });
 
   it('test_project_list_search_filters_rows', async () => {
@@ -117,11 +115,9 @@ describe('ProjectListPage', () => {
       expect(screen.getByText('p1')).toBeInTheDocument();
     });
 
-    // Type a non-existent project ID in the search box
-    const searchInput = screen.getByPlaceholderText('搜索项目 ID...');
+    const searchInput = screen.getByPlaceholderText(/Rechercher un ID projet/i);
     await user.type(searchInput, 'nonexistent-xyz');
 
-    // Both rows should be filtered out
     expect(screen.queryByText('p1')).not.toBeInTheDocument();
     expect(screen.queryByText('p2')).not.toBeInTheDocument();
   });

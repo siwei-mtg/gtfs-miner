@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -16,7 +16,12 @@ from ...schemas.project import ProjectCreate, ProjectResponse
 from ...services.worker import run_project_task_sync
 from ...services.result_query import TABLE_REGISTRY, ResultQueryError, query_table
 from ...services.map_builder import build_passage_ag_geojson, build_passage_arc_geojson, export_geopackage
-from ...services.charts_builder import build_peak_offpeak
+from ...services.charts_builder import (
+    build_courses_by_hour,
+    build_courses_by_jour_type,
+    build_kpis,
+    build_peak_offpeak,
+)
 from ...services.gtfs_core.calendar_provider import TYPE_JOUR_VAC_LABELS
 from ...core.config import settings, TEMP_DIR, PROJECT_DIR
 from ...api.deps import get_current_active_user
@@ -371,6 +376,9 @@ def get_peak_offpeak(
     Everything else (incl. FM / FS / HC midday) is off-peak.
 
     jour_type parameter is required; omitting it returns HTTP 422.
+
+    DEPRECATED — scheduled for removal one release after the dashboard
+    refonte lands; use `/charts/courses-by-hour` instead.
     """
     project = db.query(Project).filter(
         Project.id == project_id,
@@ -379,6 +387,54 @@ def get_peak_offpeak(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return build_peak_offpeak(project_id, jour_type, db)
+
+
+def _authorize_project(project_id: str, db: Session, current_user: User) -> Project:
+    """Shared tenant/ownership check used by all analytical endpoints below."""
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@router.get("/{project_id}/charts/courses-by-jour-type")
+def get_courses_by_jour_type(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Global courses-per-jour_type breakdown (F_1), unfiltered."""
+    _authorize_project(project_id, db, current_user)
+    return build_courses_by_jour_type(project_id, db)
+
+
+@router.get("/{project_id}/charts/courses-by-hour")
+def get_courses_by_hour(
+    project_id: str,
+    jour_type: int,
+    route_types: List[str] = Query(default_factory=list, alias="route_types"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """24-bucket hourly breakdown of C_1 courses for a jour_type."""
+    _authorize_project(project_id, db, current_user)
+    return build_courses_by_hour(project_id, jour_type, route_types, db)
+
+
+@router.get("/{project_id}/kpis")
+def get_kpis(
+    project_id: str,
+    jour_type: int,
+    route_types: List[str] = Query(default_factory=list, alias="route_types"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Return 4 KPIs (nb_lignes, nb_arrets, nb_courses, kcc_total) in one call."""
+    _authorize_project(project_id, db, current_user)
+    return build_kpis(project_id, jour_type, route_types, db)
 
 
 @router.get("/{project_id}/export/geopackage")

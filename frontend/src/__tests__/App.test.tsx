@@ -73,28 +73,30 @@ describe('App Routing & State Machine', () => {
     render(<App />)
     
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /My Projects/i })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /Mes projets/i })).toBeInTheDocument()
       expect(screen.getByText('proj-auth')).toBeInTheDocument()
     })
   })
 
   it('test_navigates_to_project_detail', async () => {
+    // Completed projects now land on /dashboard (dashboard refonte); use a
+    // non-completed project here so the click still lands on ProjectDetailPage.
     vi.mocked(useAuthModule.useAuth).mockReturnValue({
       token: 'valid-token', isLoading: false, user: { id: 'u1' } as any, login: vi.fn(), logout: vi.fn(), register: vi.fn()
     })
     vi.mocked(client.listProjects).mockResolvedValue([{
-      id: 'proj-nav', status: 'completed', created_at: '2026', updated_at: '2026', parameters: {} as any, error_message: null
+      id: 'proj-nav', status: 'processing', created_at: '2026', updated_at: '2026', parameters: {} as any, error_message: null
     }])
-    
+
     const user = userEvent.setup()
     render(<App />)
-    
+
     await waitFor(() => expect(screen.getByText('proj-nav')).toBeInTheDocument())
-    
+
     await user.click(screen.getByText('proj-nav'))
-    
+
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /Project proj-nav/i })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /Projet proj-nav/i })).toBeInTheDocument()
     })
   })
 
@@ -142,8 +144,8 @@ describe('App Routing & State Machine', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /New Project/i })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: /New Project/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Nouveau projet/i })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /Nouveau projet/i }))
 
     await waitFor(() => expect(screen.getByLabelText('GTFS ZIP')).toBeInTheDocument())
 
@@ -156,7 +158,7 @@ describe('App Routing & State Machine', () => {
     await waitFor(() => {
       expect(client.createProject).toHaveBeenCalled()
       expect(client.uploadGtfs).toHaveBeenCalled()
-      expect(screen.getByRole('heading', { name: /Project new-proj/i })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /Projet new-proj/i })).toBeInTheDocument()
     })
   })
 })

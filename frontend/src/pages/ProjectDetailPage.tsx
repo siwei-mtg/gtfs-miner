@@ -12,7 +12,8 @@ import { getJourTypes, type JourTypeOption } from '@/api/client';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/atoms/button';
 import { ChevronLeft, Map as MapIcon, Table as TableIcon, LayoutDashboard } from 'lucide-react';
-import { Badge } from '@/components/atoms/badge';
+import { CodeTag } from '@/components/atoms/CodeTag';
+import { Hairline } from '@/components/atoms/Hairline';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -64,18 +65,25 @@ export const ProjectDetailPage: React.FC = () => {
   if (!id) return <div>Invalid Project ID</div>;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-6 py-6">
+      {/* Header éditorial */}
+      <div className="flex items-center justify-between border-b border-hair pb-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate('/')} className="gap-2" aria-label="back-button">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/')}
+            className="h-8 gap-1.5 px-2 text-ink-muted hover:text-ink"
+            aria-label="back-button"
+          >
             <ChevronLeft className="h-4 w-4" />
-            Retour
+            Projets
           </Button>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold">Projet</h2>
-            <Badge variant="outline" className="font-mono">{id}</Badge>
-          </div>
+          <Hairline orientation="vertical" className="h-5" />
+          <h2 className="flex items-baseline gap-2 font-display text-2xl font-medium leading-none text-ink">
+            Projet
+            <CodeTag className="translate-y-[-1px] text-[13px]">{id}</CodeTag>
+          </h2>
         </div>
         {isCompleted && (
           <div className="flex items-center gap-2">
@@ -115,8 +123,10 @@ export const ProjectDetailPage: React.FC = () => {
 
       {/* Progress Section */}
       <Card>
-        <CardHeader className="py-4">
-          <CardTitle className="text-sm font-medium">État du traitement</CardTitle>
+        <CardHeader className="py-3">
+          <CardTitle className="text-[10px] font-medium uppercase tracking-[0.15em] text-ink-muted">
+            État du traitement
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ProgressPanel messages={messages} status={latestStatus} />

@@ -179,6 +179,10 @@ export interface PeakOffpeakRow {
   offpeak_count: number
 }
 
+/**
+ * @deprecated Replaced by `getCoursesByHour`. Scheduled for removal one
+ * release after the dashboard refonte lands.
+ */
 export async function getPeakOffpeak(
   projectId: string,
   jourType: number,
@@ -188,5 +192,69 @@ export async function getPeakOffpeak(
     { headers: getAuthHeaders() },
   )
   if (!res.ok) throw new Error(`getPeakOffpeak failed: ${res.status}`)
+  return res.json()
+}
+
+export interface CoursesByJourTypeRow {
+  jour_type: number
+  jour_type_name: string
+  nb_courses: number
+}
+
+export async function getCoursesByJourType(
+  projectId: string,
+): Promise<{ rows: CoursesByJourTypeRow[] }> {
+  const res = await fetch(
+    `${BASE}/${projectId}/charts/courses-by-jour-type`,
+    { headers: getAuthHeaders() },
+  )
+  if (!res.ok) throw new Error(`getCoursesByJourType failed: ${res.status}`)
+  return res.json()
+}
+
+export interface CoursesByHourRow {
+  heure: number
+  nb_courses: number
+}
+
+function appendRouteTypes(query: URLSearchParams, routeTypes?: string[]): void {
+  if (!routeTypes || routeTypes.length === 0) return
+  for (const rt of routeTypes) query.append('route_types', rt)
+}
+
+export async function getCoursesByHour(
+  projectId: string,
+  jourType: number,
+  routeTypes?: string[],
+): Promise<{ rows: CoursesByHourRow[] }> {
+  const query = new URLSearchParams({ jour_type: String(jourType) })
+  appendRouteTypes(query, routeTypes)
+  const res = await fetch(
+    `${BASE}/${projectId}/charts/courses-by-hour?${query.toString()}`,
+    { headers: getAuthHeaders() },
+  )
+  if (!res.ok) throw new Error(`getCoursesByHour failed: ${res.status}`)
+  return res.json()
+}
+
+export interface KpiResponse {
+  nb_lignes: number
+  nb_arrets: number
+  nb_courses: number
+  kcc_total: number
+}
+
+export async function getKpis(
+  projectId: string,
+  jourType: number,
+  routeTypes?: string[],
+): Promise<KpiResponse> {
+  const query = new URLSearchParams({ jour_type: String(jourType) })
+  appendRouteTypes(query, routeTypes)
+  const res = await fetch(
+    `${BASE}/${projectId}/kpis?${query.toString()}`,
+    { headers: getAuthHeaders() },
+  )
+  if (!res.ok) throw new Error(`getKpis failed: ${res.status}`)
   return res.json()
 }

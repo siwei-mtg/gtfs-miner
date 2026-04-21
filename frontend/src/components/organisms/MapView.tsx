@@ -120,8 +120,8 @@ export const MapView: React.FC<MapViewProps> = ({
       <div className={cn('relative w-full h-full min-h-[400px]', className)} data-testid="map-view">
         <div ref={containerRef} className="w-full h-full" />
         
-        {/* Layer Controls */}
-        <div className="absolute top-2 right-2 z-10 bg-background/90 backdrop-blur-sm border border-border rounded-md p-2 space-y-1 text-xs shadow-sm">
+        {/* Layer Controls — top-left pour éviter la carte flottante de droite */}
+        <div className="absolute top-3 left-3 z-10 bg-card/95 backdrop-blur-sm border border-hair rounded-lg p-2 space-y-1 text-xs shadow-raised">
           <label className="flex items-center gap-2 cursor-pointer hover:bg-accent/50 p-1 rounded transition-colors">
             <input
               type="checkbox"
@@ -151,7 +151,7 @@ export const MapView: React.FC<MapViewProps> = ({
         {(e1Loading || e4Loading) && (
           <div
             role="status"
-            className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-background/90 backdrop-blur-sm border border-border rounded-md px-3 py-1.5 text-xs shadow-sm flex items-center gap-2"
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-10 bg-card/95 backdrop-blur-sm border border-hair rounded-lg px-3 py-1.5 text-xs shadow-raised flex items-center gap-2"
           >
             <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
             Chargement des passages…

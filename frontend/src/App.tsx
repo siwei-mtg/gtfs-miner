@@ -7,6 +7,9 @@ import { ProjectDetailPage } from './pages/ProjectDetailPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { UploadForm } from '@/components/organisms/UploadForm'
 import { AppShell } from '@/components/templates/AppShell'
+import { Button } from '@/components/atoms/button'
+import { Hairline } from '@/components/atoms/Hairline'
+import { ChevronLeft } from 'lucide-react'
 import { createProject, uploadGtfs } from './api/client'
 import type { ProjectCreate } from './types/api'
 import { useState } from 'react'
@@ -38,9 +41,28 @@ function NewProjectPage() {
   }
 
   return (
-    <div>
-      <h2>New Project</h2>
-      <button onClick={() => navigate('/')}>&larr; Back to Projects</button>
+    <div className="mx-auto w-full max-w-3xl space-y-6 px-6 py-8">
+      <div className="flex items-center gap-3 border-b border-hair pb-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/')}
+          className="h-8 gap-1.5 px-2 text-ink-muted hover:text-ink"
+          aria-label="back-to-projects"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Projets
+        </Button>
+        <Hairline orientation="vertical" className="h-5" />
+        <div>
+          <span className="text-[10px] font-medium uppercase tracking-[0.15em] text-ink-muted">
+            Nouveau
+          </span>
+          <h2 className="mt-0.5 font-display text-2xl font-medium leading-none text-ink">
+            Nouveau projet
+          </h2>
+        </div>
+      </div>
       <UploadForm
         onSubmit={handleSubmit}
         isLoading={isUploading}

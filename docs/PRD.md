@@ -545,6 +545,34 @@ GTFS_algorithm.py    → 不迁移（legacy，保留备用）
 
 ---
 
+### Phase 2.5 — 看板重构（Tableau de bord Refonte，2026-04-20 新增）
+
+> **目标**：把 `DashboardPage` 重塑为项目的分析主入口；`ProjectDetailPage` 退化为管理页。详细设计见 `docs/DASHBOARD_REFONTE_PLAN.md`。
+
+**核心变更**：
+- 项目列表点击 `status='completed'` 的项目 → 默认跳转 `/dashboard`（而非 `/projects/:id`）
+- 看板布局重构为一屏三栏：左侧 15 张表清单（点击弹窗）/ 中间地图 / 右侧 4 张 KPI 卡片 + 2 张可交互图表
+- 移除 Header 里的 `jour_type` 下拉，改为点击柱状图筛选，范式统一为 "click-to-filter"
+- 新增维度：`hoursSelected`（小时筛选，通过点击 24 根柱的 "Courses par heure" 图触发）
+- Header 新增「重置筛选」按钮 + 徽标（显示激活筛选维度数）
+- 当前阶段移除 `<PlanGate>` 包裹（所有注册用户统一 Pro 对待，组件保留）
+
+**任务拆分**（按实施顺序）：
+- [ ] Task 48-1：后端三个新端点 `GET /charts/courses-by-jour-type`、`GET /charts/courses-by-hour`、`GET /kpis`
+- [ ] Task 48-2：扩展 `useDashboardSync`（新增 `hoursSelected` + `TOGGLE_HOUR` + `activeFilterCount` + `isTableFiltered`）
+- [ ] Task 48-3：基础组件 `KpiCard` / `TableSidebarItem` / `TableGroupHeader` + `DashboardLayout` template
+- [ ] Task 48-4：组件 `TableListSidebar` / `CoursesByJourTypeChart` / `CoursesByHourChart` / `DashboardRightPanel` / `TablePopup`
+- [ ] Task 48-5：页面装配 + 路由改造（`DashboardPage` 重写 + `AppHeader` 变体 + `ProjectListPage` 跳转逻辑）
+- [ ] Task 48-6：清理（删除旧 `DashboardCharts.tsx` + 废弃 `/charts/peak-offpeak`）
+
+**验收标准**：
+- 10 项手动黄金路径测试通过（见 `DASHBOARD_REFONTE_PLAN.md §端到端验证`）
+- Bug 40B（同步死循环）不复发
+- 前端 `npm run typecheck` + `npm run test` 无错
+- 后端 `pytest` 三个新端点全部通过
+
+---
+
 ### Phase 3 — LLM Agent + API 开放（第 8–12 周）
 - [ ] **F-09 LLM Agent（ReAct，Claude API tool_use）**
   - [ ] `/api/v1/projects/{id}/query` 端点（POST，接收自然语言问题）

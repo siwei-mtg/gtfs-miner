@@ -1,5 +1,5 @@
 终端 1 — Uvicorn（FastAPI 服务）                                                                                                              
-cd "C:/Users/wei.si/Projets/GTFS Miner/backend"                                                                                               
+cd "C:/Users/wei.si/Projets/GTFS Miner/backend"
 venv/Scripts/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000                     
 终端 2 — Celery Worker
 cd "C:/Users/wei.si/Projets/GTFS Miner/backend"

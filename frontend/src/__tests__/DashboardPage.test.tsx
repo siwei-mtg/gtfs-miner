@@ -3,107 +3,34 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { DashboardPage } from '@/pages/DashboardPage'
 import * as apiClient from '@/api/client'
-import * as usePlanModule from '@/hooks/usePlan'
 
-// Avoid pulling in MapLibre / recharts / AuthContext transitive deps during
-// unit tests — we only care about the wiring Dashboard ↔ its children.
+// Pull in only the endpoints Dashboard page uses at boot; the organisms
+// are mocked out so we stay focused on the page wiring.
 vi.mock('@/api/client', () => ({
   getJourTypes: vi.fn(),
-}))
-
-vi.mock('@/hooks/usePlan', () => ({
-  usePlan: vi.fn(() => ({
-    plan: 'pro',
-    isFree: false,
-    isPro: true,
-    isEnterprise: false,
-    hasAtLeast: (_p: 'free' | 'pro' | 'enterprise') => true,
-  })),
-  PLAN_ORDER: { free: 0, pro: 1, enterprise: 2 },
+  getKpis: vi.fn(),
+  getCoursesByJourType: vi.fn(),
+  getCoursesByHour: vi.fn(),
+  downloadGeoPackage: vi.fn(),
+  downloadProjectResults: vi.fn(),
 }))
 
 vi.mock('@/components/organisms/MapView', () => ({
-  MapView: (props: {
-    onStopClick?: (id: number, shiftKey: boolean) => void
-    jourType: number
-  }) => (
-    <div data-testid="mock-map" data-jour-type={props.jourType}>
-      <button
-        data-testid="mock-map-click-ag"
-        onClick={() => props.onStopClick?.(42, false)}
-      >
-        click AG 42
-      </button>
-    </div>
+  MapView: (props: { jourType: number }) => (
+    <div data-testid="mock-map" data-jour-type={props.jourType} />
   ),
 }))
+vi.mock('@/components/PassageAGLayer', () => ({ PassageAGLayer: () => null }))
+vi.mock('@/components/PassageArcLayer', () => ({ PassageArcLayer: () => null }))
 
-vi.mock('@/components/PassageAGLayer', () => ({
-  PassageAGLayer: () => null,
-}))
-vi.mock('@/components/PassageArcLayer', () => ({
-  PassageArcLayer: () => null,
-}))
-
-interface MockChartsProps {
-  jourType: number
-  filters?: { routeTypes?: string[]; agIds?: number[] }
-  onRouteTypeClick?: (rt: string) => void
-}
-vi.mock('@/components/organisms/DashboardCharts', () => ({
-  DashboardCharts: (props: MockChartsProps) => (
-    <div
-      data-testid="mock-charts"
-      data-jour-type={props.jourType}
-      data-filters={JSON.stringify(props.filters ?? {})}
-    >
-      <button
-        data-testid="mock-charts-click-rt"
-        onClick={() => props.onRouteTypeClick?.('3')}
-      >
-        click Bus sector
-      </button>
-    </div>
-  ),
+vi.mock('@/components/organisms/DashboardRightPanel', () => ({
+  DashboardRightPanel: () => <div data-testid="mock-right" />,
 }))
 
-interface MockTableProps {
-  tableName: string
-  externalEnumValues?: string[]
-  onFilterChange?: (f: { routeTypes?: string[] }) => void
-}
 vi.mock('@/components/organisms/ResultTable', () => ({
-  ResultTable: (props: MockTableProps) => (
-    <div
-      data-testid="mock-table"
-      data-table={props.tableName}
-      data-external={JSON.stringify(props.externalEnumValues ?? null)}
-    >
-      <button
-        data-testid="mock-table-filter-change"
-        onClick={() => props.onFilterChange?.({ routeTypes: ['0'] })}
-      >
-        apply route_type=0
-      </button>
-    </div>
+  ResultTable: (props: { tableName: string }) => (
+    <div data-testid={`mock-result-table-${props.tableName}`}>{props.tableName}</div>
   ),
-}))
-
-// Radix Select: swap for a plain native <select> with the same aria-label.
-vi.mock('@/components/ui/select', () => ({
-  Select: ({ onValueChange, value, children }: any) => (
-    <select
-      aria-label="jour-type-select"
-      value={value}
-      onChange={(e) => onValueChange(e.target.value)}
-    >
-      {children}
-    </select>
-  ),
-  SelectTrigger: ({ children }: any) => <>{children}</>,
-  SelectValue: () => null,
-  SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
 }))
 
 function renderAt(pid = 'p1') {
@@ -116,92 +43,54 @@ function renderAt(pid = 'p1') {
   )
 }
 
-describe('DashboardPage', () => {
+describe('DashboardPage (refonte)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(apiClient.getJourTypes).mockResolvedValue([
       { value: 1, label: 'Lundi_Scolaire' },
       { value: 2, label: 'Samedi' },
     ])
+    vi.mocked(apiClient.getKpis).mockResolvedValue({
+      nb_lignes: 42,
+      nb_arrets: 1204,
+      nb_courses: 8473,
+      kcc_total: 41500,
+    })
   })
 
-  it('renders map, charts, and table panels once jour-types resolve', async () => {
+  it('renders the four-zone layout (sidebar rail · KPI ribbon · map · floating right panel)', async () => {
     renderAt()
-
-    await waitFor(() => expect(screen.getByTestId('dashboard-page')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('dashboard-layout')).toBeInTheDocument())
+    expect(screen.getByTestId('dashboard-sidebar')).toBeInTheDocument()
     expect(screen.getByTestId('dashboard-map')).toBeInTheDocument()
-    expect(screen.getByTestId('dashboard-charts')).toBeInTheDocument()
-    expect(screen.getByTestId('dashboard-table')).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-right')).toBeInTheDocument()
+    expect(screen.getByTestId('kpi-ribbon')).toBeInTheDocument()
+    // Rail mode: 6 group pastilles A–F
+    expect(screen.getByTestId('sidebar-group-a')).toBeInTheDocument()
+    expect(screen.getByTestId('sidebar-group-f')).toBeInTheDocument()
   })
 
-  it('map stop click dispatches TOGGLE_AG_ID, propagating agIds to charts', async () => {
+  it('opens a group flyout then the TablePopup when a table is picked', async () => {
     renderAt()
-    await waitFor(() => expect(screen.getByTestId('mock-map-click-ag')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('dashboard-layout')).toBeInTheDocument())
 
-    // Before click: agIds empty.
-    const before = JSON.parse(screen.getByTestId('mock-charts').dataset.filters!)
-    expect(before.agIds ?? []).toEqual([])
+    // Click group B pastille → flyout opens with B_1, B_2
+    fireEvent.click(screen.getByTestId('sidebar-group-b'))
+    await waitFor(() =>
+      expect(screen.getByTestId('sidebar-table-b1')).toBeInTheDocument(),
+    )
 
-    fireEvent.click(screen.getByTestId('mock-map-click-ag'))
-
-    await waitFor(() => {
-      const after = JSON.parse(screen.getByTestId('mock-charts').dataset.filters!)
-      expect(after.agIds).toEqual([42])
-    })
+    // Click B_1 → popup opens, flyout closes
+    fireEvent.click(screen.getByTestId('sidebar-table-b1'))
+    await waitFor(() =>
+      expect(screen.getByTestId('mock-result-table-b1')).toBeInTheDocument(),
+    )
   })
 
-  it('chart sector click dispatches TOGGLE_ROUTE_TYPE, pushing externalEnumValues into the B1 table', async () => {
+  it('reset-filters button is disabled when no filter is active', async () => {
     renderAt()
-    await waitFor(() => expect(screen.getByTestId('mock-charts-click-rt')).toBeInTheDocument())
-
-    fireEvent.click(screen.getByTestId('mock-charts-click-rt'))
-
-    await waitFor(() => {
-      const external = JSON.parse(screen.getByTestId('mock-table').dataset.external!)
-      expect(external).toEqual(['3'])
-    })
-  })
-
-  it('table filter change dispatches SET_ROUTE_TYPES, propagating routeTypes to charts', async () => {
-    renderAt()
-    await waitFor(() => expect(screen.getByTestId('mock-table-filter-change')).toBeInTheDocument())
-
-    fireEvent.click(screen.getByTestId('mock-table-filter-change'))
-
-    await waitFor(() => {
-      const filters = JSON.parse(screen.getByTestId('mock-charts').dataset.filters!)
-      expect(filters.routeTypes).toEqual(['0'])
-    })
-  })
-
-  it('free-plan users see the map upgrade fallback and no MapView is mounted', async () => {
-    vi.mocked(usePlanModule.usePlan).mockReturnValueOnce({
-      plan: 'free',
-      isFree: true,
-      isPro: false,
-      isEnterprise: false,
-      hasAtLeast: (p: 'free' | 'pro' | 'enterprise') => p === 'free',
-    })
-    renderAt()
-
-    await waitFor(() => expect(screen.getByTestId('dashboard-page')).toBeInTheDocument())
-    expect(screen.getByTestId('dashboard-map-upgrade')).toBeInTheDocument()
-    expect(screen.queryByTestId('mock-map')).not.toBeInTheDocument()
-    // Charts + Table still render — only the map is gated.
-    expect(screen.getByTestId('mock-charts')).toBeInTheDocument()
-    expect(screen.getByTestId('mock-table')).toBeInTheDocument()
-  })
-
-  it('jour-type select change dispatches SET_JOUR_TYPE and re-renders children with new jourType', async () => {
-    renderAt()
-    const select = await screen.findByLabelText('jour-type-select')
-    expect(screen.getByTestId('mock-map').dataset.jourType).toBe('1')
-
-    fireEvent.change(select, { target: { value: '2' } })
-
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-map').dataset.jourType).toBe('2')
-      expect(screen.getByTestId('mock-charts').dataset.jourType).toBe('2')
-    })
+    await waitFor(() => expect(screen.getByTestId('dashboard-layout')).toBeInTheDocument())
+    const reset = screen.getByLabelText('reset-filters')
+    expect(reset).toBeDisabled()
   })
 })

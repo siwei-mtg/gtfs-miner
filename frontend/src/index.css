@@ -1,6 +1,15 @@
 @import "tailwindcss";
 
+/* ════════════════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — « Cartographie Éditoriale »
+   L'outil d'analyse GTFS qui se lit comme un atlas et performe comme un terminal.
+
+   3 familles typo : Fraunces (display serif) · General Sans (UI) · JetBrains Mono (data)
+   Palette warm paper → ink, un seul signal amber, 7 couleurs sémantiques route_type.
+   ════════════════════════════════════════════════════════════════════════════ */
+
 @theme inline {
+  /* ── shadcn compat (les atoms existants continuent de fonctionner) ─────── */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -20,242 +29,175 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+
+  /* ── Tokens cartographiques (nouveaux) ─────────────────────────────────── */
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-hair: var(--hair);
+  --color-signal: var(--signal);
+  --color-signal-foreground: var(--signal-foreground);
+  --color-info: var(--info);
+
+  /* ── Palette sémantique GTFS route_type ────────────────────────────────── */
+  --color-rt-tram: var(--rt-tram);
+  --color-rt-metro: var(--rt-metro);
+  --color-rt-rail: var(--rt-rail);
+  --color-rt-bus: var(--rt-bus);
+  --color-rt-ferry: var(--rt-ferry);
+  --color-rt-cable: var(--rt-cable);
+  --color-rt-funicular: var(--rt-funicular);
+
+  /* ── Familles typo (Google + Fontshare) ────────────────────────────────── */
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "General Sans", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas,
+    monospace;
+
+  /* ── Radii — restreints, pas bubbly ────────────────────────────────────── */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-full: 9999px;
+
+  /* ── Ombres — 2 niveaux seulement ──────────────────────────────────────── */
+  --shadow-raised: 0 1px 2px rgb(26 24 18 / 0.06),
+    0 2px 4px rgb(26 24 18 / 0.04);
+  --shadow-floating: 0 4px 12px rgb(26 24 18 / 0.08),
+    0 12px 24px rgb(26 24 18 / 0.06);
+
+  /* ── Motion ────────────────────────────────────────────────────────────── */
+  --ease-snap: cubic-bezier(0.2, 0, 0, 1);
+  --ease-gentle: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   LIGHT — le papier d'atlas
+   ════════════════════════════════════════════════════════════════════════════ */
 :root {
-  /* App brand variables (transition period) */
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border-color: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --app-accent: #aa3bff;
-  --app-accent-bg: rgba(170, 59, 255, 0.1);
-  --app-accent-border: rgba(170, 59, 255, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  /* Palette primaire */
+  --paper: #fbfaf7;
+  --ink: #1a1812;
+  --ink-muted: #6e6a5f;
+  --hair: #e8e2d5;
+  --signal: #f59e0b;
+  --signal-foreground: #1a1812;
+  --info: #1e3a8a;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* Palette sémantique — inspirée atlas de transport (Paris / NYC / Milan) */
+  --rt-tram: #cc4444;
+  --rt-metro: #d4942b;
+  --rt-rail: #2b7a4b;
+  --rt-bus: #2f5ca8;
+  --rt-ferry: #1a8b9d;
+  --rt-cable: #7a4d8f;
+  --rt-funicular: #6b5838;
 
-  /* shadcn/ui design tokens — violet palette */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.606 0.25 292.717);
-  --primary-foreground: oklch(0.981 0.005 285.823);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.98 0.016 285.938);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.606 0.25 292.717);
-  --radius: 0.625rem;
+  /* shadcn compat — tout dérive de la palette primaire */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: #ffffff;
+  --card-foreground: var(--ink);
+  --popover: #ffffff;
+  --popover-foreground: var(--ink);
+  --primary: var(--signal);
+  --primary-foreground: var(--signal-foreground);
+  --secondary: #f4f1ea;
+  --secondary-foreground: var(--ink);
+  --muted: #f4f1ea;
+  --muted-foreground: var(--ink-muted);
+  --accent: #f4f1ea;
+  --accent-foreground: var(--ink);
+  --destructive: #b91c1c;
+  --destructive-foreground: #fbfaf7;
+  --border: var(--hair);
+  --input: var(--hair);
+  --ring: var(--signal);
+  --radius: 0.5rem;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
   color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   DARK — le terminal
+   ════════════════════════════════════════════════════════════════════════════ */
 .dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.981 0.005 285.823);
-  --card: oklch(0.141 0.005 285.823);
-  --card-foreground: oklch(0.981 0.005 285.823);
-  --popover: oklch(0.141 0.005 285.823);
-  --popover-foreground: oklch(0.981 0.005 285.823);
-  --primary: oklch(0.541 0.281 292.717);
-  --primary-foreground: oklch(0.981 0.005 285.823);
-  --secondary: oklch(0.274 0.006 286.618);
-  --secondary-foreground: oklch(0.981 0.005 285.823);
-  --muted: oklch(0.274 0.006 286.618);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.618);
-  --accent-foreground: oklch(0.981 0.005 285.823);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.274 0.006 286.618);
-  --input: oklch(0.274 0.006 286.618);
-  --ring: oklch(0.541 0.281 292.717);
+  --paper: #0e0d0a;
+  --ink: #f2ede0;
+  --ink-muted: #8a8477;
+  --hair: #26231c;
+  --signal: #fbbf24;
+  --signal-foreground: #0e0d0a;
+  --info: #60a5fa;
+
+  --rt-tram: #e86565;
+  --rt-metro: #e8b04c;
+  --rt-rail: #4fab70;
+  --rt-bus: #5485cc;
+  --rt-ferry: #3db3c4;
+  --rt-cable: #a075b4;
+  --rt-funicular: #a08b5e;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: #151310;
+  --card-foreground: var(--ink);
+  --popover: #151310;
+  --popover-foreground: var(--ink);
+  --primary: var(--signal);
+  --primary-foreground: var(--signal-foreground);
+  --secondary: #1e1b15;
+  --secondary-foreground: var(--ink);
+  --muted: #1e1b15;
+  --muted-foreground: var(--ink-muted);
+  --accent: #1e1b15;
+  --accent-foreground: var(--ink);
+  --destructive: #ef4444;
+  --destructive-foreground: #fbfaf7;
+  --border: var(--hair);
+  --input: var(--hair);
+  --ring: var(--signal);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border-color: #2e303a;
-    --code-bg: #1f2028;
-    --app-accent: #c084fc;
-    --app-accent-bg: rgba(192, 132, 252, 0.15);
-    --app-accent-border: rgba(192, 132, 252, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-}
-
+/* ════════════════════════════════════════════════════════════════════════════
+   BODY / ROOT — plus de cap 1126 px, place à la carte plein écran.
+   Noise SVG en fond : donne le grain « papier d'atlas » qui casse le plat
+   shadcn sans alourdir la lecture (opacité très basse, seulement sur le fond).
+   ════════════════════════════════════════════════════════════════════════════ */
 body {
   margin: 0;
+  background-color: var(--paper);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.09 0 0 0 0 0.07 0 0 0 0.035 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+  background-attachment: fixed;
+}
+
+.dark body,
+.dark {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.95 0 0 0 0 0.9 0 0 0 0 0.8 0 0 0 0.025 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border-color);
   min-height: 100svh;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-
-p {
-  margin: 0;
-}
-
-/* ─── Transition styles — à supprimer lors de Task 43/44 ─────────────────────
-   Ces règles remplacent App.css (supprimé en Task 41). Elles seront retirées
-   au fur et à mesure que LoginPage, RegisterPage, UploadForm et ProjectDetailPage
-   seront refactorisés avec shadcn Card + Input + Button.
-   ──────────────────────────────────────────────────────────────────────────── */
-
-/* Tailwind preflight efface les styles natifs de tous les <button>.
-   Cette règle restaure une apparence visible pour les boutons non encore
-   refactorisés avec shadcn Button (Tasks 43–45). */
-button {
-  padding: 0.375rem 0.75rem;
-  border-radius: 4px;
-  border: 1px solid #d1d5db;
-  background: #f9fafb;
-  color: inherit;
-  font-size: 0.875rem;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-button:hover:not(:disabled) {
-  background: #f3f4f6;
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-
-form > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 0.75rem;
-}
-
-form label {
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-form input {
-  padding: 0.375rem 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 0.875rem;
-}
-
-form button[type='submit'],
-a[aria-label='download-button'],
-button[aria-label='download-button'] {
-  margin-top: 1rem;
-  padding: 0.5rem 1.25rem;
-  border-radius: 4px;
-  border: none;
-  background: #0070f3;
-  color: #fff;
-  font-size: 1rem;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-}
-
-form button[type='submit']:disabled,
-button[aria-label='download-button']:disabled {
-  background: #aaa;
-  cursor: not-allowed;
-}
-
-[role='alert'] {
-  color: #c00;
-  font-size: 0.875rem;
-  margin-top: 0.5rem;
-}
-
-ol {
-  padding-left: 1.25rem;
-  line-height: 2;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+/* ════════════════════════════════════════════════════════════════════════════
+   Tabular numerals par défaut pour les chiffres
+   ════════════════════════════════════════════════════════════════════════════ */
+.font-mono,
+[class*="tabular-nums"] {
+  font-variant-numeric: tabular-nums;
 }

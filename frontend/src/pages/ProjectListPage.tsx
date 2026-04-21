@@ -10,9 +10,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/atoms/badge';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
+import { Pastille } from '@/components/atoms/Pastille';
+import { CodeTag } from '@/components/atoms/CodeTag';
 import {
   Select,
   SelectContent,
@@ -20,19 +21,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Plus, Search } from 'lucide-react';
 
 interface ProjectListPageProps {
   onProjectClick?: (id: string) => void;
   onNewProjectClick?: () => void;
 }
 
-type BadgeVariant = 'default' | 'destructive' | 'secondary' | 'outline';
+type PastilleTone = React.ComponentProps<typeof Pastille>['tone'];
 
-const statusVariantMap: Record<string, BadgeVariant> = {
-  completed: 'default',
-  failed: 'destructive',
-  processing: 'secondary',
-  pending: 'outline',
+const statusPastille: Record<string, { tone: PastilleTone; dot: string }> = {
+  completed: { tone: 'default', dot: '●' },
+  failed: { tone: 'destructive', dot: '▲' },
+  processing: { tone: 'signal', dot: '◐' },
+  pending: { tone: 'muted', dot: '○' },
 };
 
 export const ProjectListPage: React.FC<ProjectListPageProps> = ({
@@ -71,10 +73,14 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
     };
   }, []);
 
-  const handleProjectClick = (e: React.MouseEvent, id: string) => {
+  const handleProjectClick = (e: React.MouseEvent, id: string, status: string) => {
     e.preventDefault();
     if (onProjectClick) {
       onProjectClick(id);
+      return;
+    }
+    if (status === 'completed') {
+      navigate(`/projects/${id}/dashboard`);
     } else {
       navigate(`/projects/${id}`);
     }
@@ -96,94 +102,149 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
   });
 
   if (isLoading) {
-    return <div>Loading projects...</div>;
+    return (
+      <div className="px-6 py-10 text-sm text-ink-muted">
+        Chargement des projets…
+      </div>
+    );
   }
 
   if (error) {
-    return <div role="alert">{error}</div>;
+    return (
+      <div role="alert" className="px-6 py-10 text-sm text-destructive">
+        {error}
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-6 py-8">
+      {/* Page header éditorial */}
+      <header className="flex items-end justify-between gap-4 border-b border-hair pb-4">
+        <div>
+          <span className="text-[10px] font-medium uppercase tracking-[0.15em] text-ink-muted">
+            Projets GTFS
+          </span>
+          <h1 className="mt-1 font-display text-[36px] font-medium leading-none text-ink">
+            Mes projets
+          </h1>
+        </div>
+        <Button onClick={handleNewProject} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Nouveau projet
+        </Button>
+      </header>
+
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 flex-1">
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
           <Input
-            placeholder="搜索项目 ID..."
+            placeholder="Rechercher un ID projet…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-xs"
+            className="pl-9"
           />
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="所有状态" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">所有状态</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="processing">Processing</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
-        <Button onClick={handleNewProject}>新建项目</Button>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Tous les statuts" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les statuts</SelectItem>
+            <SelectItem value="completed">Terminés</SelectItem>
+            <SelectItem value="processing">En cours</SelectItem>
+            <SelectItem value="pending">En attente</SelectItem>
+            <SelectItem value="failed">Échec</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Table */}
+      {/* Table éditoriale */}
       {filteredProjects.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          No projects found. Create one to get started.
+        <div className="rounded-lg border border-hair bg-card px-6 py-16 text-center">
+          <p className="font-display text-lg text-ink">Aucun projet.</p>
+          <p className="mt-1 text-sm text-ink-muted">
+            Créez votre premier projet pour commencer l'analyse GTFS.
+          </p>
         </div>
       ) : (
-        <div className="rounded-md border">
+        <div className="overflow-hidden rounded-lg border border-hair bg-card">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>项目 ID</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>创建时间</TableHead>
-                <TableHead>操作</TableHead>
+              <TableRow className="border-hair">
+                <TableHead className="text-[10px] uppercase tracking-[0.15em] text-ink-muted">
+                  ID projet
+                </TableHead>
+                <TableHead className="text-[10px] uppercase tracking-[0.15em] text-ink-muted">
+                  Statut
+                </TableHead>
+                <TableHead className="text-[10px] uppercase tracking-[0.15em] text-ink-muted">
+                  Créé le
+                </TableHead>
+                <TableHead className="text-right text-[10px] uppercase tracking-[0.15em] text-ink-muted">
+                  Action
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProjects.map((project) => (
-                <TableRow key={project.id}>
-                  <TableCell className="font-mono text-sm">
-                    <a
-                      href={`/projects/${project.id}`}
-                      onClick={(e) => handleProjectClick(e, project.id)}
-                      className="hover:underline"
-                    >
-                      {project.id}
-                    </a>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={statusVariantMap[project.status] ?? 'outline'}
-                    >
-                      {project.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {new Date(project.created_at).toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      asChild
-                    >
+              {filteredProjects.map((project) => {
+                const config = statusPastille[project.status] ?? {
+                  tone: 'muted' as const,
+                  dot: '·',
+                };
+                const href =
+                  project.status === 'completed'
+                    ? `/projects/${project.id}/dashboard`
+                    : `/projects/${project.id}`;
+                return (
+                  <TableRow
+                    key={project.id}
+                    className="group border-hair transition-colors hover:bg-secondary/60"
+                  >
+                    <TableCell>
                       <a
-                        href={`/projects/${project.id}`}
-                        onClick={(e) => handleProjectClick(e, project.id)}
+                        href={href}
+                        onClick={(e) => handleProjectClick(e, project.id, project.status)}
+                        className="inline-flex items-center"
                       >
-                        查看
+                        <CodeTag className="group-hover:bg-signal/15">
+                          {project.id}
+                        </CodeTag>
                       </a>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center gap-2">
+                        <Pastille tone={config.tone} size="sm">
+                          {config.dot}
+                        </Pastille>
+                        <span className="text-sm capitalize text-ink">
+                          {project.status}
+                        </span>
+                      </span>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums text-ink-muted">
+                      {new Date(project.created_at).toLocaleString('fr-FR', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" asChild>
+                        <a
+                          href={href}
+                          onClick={(e) => handleProjectClick(e, project.id, project.status)}
+                        >
+                          Ouvrir →
+                        </a>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

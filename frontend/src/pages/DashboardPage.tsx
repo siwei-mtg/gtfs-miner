@@ -1,75 +1,55 @@
 /**
- * DashboardPage — three-pane analytics view (Map + Charts + Table) with
- * filter state shared via <DashboardSyncProvider> (Task 39B).
+ * DashboardPage — three-pane analytical dashboard (sidebar · map · right panel).
  *
- *     ┌──────────────┬──────────────┐
- *     │              │  Charts      │
- *     │   Map        ├──────────────┤
- *     │              │  ResultTable │
- *     └──────────────┴──────────────┘
- *
- * - Map pie-click  → TOGGLE_AG_ID       → Charts + Table re-query
- * - Chart click    → TOGGLE_ROUTE_TYPE  → Map + Table re-query
- * - Table filter   → SET_ROUTE_TYPES    → Map + Charts re-query
+ * The header's old jour_type dropdown has been retired: the two right-side
+ * charts are now the interaction surface. Left sidebar opens any of the 15
+ * result tables in a central popup that preserves filter state.
  */
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react'
+import { useParams } from 'react-router-dom'
 
-import { getJourTypes, type JourTypeOption } from '@/api/client';
-import { Button } from '@/components/atoms/button';
-import { DashboardCharts } from '@/components/organisms/DashboardCharts';
-import { MapView } from '@/components/organisms/MapView';
-import { PassageAGLayer } from '@/components/PassageAGLayer';
-import { PassageArcLayer } from '@/components/PassageArcLayer';
-import { ResultTable } from '@/components/organisms/ResultTable';
-import { PlanGate } from '@/components/molecules/PlanGate';
-import { ErrorBoundary } from '@/components/molecules/ErrorBoundary';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  DashboardSyncProvider,
-  useDashboardSync,
-} from '@/hooks/useDashboardSync';
-
-const RESULT_TABLES: Array<{ id: string; label: string }> = [
-  { id: 'a1', label: 'A1: AG' },
-  { id: 'b1', label: 'B1: Lignes' },
-  { id: 'b2', label: 'B2: Sous-Lignes' },
-  { id: 'e1', label: 'E1: Passage AG' },
-  { id: 'e4', label: 'E4: Passage Arc' },
-  { id: 'f1', label: 'F1: Courses' },
-  { id: 'f3', label: 'F3: KCC' },
-];
+import { downloadGeoPackage, downloadProjectResults, getJourTypes, type JourTypeOption } from '@/api/client'
+import { DashboardLayout } from '@/components/templates/DashboardLayout'
+import { DashboardHeader } from '@/components/organisms/DashboardHeader'
+import { DashboardRightPanel } from '@/components/organisms/DashboardRightPanel'
+import { KpiRibbon } from '@/components/organisms/KpiRibbon'
+import { MapView } from '@/components/organisms/MapView'
+import { PassageAGLayer } from '@/components/PassageAGLayer'
+import { PassageArcLayer } from '@/components/PassageArcLayer'
+import { SIDEBAR_GROUPS, TableListSidebar } from '@/components/organisms/TableListSidebar'
+import { TablePopup } from '@/components/organisms/TablePopup'
+import { ErrorBoundary } from '@/components/molecules/ErrorBoundary'
+import { DashboardSyncProvider, useDashboardSync } from '@/hooks/useDashboardSync'
 
 export const DashboardPage: React.FC = () => {
-  const { id: projectId } = useParams<{ id: string }>();
-  const [jourTypeOptions, setJourTypeOptions] = useState<JourTypeOption[]>([]);
-  const [initialJourType, setInitialJourType] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { id: projectId } = useParams<{ id: string }>()
+  const [jourTypeOptions, setJourTypeOptions] = useState<JourTypeOption[]>([])
+  const [initialJourType, setInitialJourType] = useState<number | null>(null)
+  const [bootError, setBootError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!projectId) return;
-    let cancelled = false;
+    if (!projectId) return
+    let cancelled = false
     getJourTypes(projectId)
       .then((opts) => {
-        if (cancelled) return;
-        setJourTypeOptions(opts);
-        setInitialJourType(opts[0]?.value ?? 1);
+        if (cancelled) return
+        setJourTypeOptions(opts)
+        setInitialJourType(opts[0]?.value ?? 1)
       })
       .catch((err) => {
-        if (cancelled) return;
-        console.error('Failed to load jour-types:', err);
-        setError('Impossible de charger les types de jour pour ce projet.');
-        setInitialJourType(1);
-      });
-    return () => { cancelled = true; };
-  }, [projectId]);
+        if (cancelled) return
+        console.error('Failed to load jour-types:', err)
+        setBootError('Impossible de charger les types de jour pour ce projet.')
+        setInitialJourType(1)
+      })
+    return () => { cancelled = true }
+  }, [projectId])
 
   if (!projectId) {
-    return <div role="alert" className="p-8 text-destructive">Projet introuvable.</div>;
+    return <div role="alert" className="p-8 text-destructive">Projet introuvable.</div>
   }
   if (initialJourType === null) {
-    return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
+    return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>
   }
 
   return (
@@ -78,154 +58,82 @@ export const DashboardPage: React.FC = () => {
         <DashboardShell
           projectId={projectId}
           jourTypeOptions={jourTypeOptions}
-          bootError={error}
+          bootError={bootError}
         />
       </DashboardSyncProvider>
     </ErrorBoundary>
-  );
-};
-
-interface ShellProps {
-  projectId: string;
-  jourTypeOptions: JourTypeOption[];
-  bootError: string | null;
+  )
 }
 
-function DashboardShell({ projectId, jourTypeOptions, bootError }: ShellProps) {
-  const { state, dispatch } = useDashboardSync();
-  const [activeTable, setActiveTable] = useState<string>('b1');
+interface ShellProps {
+  projectId: string
+  jourTypeOptions: JourTypeOption[]
+  bootError: string | null
+}
 
-  const routeTypesForTable = useMemo(
-    () => (activeTable === 'b1' ? state.routeTypes : undefined),
-    [activeTable, state.routeTypes],
-  );
+function DashboardShell({ projectId, jourTypeOptions: _jourTypeOptions, bootError }: ShellProps) {
+  const { state } = useDashboardSync()
+  const [openTableId, setOpenTableId] = useState<string | null>(null)
+
+  const tableIndex = useMemo(() => {
+    const map = new Map<string, { code: string; name: string }>()
+    for (const g of SIDEBAR_GROUPS) {
+      for (const t of g.tables) map.set(t.id, { code: t.code, name: t.name })
+    }
+    return map
+  }, [])
+
+  const openLabel = openTableId ? tableIndex.get(openTableId) : undefined
 
   return (
-    <div className="flex flex-col gap-4" data-testid="dashboard-page">
-      {/* Top bar */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <Button asChild variant="ghost" size="sm">
-            <Link to={`/projects/${projectId}`}>← Retour</Link>
-          </Button>
-          <h1 className="text-lg font-semibold">Tableau de bord</h1>
-          <span className="text-xs text-muted-foreground">{projectId}</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">Type de jour</span>
-          <Select
-            value={String(state.jourType)}
-            onValueChange={(v) => dispatch({ type: 'SET_JOUR_TYPE', payload: Number(v) })}
-          >
-            <SelectTrigger className="w-48" aria-label="jour-type-select">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {jourTypeOptions.map((opt) => (
-                <SelectItem key={opt.value} value={String(opt.value)}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {(state.routeTypes.length > 0 || state.agIds.length > 0) && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => dispatch({ type: 'CLEAR_FILTERS' })}
-            >
-              Effacer les filtres
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {bootError && (
-        <div role="alert" className="text-sm text-destructive">{bootError}</div>
-      )}
-
-      <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] xl:h-[calc(100vh-10rem)]">
-        {/* Map pane (spans both rows on xl) — locked behind Pro+ */}
-        <section
-          data-testid="dashboard-map"
-          className="xl:row-span-2 min-h-[400px] rounded-lg border overflow-hidden"
-        >
+    <>
+      <DashboardLayout
+        header={
+          <DashboardHeader
+            projectId={projectId}
+            onExportGeoPackage={() => downloadGeoPackage(projectId, state.jourType)}
+            onExportCsvZip={() => downloadProjectResults(projectId)}
+          />
+        }
+        kpiRibbon={<KpiRibbon projectId={projectId} />}
+        sidebar={
+          <TableListSidebar
+            activeTableId={openTableId}
+            onTableClick={(id) => setOpenTableId(id)}
+          />
+        }
+        map={
           <ErrorBoundary scope="Map pane">
-            <PlanGate
-              plan="pro"
-              fallback={
-                <div
-                  data-testid="dashboard-map-upgrade"
-                  className="flex h-full min-h-[400px] flex-col items-center justify-center gap-3 p-8 text-center"
-                >
-                  <h3 className="text-base font-semibold">Couche cartographique verrouillée</h3>
-                  <p className="max-w-sm text-sm text-muted-foreground">
-                    La visualisation des passages AG / arcs (E_1, E_4) est réservée aux
-                    forfaits <strong>Pro</strong> et <strong>Enterprise</strong>.
-                  </p>
-                  <Button variant="default" size="sm" disabled>
-                    Mettre à niveau (bientôt)
-                  </Button>
-                </div>
-              }
-            >
-              <MapView
-                projectId={projectId}
-                jourType={state.jourType}
-                onStopClick={(agId, shiftKey) =>
-                  dispatch({ type: 'TOGGLE_AG_ID', payload: agId, shift: shiftKey })
-                }
+            <MapView projectId={projectId} jourType={state.jourType}>
+              <PassageAGLayer projectId={projectId} jourType={state.jourType} />
+              <PassageArcLayer projectId={projectId} jourType={state.jourType} />
+            </MapView>
+          </ErrorBoundary>
+        }
+        rightPanel={
+          <ErrorBoundary scope="Right panel">
+            <DashboardRightPanel projectId={projectId} />
+          </ErrorBoundary>
+        }
+        overlay={
+          <>
+            {bootError && (
+              <div
+                role="alert"
+                className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-md border bg-destructive/10 px-3 py-2 text-sm text-destructive shadow"
               >
-                <PassageAGLayer projectId={projectId} jourType={state.jourType} />
-                <PassageArcLayer projectId={projectId} jourType={state.jourType} />
-              </MapView>
-            </PlanGate>
-          </ErrorBoundary>
-        </section>
-
-        {/* Charts pane */}
-        <section
-          data-testid="dashboard-charts"
-          className="rounded-lg border p-3 overflow-auto"
-        >
-          <ErrorBoundary scope="Charts pane">
-            <DashboardCharts
+                {bootError}
+              </div>
+            )}
+            <TablePopup
               projectId={projectId}
-              jourType={state.jourType}
-              filters={state}
-              onRouteTypeClick={(rt) => dispatch({ type: 'TOGGLE_ROUTE_TYPE', payload: rt })}
+              tableId={openTableId}
+              tableLabel={openLabel ? `${openLabel.code} · ${openLabel.name}` : undefined}
+              onClose={() => setOpenTableId(null)}
             />
-          </ErrorBoundary>
-        </section>
-
-        {/* Table pane (with tabs) */}
-        <section
-          data-testid="dashboard-table"
-          className="rounded-lg border p-3 overflow-auto"
-        >
-          <ErrorBoundary scope="Table pane">
-            <Tabs value={activeTable} onValueChange={setActiveTable}>
-              <TabsList className="flex-wrap h-auto">
-                {RESULT_TABLES.map((t) => (
-                  <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-            <div className="mt-3">
-              <ResultTable
-                projectId={projectId}
-                tableName={activeTable}
-                externalEnumValues={routeTypesForTable}
-                onFilterChange={(f) => {
-                  if (f.routeTypes !== undefined) {
-                    dispatch({ type: 'SET_ROUTE_TYPES', payload: f.routeTypes });
-                  }
-                }}
-              />
-            </div>
-          </ErrorBoundary>
-        </section>
-      </div>
-    </div>
-  );
+          </>
+        }
+      />
+    </>
+  )
 }

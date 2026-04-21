@@ -14,11 +14,13 @@ export const PieChartLegend: React.FC<PieChartLegendProps> = ({ routeTypes, clas
     <div
       data-testid="pie-chart-legend"
       className={cn(
-        'absolute top-[120px] right-2 z-10 bg-background/90 backdrop-blur-sm border border-border rounded-md p-2 space-y-1 text-xs shadow-sm',
+        'absolute top-[88px] left-3 z-10 bg-card/95 backdrop-blur-sm border border-hair rounded-lg p-2 space-y-1 text-xs shadow-raised',
         className,
       )}
     >
-      <div className="font-semibold text-muted-foreground mb-1">Légende</div>
+      <div className="text-[10px] font-medium uppercase tracking-[0.15em] text-ink-muted mb-1">
+        Légende
+      </div>
       {sorted.map((rt) => (
         <div key={rt} className="flex items-center gap-2">
           <span
