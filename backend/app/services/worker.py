@@ -15,9 +15,11 @@ from sqlalchemy.orm import Session
 import numpy as np
 import pandas as pd
 
+from sqlalchemy import func
+
 from ..core.config import settings, PROJECT_DIR, TEMP_DIR
 from ..db.database import SessionLocal, engine as _db_engine
-from ..db.models import Project
+from ..db.models import Project, ProgressEvent
 from ..db import result_models as _r  # noqa: F401 — registers result tables with Base.metadata
 from ..api.websockets.progress import manager
 
@@ -151,6 +153,30 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
             "time_elapsed": elapsed,
             "error": error,
         }
+        # Persist the event so WS reconnects can replay the full history. Uses a
+        # dedicated session so a persistence failure can't poison the worker
+        # transaction, and is swallowed to avoid killing the pipeline.
+        _evt_db = SessionLocal()
+        try:
+            next_seq = (
+                _evt_db.query(func.coalesce(func.max(ProgressEvent.seq), 0))
+                .filter(ProgressEvent.project_id == project_id)
+                .scalar()
+            ) + 1
+            _evt_db.add(ProgressEvent(
+                project_id=project_id,
+                seq=next_seq,
+                status=status,
+                step=step,
+                time_elapsed=elapsed,
+                error=error,
+            ))
+            _evt_db.commit()
+        except Exception:
+            _evt_db.rollback()
+        finally:
+            _evt_db.close()
+
         if loop is not None:
             # BackgroundTasks mode (dev/test — no Redis)
             future = asyncio.run_coroutine_threadsafe(

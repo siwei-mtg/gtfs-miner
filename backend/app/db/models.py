@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, JSON
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, JSON
 from datetime import datetime
 import uuid
 from .database import Base
@@ -55,3 +55,34 @@ class Project(Base):
     output_path = Column(String, nullable=True)  # R2 key 或本地路径
     tenant_id = Column(String, ForeignKey("tenants.id"), nullable=True, index=True)
     owner_id = Column(String, ForeignKey("users.id"), nullable=True)
+
+
+class ProgressEvent(Base):
+    """
+    Trace durable des événements de progression émis par le worker pendant
+    l'exécution du pipeline GTFS.
+
+    Rejouée à chaque nouvelle connexion WebSocket (`/api/v1/projects/{id}/ws`)
+    pour qu'un utilisateur revenant sur un projet — en cours ou terminé —
+    retrouve l'intégralité de l'historique (steps faits, step courant, durées)
+    au lieu de repartir d'un état vide.
+    """
+    __tablename__ = "progress_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(
+        String,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    seq = Column(Integer, nullable=False)  # ordre strict par project_id
+    status = Column(String, nullable=False)  # pending / processing / completed / failed
+    step = Column(String, nullable=False)  # ex: "[3/9] Spatial clustering…"
+    time_elapsed = Column(Float, nullable=False)
+    error = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index("ix_progress_events_project_seq", "project_id", "seq"),
+    )
