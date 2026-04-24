@@ -207,6 +207,25 @@ describe('ProjectListPage', () => {
     expect(screen.getByText('p2')).toBeInTheDocument();
   });
 
+  it('test_delete_success_shows_banner', async () => {
+    vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
+    vi.mocked(apiClient.deleteProject).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderWithRouter(<ProjectListPage />);
+
+    const btn = await screen.findByRole('button', {
+      name: /Supprimer le projet p1/i,
+    });
+    await user.click(btn);
+    await user.click(
+      screen.getByRole('button', { name: /Supprimer définitivement/i }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/supprimé/i);
+    });
+  });
+
   it('test_delete_failure_shows_error_banner', async () => {
     vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
     vi.mocked(apiClient.deleteProject).mockRejectedValue(

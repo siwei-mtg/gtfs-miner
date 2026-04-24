@@ -51,6 +51,13 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
   const [pendingDelete, setPendingDelete] = useState<ProjectResponse | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!deleteSuccess) return;
+    const id = window.setTimeout(() => setDeleteSuccess(null), 3000);
+    return () => window.clearTimeout(id);
+  }, [deleteSuccess]);
 
   useEffect(() => {
     let mounted = true;
@@ -103,10 +110,13 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
     try {
       await deleteProject(pendingDelete.id);
       setProjects((prev) => prev.filter((p) => p.id !== pendingDelete.id));
+      setDeleteError(null);
+      setDeleteSuccess('Projet supprimé avec succès.');
       setPendingDelete(null);
     } catch (err) {
       const isConflict =
         err instanceof Error && err.message.includes('409');
+      setDeleteSuccess(null);
       setDeleteError(
         isConflict
           ? 'Impossible de supprimer un projet en cours de traitement.'
@@ -192,6 +202,15 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
           className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive"
         >
           {deleteError}
+        </div>
+      )}
+
+      {deleteSuccess && (
+        <div
+          role="status"
+          className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-300"
+        >
+          {deleteSuccess}
         </div>
       )}
 
@@ -317,6 +336,7 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
         }
         confirmLabel="Supprimer définitivement"
         cancelLabel="Annuler"
+        loadingLabel="Suppression en cours…"
         destructive
         loading={isDeleting}
         onConfirm={handleConfirmDelete}

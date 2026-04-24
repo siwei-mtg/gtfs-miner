@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { Loader2 } from 'lucide-react'
 
 import {
   Dialog,
@@ -18,6 +19,8 @@ export interface ConfirmDialogProps {
   description: React.ReactNode
   confirmLabel?: string
   cancelLabel?: string
+  /** Label shown on the confirm button while `loading` is true. */
+  loadingLabel?: string
   /** Use the destructive button variant for the confirm action. */
   destructive?: boolean
   /** Disable both buttons and show the confirm button in a busy state. */
@@ -33,6 +36,7 @@ export function ConfirmDialog({
   description,
   confirmLabel = 'Confirmer',
   cancelLabel = 'Annuler',
+  loadingLabel,
   destructive = false,
   loading = false,
   onConfirm,
@@ -64,7 +68,14 @@ export function ConfirmDialog({
             onClick={handleConfirm}
             disabled={loading}
           >
-            {loading ? '…' : confirmLabel}
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {loadingLabel ?? confirmLabel}
+              </>
+            ) : (
+              confirmLabel
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
