@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { DashboardPage } from '@/pages/DashboardPage'
 import * as apiClient from '@/api/client'
+import * as useProjectProgressModule from '@/hooks/useProjectProgress'
 
 // Pull in only the endpoints Dashboard page uses at boot; the organisms
 // are mocked out so we stay focused on the page wiring.
@@ -13,6 +14,12 @@ vi.mock('@/api/client', () => ({
   getCoursesByHour: vi.fn(),
   downloadGeoPackage: vi.fn(),
   downloadProjectResults: vi.fn(),
+}))
+
+// useProjectProgress now gates the dashboard branch — must report 'completed'
+// for the analytical layout to mount.
+vi.mock('@/hooks/useProjectProgress', () => ({
+  useProjectProgress: vi.fn(),
 }))
 
 vi.mock('@/components/organisms/MapView', () => ({
@@ -35,9 +42,9 @@ vi.mock('@/components/organisms/ResultTable', () => ({
 
 function renderAt(pid = 'p1') {
   return render(
-    <MemoryRouter initialEntries={[`/projects/${pid}/dashboard`]}>
+    <MemoryRouter initialEntries={[`/projects/${pid}`]}>
       <Routes>
-        <Route path="/projects/:id/dashboard" element={<DashboardPage />} />
+        <Route path="/projects/:id" element={<DashboardPage />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -46,6 +53,11 @@ function renderAt(pid = 'p1') {
 describe('DashboardPage (refonte)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(useProjectProgressModule.useProjectProgress).mockReturnValue({
+      messages: [],
+      latestStatus: 'completed',
+      isConnected: true,
+    })
     vi.mocked(apiClient.getJourTypes).mockResolvedValue([
       { value: 1, label: 'Lundi_Scolaire' },
       { value: 2, label: 'Samedi' },
@@ -56,6 +68,18 @@ describe('DashboardPage (refonte)', () => {
       nb_courses: 8473,
       kcc_total: 41500,
     })
+  })
+
+  it('renders the ProgressView when the project is not yet completed', async () => {
+    vi.mocked(useProjectProgressModule.useProjectProgress).mockReturnValue({
+      messages: [],
+      latestStatus: 'processing',
+      isConnected: true,
+    })
+    renderAt('p-pending')
+    expect(await screen.findByRole('heading', { name: /Projet/i })).toBeInTheDocument()
+    expect(screen.getByText('p-pending')).toBeInTheDocument()
+    expect(screen.queryByTestId('dashboard-layout')).not.toBeInTheDocument()
   })
 
   it('renders the four-zone layout (sidebar rail · KPI ribbon · map · floating right panel)', async () => {

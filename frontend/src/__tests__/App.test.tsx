@@ -43,7 +43,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(useProjectProgressModule.useProjectProgress).mockReturnValue({
     messages: [],
-    latestStatus: null,
+    // Default to a non-terminal status so DashboardPage falls through to the
+    // ProgressView (which reuses the "Projet [id]" heading several tests
+    // assert on). Tests that need the dashboard branch override this.
+    latestStatus: 'processing',
     isConnected: false
   })
   window.history.pushState({}, '', '/')
@@ -79,8 +82,8 @@ describe('App Routing & State Machine', () => {
   })
 
   it('test_navigates_to_project_detail', async () => {
-    // Completed projects now land on /dashboard (dashboard refonte); use a
-    // non-completed project here so the click still lands on ProjectDetailPage.
+    // /projects/:id is the only project URL. Non-completed projects render
+    // the in-page ProgressView; completed ones swap to the 3-pane dashboard.
     vi.mocked(useAuthModule.useAuth).mockReturnValue({
       token: 'valid-token', isLoading: false, user: { id: 'u1' } as any, login: vi.fn(), logout: vi.fn(), register: vi.fn()
     })
@@ -118,11 +121,11 @@ describe('App Routing & State Machine', () => {
     expect(logoutMock).toHaveBeenCalled()
   })
 
-  it('test_dashboard_route_redirects_unauthenticated', async () => {
+  it('test_project_route_redirects_unauthenticated', async () => {
     vi.mocked(useAuthModule.useAuth).mockReturnValue({
       token: null, isLoading: false, user: null, login: vi.fn(), logout: vi.fn(), register: vi.fn(),
     } as any)
-    window.history.pushState({}, '', '/projects/p1/dashboard')
+    window.history.pushState({}, '', '/projects/p1')
 
     render(<App />)
 

@@ -3,7 +3,6 @@ import { useAuth } from './hooks/useAuth'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ProjectListPage } from './pages/ProjectListPage'
-import { ProjectDetailPage } from './pages/ProjectDetailPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { UploadForm } from '@/components/organisms/UploadForm'
 import { AppShell } from '@/components/templates/AppShell'
@@ -94,12 +93,6 @@ function App() {
           } />
 
           <Route path="/projects/:id" element={
-            <AuthGuard>
-              <ProjectDetailPage />
-            </AuthGuard>
-          } />
-
-          <Route path="/projects/:id/dashboard" element={
             <AuthGuard>
               <DashboardPage />
             </AuthGuard>
