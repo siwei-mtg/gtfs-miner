@@ -17,8 +17,9 @@ import zipfile
 import pytest
 
 from app.db.database import SessionLocal
-from app.db.models import Project
-from app.core.config import PROJECT_DIR
+from app.db.models import Project, ProgressEvent
+from app.db.result_models import ResultA1ArretGenerique
+from app.core.config import PROJECT_DIR, TEMP_DIR
 from .conftest import GTFS_ZIP, EXPECTED_CSVS
 
 # ──────────────────────────────────────────────────────────────────
@@ -162,3 +163,90 @@ def test_full_e2e_upload_process_download(client_authed):
             assert len(data) > 0,   f"{name} is empty"
             assert ";" in data,     f"{name} is not semicolon-separated"
     print(f"  ✓ Downloaded ZIP contains {len(zip_names)} valid semicolon-delimited CSVs.")
+
+
+# ──────────────────────────────────────────────────────────────────
+# Project deletion — tenant-scoped, cascades to files + result tables
+# ──────────────────────────────────────────────────────────────────
+
+def _create_project(isolated_client_authed) -> str:
+    """Create a completed-looking project and return its ID."""
+    payload = {
+        "hpm_debut": "07:00", "hpm_fin": "09:00",
+        "hps_debut": "17:00", "hps_fin": "19:30",
+        "vacances": "A", "pays": "法国",
+    }
+    resp = isolated_client_authed.post("/api/v1/projects/", json=payload)
+    assert resp.status_code == 201, resp.text
+    return resp.json()["id"]
+
+
+def test_delete_project_removes_db_rows_files_and_progress(
+    isolated_client_authed, test_db
+):
+    """DELETE cleans up: project row, 15 result tables, progress_events, output dir, temp zip."""
+    project_id = _create_project(isolated_client_authed)
+    tenant_id = "test-tenant-id"  # matches isolated_client_authed fake_user
+
+    # Seed one result row, one progress event, and fake on-disk artefacts.
+    test_db.add(ResultA1ArretGenerique(project_id=project_id, id_ag_num=1))
+    test_db.add(ProgressEvent(
+        project_id=project_id, seq=1, status="completed",
+        step="[done]", time_elapsed=1.0,
+    ))
+    test_db.commit()
+
+    output_dir = PROJECT_DIR / tenant_id / project_id / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "A_1_Arrets_Generiques.csv").write_text("id;name\n1;foo\n", encoding="utf-8")
+    temp_zip = TEMP_DIR / f"{project_id}_leftover.zip"
+    temp_zip.write_bytes(b"fake")
+
+    try:
+        resp = isolated_client_authed.delete(f"/api/v1/projects/{project_id}")
+        assert resp.status_code == 204, resp.text
+
+        # Project + related rows gone.
+        assert test_db.query(Project).filter(Project.id == project_id).first() is None
+        assert test_db.query(ResultA1ArretGenerique).filter(
+            ResultA1ArretGenerique.project_id == project_id
+        ).count() == 0
+        assert test_db.query(ProgressEvent).filter(
+            ProgressEvent.project_id == project_id
+        ).count() == 0
+
+        # GET now 404.
+        assert isolated_client_authed.get(f"/api/v1/projects/{project_id}").status_code == 404
+
+        # Filesystem artefacts gone.
+        assert not (PROJECT_DIR / tenant_id / project_id).exists()
+        assert not temp_zip.exists()
+    finally:
+        # Defensive cleanup if the test assertion fails mid-way.
+        if temp_zip.exists():
+            temp_zip.unlink()
+        project_root = PROJECT_DIR / tenant_id / project_id
+        if project_root.exists():
+            import shutil as _shutil
+            _shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_delete_project_while_processing_returns_409(isolated_client_authed, test_db):
+    """Cannot delete a project whose worker is still running."""
+    project_id = _create_project(isolated_client_authed)
+
+    project = test_db.query(Project).filter(Project.id == project_id).first()
+    project.status = "processing"
+    test_db.commit()
+
+    resp = isolated_client_authed.delete(f"/api/v1/projects/{project_id}")
+    assert resp.status_code == 409
+    assert "processing" in resp.json()["detail"].lower()
+
+    # Project still exists.
+    assert test_db.query(Project).filter(Project.id == project_id).first() is not None
+
+
+def test_delete_project_not_found_returns_404(isolated_client_authed):
+    resp = isolated_client_authed.delete("/api/v1/projects/does-not-exist")
+    assert resp.status_code == 404

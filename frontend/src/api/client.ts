@@ -52,6 +52,14 @@ export async function listProjects(): Promise<ProjectResponse[]> {
   return res.json()
 }
 
+export async function deleteProject(projectId: string): Promise<void> {
+  const res = await fetch(`${BASE}/${projectId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error(`deleteProject failed: ${res.status}`)
+}
+
 async function fetchBlob(url: string): Promise<{ blob: Blob; filename: string }> {
   const res = await fetch(url, { headers: getAuthHeaders() })
   if (!res.ok) throw new Error(`Download failed: ${res.status}`)

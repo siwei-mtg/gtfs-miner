@@ -11,6 +11,7 @@ const renderWithRouter = (ui: React.ReactElement) =>
 
 vi.mock('../api/client', () => ({
   listProjects: vi.fn(),
+  deleteProject: vi.fn(),
 }));
 
 const mockProjects: ProjectResponse[] = [
@@ -120,5 +121,136 @@ describe('ProjectListPage', () => {
 
     expect(screen.queryByText('p1')).not.toBeInTheDocument();
     expect(screen.queryByText('p2')).not.toBeInTheDocument();
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Delete flow
+  // ──────────────────────────────────────────────────────────────────
+
+  it('test_delete_button_rendered_per_row', async () => {
+    vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
+    renderWithRouter(<ProjectListPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /Supprimer le projet p1/i }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole('button', { name: /Supprimer le projet p2/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('test_delete_button_disabled_for_processing_project', async () => {
+    vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
+    renderWithRouter(<ProjectListPage />);
+
+    const btn = await screen.findByRole('button', {
+      name: /Supprimer le projet p2/i,
+    });
+    expect(btn).toBeDisabled();
+  });
+
+  it('test_delete_click_opens_confirm_dialog', async () => {
+    vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
+    const user = userEvent.setup();
+    renderWithRouter(<ProjectListPage />);
+
+    const btn = await screen.findByRole('button', {
+      name: /Supprimer le projet p1/i,
+    });
+    await user.click(btn);
+
+    expect(
+      screen.getByText(/Supprimer définitivement ce projet/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/irrévocablement supprimés/i)).toBeInTheDocument();
+  });
+
+  it('test_delete_cancel_does_not_call_api', async () => {
+    vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
+    const user = userEvent.setup();
+    renderWithRouter(<ProjectListPage />);
+
+    const btn = await screen.findByRole('button', {
+      name: /Supprimer le projet p1/i,
+    });
+    await user.click(btn);
+
+    await user.click(screen.getByRole('button', { name: /^Annuler$/i }));
+
+    expect(apiClient.deleteProject).not.toHaveBeenCalled();
+    expect(screen.getByText('p1')).toBeInTheDocument();
+  });
+
+  it('test_delete_confirm_calls_api_and_removes_row', async () => {
+    vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
+    vi.mocked(apiClient.deleteProject).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderWithRouter(<ProjectListPage />);
+
+    const btn = await screen.findByRole('button', {
+      name: /Supprimer le projet p1/i,
+    });
+    await user.click(btn);
+    await user.click(
+      screen.getByRole('button', { name: /Supprimer définitivement/i }),
+    );
+
+    await waitFor(() => {
+      expect(apiClient.deleteProject).toHaveBeenCalledWith('p1');
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('p1')).not.toBeInTheDocument();
+    });
+    // p2 row unaffected.
+    expect(screen.getByText('p2')).toBeInTheDocument();
+  });
+
+  it('test_delete_failure_shows_error_banner', async () => {
+    vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
+    vi.mocked(apiClient.deleteProject).mockRejectedValue(
+      new Error('deleteProject failed: 500'),
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<ProjectListPage />);
+
+    const btn = await screen.findByRole('button', {
+      name: /Supprimer le projet p1/i,
+    });
+    await user.click(btn);
+    await user.click(
+      screen.getByRole('button', { name: /Supprimer définitivement/i }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /La suppression a échoué/i,
+      );
+    });
+    expect(screen.getByText('p1')).toBeInTheDocument();
+  });
+
+  it('test_delete_conflict_shows_processing_error', async () => {
+    vi.mocked(apiClient.listProjects).mockResolvedValue(mockProjects);
+    vi.mocked(apiClient.deleteProject).mockRejectedValue(
+      new Error('deleteProject failed: 409'),
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<ProjectListPage />);
+
+    const btn = await screen.findByRole('button', {
+      name: /Supprimer le projet p1/i,
+    });
+    await user.click(btn);
+    await user.click(
+      screen.getByRole('button', { name: /Supprimer définitivement/i }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /projet en cours de traitement/i,
+      );
+    });
   });
 });

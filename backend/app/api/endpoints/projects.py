@@ -4,13 +4,14 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import List
 import io
+import logging
 import shutil
 import asyncio
 import zipfile
 from pathlib import Path
 
 from ...db.database import get_db
-from ...db.models import Project, User
+from ...db.models import Project, ProgressEvent, User
 from ...db.result_models import ResultA1ArretGenerique, ResultE1PassageAG
 from ...schemas.project import ProjectCreate, ProjectResponse
 from ...services.worker import run_project_task_sync
@@ -86,6 +87,78 @@ def get_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+def _purge_project_files(tenant_id: str | None, project_id: str) -> None:
+    """Best-effort cleanup of on-disk artefacts for a deleted project.
+
+    Missing paths are treated as normal; individual failures are logged but
+    do not raise so a partial filesystem cleanup never rolls back the DB
+    delete that has already committed.
+    """
+    log = logging.getLogger(__name__)
+    if tenant_id:
+        output_dir = PROJECT_DIR / tenant_id / project_id
+        if output_dir.exists():
+            try:
+                shutil.rmtree(output_dir)
+            except OSError as exc:
+                log.warning("Failed to remove %s: %s", output_dir, exc)
+    for leftover in TEMP_DIR.glob(f"{project_id}_*"):
+        try:
+            leftover.unlink(missing_ok=True)
+        except OSError as exc:
+            log.warning("Failed to remove %s: %s", leftover, exc)
+
+
+@router.delete("/{project_id}", status_code=204)
+async def delete_project(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    永久删除项目及其所有数据：
+
+    - 15 张结果表的行（FK 无 CASCADE，必须显式删除）
+    - progress_events 行（SQLite 默认不强制 FK，显式删除以确保跨数据库一致）
+    - Project 行本身
+    - ``PROJECT_DIR/<tenant_id>/<project_id>/`` 下的 output 目录
+    - ``TEMP_DIR/<project_id>_*`` 下的残留 zip
+    - 仍订阅该 project_id 的活跃 WebSocket
+
+    正在处理中的项目禁止删除（返回 409），避免 worker 写入已删除的 project_id。
+    """
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.status == "processing":
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete a project while it is processing.",
+        )
+
+    tenant_id = project.tenant_id
+
+    for model_cls in TABLE_REGISTRY.values():
+        db.query(model_cls).filter(model_cls.project_id == project_id).delete(
+            synchronize_session=False
+        )
+    db.query(ProgressEvent).filter(
+        ProgressEvent.project_id == project_id
+    ).delete(synchronize_session=False)
+    db.delete(project)
+    db.commit()
+
+    _purge_project_files(tenant_id, project_id)
+
+    from ..websockets.progress import manager
+    await manager.close_project(project_id)
+    return None
 
 @router.post("/{project_id}/upload")
 async def upload_gtfs(

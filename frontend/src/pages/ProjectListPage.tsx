@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listProjects } from '../api/client';
+import { deleteProject, listProjects } from '../api/client';
 import type { ProjectResponse } from '../types/api';
 import {
   Table,
@@ -21,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Search } from 'lucide-react';
+import { ConfirmDialog } from '@/components/molecules/ConfirmDialog';
+import { Plus, Search, Trash2 } from 'lucide-react';
 
 interface ProjectListPageProps {
   onProjectClick?: (id: string) => void;
@@ -47,6 +48,9 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [pendingDelete, setPendingDelete] = useState<ProjectResponse | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -73,22 +77,44 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
     };
   }, []);
 
-  const handleProjectClick = (e: React.MouseEvent, id: string, status: string) => {
+  const handleProjectClick = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     if (onProjectClick) {
       onProjectClick(id);
       return;
     }
-    if (status === 'completed') {
-      navigate(`/projects/${id}/dashboard`);
-    } else {
-      navigate(`/projects/${id}`);
-    }
+    navigate(`/projects/${id}`);
   };
 
   const handleNewProject = () => {
     if (onNewProjectClick) {
       onNewProjectClick();
+    }
+  };
+
+  const handleDeleteClick = (project: ProjectResponse) => {
+    setDeleteError(null);
+    setPendingDelete(project);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteProject(pendingDelete.id);
+      setProjects((prev) => prev.filter((p) => p.id !== pendingDelete.id));
+      setPendingDelete(null);
+    } catch (err) {
+      const isConflict =
+        err instanceof Error && err.message.includes('409');
+      setDeleteError(
+        isConflict
+          ? 'Impossible de supprimer un projet en cours de traitement.'
+          : 'La suppression a échoué. Réessayez.',
+      );
+      setPendingDelete(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -160,6 +186,15 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
         </Select>
       </div>
 
+      {deleteError && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive"
+        >
+          {deleteError}
+        </div>
+      )}
+
       {/* Table éditoriale */}
       {filteredProjects.length === 0 ? (
         <div className="rounded-lg border border-hair bg-card px-6 py-16 text-center">
@@ -193,10 +228,7 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
                   tone: 'muted' as const,
                   dot: '·',
                 };
-                const href =
-                  project.status === 'completed'
-                    ? `/projects/${project.id}/dashboard`
-                    : `/projects/${project.id}`;
+                const href = `/projects/${project.id}`;
                 return (
                   <TableRow
                     key={project.id}
@@ -205,7 +237,7 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
                     <TableCell>
                       <a
                         href={href}
-                        onClick={(e) => handleProjectClick(e, project.id, project.status)}
+                        onClick={(e) => handleProjectClick(e, project.id)}
                         className="inline-flex items-center"
                       >
                         <CodeTag className="group-hover:bg-signal/15">
@@ -233,14 +265,31 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
                       })}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" asChild>
-                        <a
-                          href={href}
-                          onClick={(e) => handleProjectClick(e, project.id, project.status)}
+                      <div className="inline-flex items-center gap-1">
+                        <Button variant="ghost" size="sm" asChild>
+                          <a
+                            href={href}
+                            onClick={(e) => handleProjectClick(e, project.id)}
+                          >
+                            Ouvrir →
+                          </a>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteClick(project)}
+                          disabled={project.status === 'processing'}
+                          aria-label={`Supprimer le projet ${project.id}`}
+                          title={
+                            project.status === 'processing'
+                              ? 'Impossible de supprimer un projet en cours'
+                              : 'Supprimer définitivement'
+                          }
+                          className="text-ink-muted hover:text-destructive"
                         >
-                          Ouvrir →
-                        </a>
-                      </Button>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -249,6 +298,29 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
           </Table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        title="Supprimer définitivement ce projet ?"
+        description={
+          <>
+            Le projet{' '}
+            {pendingDelete && <CodeTag>{pendingDelete.id}</CodeTag>} et
+            toutes ses données (tables de résultats, fichiers d'export,
+            historique de progression) seront{' '}
+            <strong>irrévocablement supprimés</strong>. Cette action est
+            permanente.
+          </>
+        }
+        confirmLabel="Supprimer définitivement"
+        cancelLabel="Annuler"
+        destructive
+        loading={isDeleting}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 };
