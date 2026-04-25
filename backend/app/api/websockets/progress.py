@@ -86,7 +86,15 @@ async def websocket_endpoint(websocket: WebSocket, project_id: str):
         if settings.REDIS_URL:
             # Celery mode: subscribe to Redis pub/sub channel and forward to WS
             import redis.asyncio as aioredis
-            r = aioredis.from_url(settings.REDIS_URL)
+            # redis-py wants ssl_cert_reqs as the lowercase string "required"
+            # (kombu/celery uses ssl.CERT_REQUIRED instead). The two are
+            # incompatible in URL query strings — keep both out of REDIS_URL
+            # and pass each client what it expects via kwargs / conf.
+            ssl_kwargs = (
+                {"ssl_cert_reqs": "required"}
+                if settings.REDIS_URL.startswith("rediss://") else {}
+            )
+            r = aioredis.from_url(settings.REDIS_URL, **ssl_kwargs)
             pubsub = r.pubsub()
             await pubsub.subscribe(f"progress:{project_id}")
             try:

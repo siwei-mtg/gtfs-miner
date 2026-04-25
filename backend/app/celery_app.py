@@ -1,3 +1,5 @@
+import ssl
+
 from celery import Celery
 from celery.schedules import crontab
 from app.core.config import settings
@@ -29,3 +31,10 @@ celery.conf.update(
         },
     },
 )
+
+# rediss:// (TLS) brokers like Upstash require explicit SSL cert config; kombu
+# expects ssl module constants here (NOT the string "required" that redis-py
+# uses elsewhere — incompatible naming, so we keep it out of the URL).
+if settings.REDIS_URL.startswith("rediss://"):
+    celery.conf.broker_use_ssl = {"ssl_cert_reqs": ssl.CERT_REQUIRED}
+    celery.conf.redis_backend_use_ssl = {"ssl_cert_reqs": ssl.CERT_REQUIRED}
