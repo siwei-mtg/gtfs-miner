@@ -38,6 +38,17 @@ const statusPastille: Record<string, { tone: PastilleTone; dot: string }> = {
   pending: { tone: 'muted', dot: '○' },
 };
 
+const fmtYmd = (n: number | null): string => {
+  if (!n) return '';
+  const s = String(n);
+  return `${s.slice(6, 8)}/${s.slice(4, 6)}/${s.slice(0, 4)}`;
+};
+
+const fmtValidite = (deb: number | null, fin: number | null): string | null => {
+  if (!deb || !fin) return null;
+  return `${fmtYmd(deb)} – ${fmtYmd(fin)}`;
+};
+
 export const ProjectListPage: React.FC<ProjectListPageProps> = ({
   onProjectClick,
   onNewProjectClick,
@@ -231,6 +242,12 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
                   ID projet
                 </TableHead>
                 <TableHead className="text-[10px] uppercase tracking-[0.15em] text-ink-muted">
+                  Réseau
+                </TableHead>
+                <TableHead className="text-[10px] uppercase tracking-[0.15em] text-ink-muted">
+                  Validité
+                </TableHead>
+                <TableHead className="text-[10px] uppercase tracking-[0.15em] text-ink-muted">
                   Statut
                 </TableHead>
                 <TableHead className="text-[10px] uppercase tracking-[0.15em] text-ink-muted">
@@ -263,6 +280,19 @@ export const ProjectListPage: React.FC<ProjectListPageProps> = ({
                           {project.id}
                         </CodeTag>
                       </a>
+                    </TableCell>
+                    <TableCell
+                      className="max-w-[14rem] truncate text-sm text-ink"
+                      title={project.reseau ?? undefined}
+                    >
+                      {project.reseau ?? (
+                        <span className="text-ink-muted">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums text-ink-muted">
+                      {fmtValidite(project.validite_debut, project.validite_fin) ?? (
+                        <span className="text-ink-muted">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <span className="inline-flex items-center gap-2">

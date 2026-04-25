@@ -55,6 +55,9 @@ class Project(Base):
     output_path = Column(String, nullable=True)  # R2 key 或本地路径
     tenant_id = Column(String, ForeignKey("tenants.id"), nullable=True, index=True)
     owner_id = Column(String, ForeignKey("users.id"), nullable=True)
+    reseau = Column(String, nullable=True)
+    validite_debut = Column(Integer, nullable=True)  # YYYYMMDD
+    validite_fin = Column(Integer, nullable=True)  # YYYYMMDD
 
 
 class ProgressEvent(Base):

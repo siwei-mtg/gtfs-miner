@@ -41,6 +41,7 @@ from .gtfs_core.gtfs_export import (
     MEF_ligne, MEF_serdate, MEF_servjour,
 )
 from .dwd_loader import load_outputs_to_dwd
+from .project_metadata import extract_reseau, extract_validite
 
 # HPM/HPS as time fractions — overridable from project parameters
 def _parse_time_frac(hhmm: str) -> float:
@@ -235,6 +236,9 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
         n_routes = len(normed['routes'])
         n_trips  = len(normed['trips'])
 
+        project.reseau = extract_reseau(normed['agency'])
+        db.commit()
+
         send_progress(f"[3/9] 空间聚类生成站点映射（{n_stops} 停靠站，{n_routes} 线路，{n_trips} 班次）")
 
         # ── 3. Spatial clustering (A_1 / A_2) ────────────────────────────
@@ -271,6 +275,8 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
 
         # ── 6. Service dates (D_1 / D_2) ─────────────────────────────────
         Dates = build_dates_table(normed['calendar'], normed['calendar_dates'])
+        project.validite_debut, project.validite_fin = extract_validite(Dates)
+        db.commit()
         Dates = DBCalendarProvider(db).enrich(Dates)  # inject Type_Jour_Vacances_*
         service_dates, msg = service_date_generate(
             normed['calendar'], normed['calendar_dates'], Dates

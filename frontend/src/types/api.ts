@@ -16,6 +16,9 @@ export interface ProjectResponse {
   updated_at: string
   parameters: ProjectCreate
   error_message: string | null
+  reseau: string | null
+  validite_debut: number | null
+  validite_fin: number | null
 }
 
 export interface WebSocketMessage {

@@ -35,7 +35,10 @@ class ProjectResponse(BaseModel):
     updated_at: datetime
     parameters: ProjectCreate
     error_message: Optional[str] = None
-    
+    reseau: Optional[str] = None
+    validite_debut: Optional[int] = None  # YYYYMMDD
+    validite_fin: Optional[int] = None  # YYYYMMDD
+
     model_config = ConfigDict(from_attributes=True)
 
 class WebsocketMessage(BaseModel):
