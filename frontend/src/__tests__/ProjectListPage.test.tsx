@@ -21,7 +21,10 @@ const mockProjects: ProjectResponse[] = [
     created_at: '2026-04-10T10:00:00Z',
     updated_at: '2026-04-10T11:00:00Z',
     parameters: {} as any,
-    error_message: null
+    error_message: null,
+    reseau: null,
+    validite_debut: null,
+    validite_fin: null,
   },
   {
     id: 'p2',
@@ -29,7 +32,10 @@ const mockProjects: ProjectResponse[] = [
     created_at: '2026-04-11T12:00:00Z',
     updated_at: '2026-04-11T12:00:00Z',
     parameters: {} as any,
-    error_message: null
+    error_message: null,
+    reseau: null,
+    validite_debut: null,
+    validite_fin: null,
   }
 ];
 

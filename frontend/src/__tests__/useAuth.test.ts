@@ -24,7 +24,7 @@ describe('useAuth', () => {
 
   it('test_login_stores_token', async () => {
     vi.mocked(apiClient.login).mockResolvedValue({ access_token: 'new-token', token_type: 'bearer' })
-    vi.mocked(apiClient.getMe).mockResolvedValue({ id: '1', email: 'test@t.com', role: 'member', tenant_id: '1', created_at: '2026' })
+    vi.mocked(apiClient.getMe).mockResolvedValue({ id: '1', email: 'test@t.com', role: 'member', tenant_id: '1', plan: 'free', created_at: '2026' })
 
     const { result } = renderHook(() => useAuth())
     
@@ -38,7 +38,7 @@ describe('useAuth', () => {
 
   it('test_logout_clears_token', async () => {
     localStorage.setItem('token', 'existing-token')
-    vi.mocked(apiClient.getMe).mockResolvedValue({ id: '1', email: 'test@t.com', role: 'member', tenant_id: '1', created_at: '2026' })
+    vi.mocked(apiClient.getMe).mockResolvedValue({ id: '1', email: 'test@t.com', role: 'member', tenant_id: '1', plan: 'free', created_at: '2026' })
 
     const { result } = renderHook(() => useAuth())
     
@@ -57,7 +57,7 @@ describe('useAuth', () => {
 
   it('test_restores_token_from_storage', async () => {
     localStorage.setItem('token', 'stored-token')
-    vi.mocked(apiClient.getMe).mockResolvedValue({ id: '1', email: 'me@t.com', role: 'member', tenant_id: '1', created_at: '2026' })
+    vi.mocked(apiClient.getMe).mockResolvedValue({ id: '1', email: 'me@t.com', role: 'member', tenant_id: '1', plan: 'free', created_at: '2026' })
 
     const { result } = renderHook(() => useAuth())
     
@@ -85,7 +85,7 @@ describe('useAuth', () => {
 
   it('test_user_loaded_after_login', async () => {
     vi.mocked(apiClient.login).mockResolvedValue({ access_token: 'login-token', token_type: 'bearer' })
-    vi.mocked(apiClient.getMe).mockResolvedValue({ id: '1', email: 'login@t.com', role: 'member', tenant_id: '1', created_at: '2026' })
+    vi.mocked(apiClient.getMe).mockResolvedValue({ id: '1', email: 'login@t.com', role: 'member', tenant_id: '1', plan: 'free', created_at: '2026' })
 
     const { result } = renderHook(() => useAuth())
     

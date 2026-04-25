@@ -14,20 +14,22 @@ interface PassageArcLayerProps {
 const LAYER_ID = 'passage-arc-layer';
 const SOURCE_ID = 'passage-arc';
 
-function buildPaint(mw: number): maplibregl.LinePaint {
+type LinePaint = NonNullable<maplibregl.LineLayerSpecification['paint']>;
+
+function buildPaint(mw: number): LinePaint {
   return {
     'line-color': '#ef4444',
     // line_width = weight × maxWidthPx
-    'line-width': ['*', ['get', 'weight'], mw] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>,
+    'line-width': ['*', ['get', 'weight'], mw],
     // line_offset = sign(direction) × (line_width/2 + 0.1)
     //   sign(AB) = +1, sign(BA) = -1
     'line-offset': [
       '*',
       ['case', ['==', ['get', 'direction'], 'AB'], 1, -1],
       ['+', ['*', ['*', ['get', 'weight'], mw], 0.5], 0.1],
-    ] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>,
+    ],
     // Hide arcs with zero passages
-    'line-opacity': ['case', ['==', ['get', 'nb_passage'], 0], 0, 1] as unknown as maplibregl.DataDrivenPropertyValueSpecification<number>,
+    'line-opacity': ['case', ['==', ['get', 'nb_passage'], 0], 0, 1],
   };
 }
 

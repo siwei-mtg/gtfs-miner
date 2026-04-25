@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createProject, uploadGtfs, getProject, getDownloadUrl, register, login, getMe } from '../api/client'
+import { createProject, uploadGtfs, getProject, register, login, getMe } from '../api/client'
 import type { ProjectCreate, UserCreate, Token, UserResponse } from '../types/api'
 
 const defaultParams: ProjectCreate = {
@@ -89,12 +89,6 @@ describe('getProject', () => {
   })
 })
 
-describe('getDownloadUrl', () => {
-  it('returns correct download URL', () => {
-    expect(getDownloadUrl('test-uuid')).toBe('/api/v1/projects/test-uuid/download')
-  })
-})
-
 describe('register', () => {
   it('test_register_call', async () => {
     const mockToken: Token = { access_token: 'fake-token', token_type: 'bearer' }
@@ -137,7 +131,7 @@ describe('login', () => {
 
 describe('getMe', () => {
   it('test_getMe_with_auth_header', async () => {
-    const mockUser: UserResponse = { id: '1', email: 'u@test.com', role: 'member', tenant_id: '1', created_at: '2026' }
+    const mockUser: UserResponse = { id: '1', email: 'u@test.com', role: 'member', tenant_id: '1', plan: 'free', created_at: '2026' }
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify(mockUser), { status: 200 })
     )

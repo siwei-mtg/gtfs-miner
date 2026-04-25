@@ -6,7 +6,7 @@ describe('AppShell', () => {
   it('test_appshell_renders_header_when_user', () => {
     render(
       <AppShell
-        user={{ id: '1', email: 'x@y.com', role: 'member', tenant_id: 't1', created_at: '' }}
+        user={{ id: '1', email: 'x@y.com', role: 'member', tenant_id: 't1', plan: 'free', created_at: '' }}
         onLogout={vi.fn()}
       >
         <div>content</div>

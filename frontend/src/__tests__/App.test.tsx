@@ -70,7 +70,8 @@ describe('App Routing & State Machine', () => {
       token: 'valid-token', isLoading: false, user: { id: 'u1' } as any, login: vi.fn(), logout: vi.fn(), register: vi.fn()
     })
     vi.mocked(client.listProjects).mockResolvedValue([{
-      id: 'proj-auth', status: 'completed', created_at: '2026', updated_at: '2026', parameters: {} as any, error_message: null
+      id: 'proj-auth', status: 'completed', created_at: '2026', updated_at: '2026', parameters: {} as any, error_message: null,
+      reseau: null, validite_debut: null, validite_fin: null,
     }])
     
     render(<App />)
@@ -88,7 +89,8 @@ describe('App Routing & State Machine', () => {
       token: 'valid-token', isLoading: false, user: { id: 'u1' } as any, login: vi.fn(), logout: vi.fn(), register: vi.fn()
     })
     vi.mocked(client.listProjects).mockResolvedValue([{
-      id: 'proj-nav', status: 'processing', created_at: '2026', updated_at: '2026', parameters: {} as any, error_message: null
+      id: 'proj-nav', status: 'processing', created_at: '2026', updated_at: '2026', parameters: {} as any, error_message: null,
+      reseau: null, validite_debut: null, validite_fin: null,
     }])
 
     const user = userEvent.setup()
@@ -140,7 +142,8 @@ describe('App Routing & State Machine', () => {
     })
     vi.mocked(client.listProjects).mockResolvedValue([])
     vi.mocked(client.createProject).mockResolvedValue({
-      id: 'new-proj', status: 'pending', created_at: '2026', updated_at: '2026', parameters: {} as any, error_message: null
+      id: 'new-proj', status: 'pending', created_at: '2026', updated_at: '2026', parameters: {} as any, error_message: null,
+      reseau: null, validite_debut: null, validite_fin: null,
     })
     vi.mocked(client.uploadGtfs).mockResolvedValue({ msg: 'ok', project_id: 'new-proj' })
 
