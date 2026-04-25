@@ -11,6 +11,7 @@ from alembic import context
 from app.core.config import settings
 from app.db.database import Base
 from app.db.models import Project, Tenant, User  # noqa: F401
+from app.db import result_models  # noqa: F401 — registers 15 result tables with Base.metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

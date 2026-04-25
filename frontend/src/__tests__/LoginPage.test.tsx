@@ -1,0 +1,81 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
+import { LoginPage } from '../pages/LoginPage';
+import { useAuth } from '../hooks/useAuth';
+
+const renderWithRouter = (ui: React.ReactElement) =>
+  render(<MemoryRouter>{ui}</MemoryRouter>);
+
+vi.mock('../hooks/useAuth', () => ({
+  useAuth: vi.fn(),
+}));
+
+describe('LoginPage', () => {
+  const mockLogin = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (useAuth as any).mockReturnValue({
+      login: mockLogin,
+    });
+  });
+
+  it('test_renders_form', () => {
+    renderWithRouter(<LoginPage />);
+    expect(screen.getByLabelText(/Email/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Mot de passe/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Se connecter/i })).toBeInTheDocument();
+  });
+
+  it('test_submit_calls_login', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<LoginPage />);
+    
+    await user.type(screen.getByLabelText(/Email/i), 'test@test.com');
+    await user.type(screen.getByLabelText(/Mot de passe/i), '123456');
+    await user.click(screen.getByRole('button', { name: /Se connecter/i }));
+
+    expect(mockLogin).toHaveBeenCalledWith('test@test.com', '123456');
+  });
+
+  it('test_error_displayed_on_failure', async () => {
+    mockLogin.mockRejectedValueOnce(new Error('Invalid credentials'));
+    const user = userEvent.setup();
+    renderWithRouter(<LoginPage />);
+    
+    await user.type(screen.getByLabelText(/Email/i), 'test@test.com');
+    await user.type(screen.getByLabelText(/Mot de passe/i), 'wrong');
+    await user.click(screen.getByRole('button', { name: /Se connecter/i }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Invalid credentials');
+  });
+
+  it('test_redirects_on_success', async () => {
+    mockLogin.mockResolvedValueOnce(undefined);
+    const onSuccess = vi.fn();
+    const user = userEvent.setup();
+    renderWithRouter(<LoginPage onSuccess={onSuccess} />);
+    
+    await user.type(screen.getByLabelText(/Email/i), 'test@test.com');
+    await user.type(screen.getByLabelText(/Mot de passe/i), '123456');
+    await user.click(screen.getByRole('button', { name: /Se connecter/i }));
+
+    expect(onSuccess).toHaveBeenCalled();
+  });
+
+  it('test_link_to_register', () => {
+    renderWithRouter(<LoginPage />);
+    const link = screen.getByRole('link', { name: /Créer un compte/i });
+    expect(link).toHaveAttribute('href', '/register');
+  });
+
+  // Task 43
+  it('test_login_form_renders_inputs', () => {
+    renderWithRouter(<LoginPage />);
+    expect(screen.getByLabelText(/Email/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Mot de passe/i)).toBeInTheDocument();
+  });
+});

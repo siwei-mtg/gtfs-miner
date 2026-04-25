@@ -23,6 +23,19 @@ def upload_file(local_path: Path, key: str) -> str:
     return str(dest)
 
 
+def delete_file(key: str) -> None:
+    """Delete a stored file by key.
+
+    Key format: {tenant_id}/projects/{project_id}/output/{filename}
+    """
+    if settings.use_r2:
+        _r2_client().delete_object(Bucket=settings.R2_BUCKET_NAME, Key=key)
+    else:
+        target = settings.project_dir / key
+        if target.exists():
+            target.unlink()
+
+
 def generate_presigned_url(key: str, expires: int = 3600) -> str:
     if settings.use_r2:
         return _r2_client().generate_presigned_url(

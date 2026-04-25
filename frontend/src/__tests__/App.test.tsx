@@ -1,130 +1,170 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+
+// maplibre-gl executes `window.URL.createObjectURL(new Blob(...))` at module
+// load time, which jsdom does not support.  Stub it before App (which
+// transitively imports MapView) is imported.  vi.mock is hoisted.
+vi.mock('maplibre-gl', () => ({
+  default: {
+    Map: vi.fn(() => ({
+      on: vi.fn(), addSource: vi.fn(), addLayer: vi.fn(), getLayer: vi.fn(() => true),
+      setLayoutProperty: vi.fn(), remove: vi.fn(), addControl: vi.fn(), resize: vi.fn(),
+    })),
+    NavigationControl: vi.fn(),
+    Marker: vi.fn(() => ({ setLngLat: vi.fn().mockReturnThis(), addTo: vi.fn().mockReturnThis(), remove: vi.fn() })),
+    Popup: vi.fn(() => ({ setLngLat: vi.fn().mockReturnThis(), setHTML: vi.fn().mockReturnThis(), addTo: vi.fn().mockReturnThis(), remove: vi.fn() })),
+  },
+}))
+
 import App from '../App'
 import * as client from '../api/client'
 import * as useProjectProgressModule from '../hooks/useProjectProgress'
-import type { WebSocketMessage } from '../types/api'
+import * as useAuthModule from '../hooks/useAuth'
 
-const mockProject = {
-  id: 'proj-test',
-  status: 'pending' as const,
-  created_at: '2026-04-07T00:00:00',
-  updated_at: '2026-04-07T00:00:00',
-  parameters: {
-    hpm_debut: '07:00', hpm_fin: '09:00',
-    hps_debut: '17:00', hps_fin: '19:30',
-    vacances: 'A', pays: '法国',
-  },
-  error_message: null,
-}
+vi.mock('../api/client', () => ({
+  createProject: vi.fn(),
+  uploadGtfs: vi.fn(),
+  listProjects: vi.fn(),
+  getTableData: vi.fn(),
+  getTableDownloadUrl: vi.fn(),
+  getJourTypes: vi.fn().mockResolvedValue([]),
+}))
 
-function makeMsg(step: string, status: WebSocketMessage['status'] = 'processing'): WebSocketMessage {
-  return { project_id: 'proj-test', status, step, time_elapsed: 1.0, error: null }
-}
+vi.mock('../hooks/useProjectProgress', () => ({
+  useProjectProgress: vi.fn()
+}))
+
+vi.mock('../hooks/useAuth', () => ({
+  useAuth: vi.fn()
+}))
 
 beforeEach(() => {
-  vi.restoreAllMocks()
-  // Default: hook returns no messages
-  vi.spyOn(useProjectProgressModule, 'useProjectProgress').mockReturnValue({
+  vi.clearAllMocks()
+  vi.mocked(useProjectProgressModule.useProjectProgress).mockReturnValue({
     messages: [],
-    latestStatus: null,
-    isConnected: false,
+    // Default to a non-terminal status so DashboardPage falls through to the
+    // ProgressView (which reuses the "Projet [id]" heading several tests
+    // assert on). Tests that need the dashboard branch override this.
+    latestStatus: 'processing',
+    isConnected: false
   })
+  window.history.pushState({}, '', '/')
 })
 
-describe('App', () => {
-  it('shows UploadForm in initial idle state', () => {
+describe('App Routing & State Machine', () => {
+  it('test_redirects_to_login_if_unauthenticated', async () => {
+    vi.mocked(useAuthModule.useAuth).mockReturnValue({
+      token: null, isLoading: false, user: null, login: vi.fn(), logout: vi.fn(), register: vi.fn()
+    } as any)
+    
     render(<App />)
-    expect(screen.getByLabelText('GTFS ZIP')).toBeInTheDocument()
-    expect(screen.queryByLabelText('progress-panel')).not.toBeInTheDocument()
+    
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /Login/i })).toBeInTheDocument()
+    })
   })
 
-  it('switches to ProgressPanel view after successful upload', async () => {
-    vi.spyOn(client, 'createProject').mockResolvedValue(mockProject)
-    vi.spyOn(client, 'uploadGtfs').mockResolvedValue({ msg: 'ok', project_id: 'proj-test' })
+  it('test_shows_project_list_when_authenticated', async () => {
+    vi.mocked(useAuthModule.useAuth).mockReturnValue({
+      token: 'valid-token', isLoading: false, user: { id: 'u1' } as any, login: vi.fn(), logout: vi.fn(), register: vi.fn()
+    })
+    vi.mocked(client.listProjects).mockResolvedValue([{
+      id: 'proj-auth', status: 'completed', created_at: '2026', updated_at: '2026', parameters: {} as any, error_message: null,
+      reseau: null, validite_debut: null, validite_fin: null,
+    }])
+    
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /Mes projets/i })).toBeInTheDocument()
+      expect(screen.getByText('proj-auth')).toBeInTheDocument()
+    })
+  })
+
+  it('test_navigates_to_project_detail', async () => {
+    // /projects/:id is the only project URL. Non-completed projects render
+    // the in-page ProgressView; completed ones swap to the 3-pane dashboard.
+    vi.mocked(useAuthModule.useAuth).mockReturnValue({
+      token: 'valid-token', isLoading: false, user: { id: 'u1' } as any, login: vi.fn(), logout: vi.fn(), register: vi.fn()
+    })
+    vi.mocked(client.listProjects).mockResolvedValue([{
+      id: 'proj-nav', status: 'processing', created_at: '2026', updated_at: '2026', parameters: {} as any, error_message: null,
+      reseau: null, validite_debut: null, validite_fin: null,
+    }])
 
     const user = userEvent.setup()
     render(<App />)
 
-    await user.upload(
-      screen.getByLabelText('GTFS ZIP'),
-      new File(['zip'], 'gtfs.zip', { type: 'application/zip' })
-    )
-    await user.click(screen.getByRole('button', { name: /lancer/i }))
+    await waitFor(() => expect(screen.getByText('proj-nav')).toBeInTheDocument())
 
-    await waitFor(() =>
-      expect(screen.getByLabelText('progress-panel')).toBeInTheDocument()
-    )
-    expect(screen.queryByLabelText('GTFS ZIP')).not.toBeInTheDocument()
+    await user.click(screen.getByText('proj-nav'))
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /Projet proj-nav/i })).toBeInTheDocument()
+    })
   })
 
-  it('shows disabled download button while processing', async () => {
-    vi.spyOn(client, 'createProject').mockResolvedValue(mockProject)
-    vi.spyOn(client, 'uploadGtfs').mockResolvedValue({ msg: 'ok', project_id: 'proj-test' })
-    vi.spyOn(useProjectProgressModule, 'useProjectProgress').mockReturnValue({
-      messages: [makeMsg('[1/7] 读取与解压 GTFS 文件')],
-      latestStatus: 'processing',
-      isConnected: true,
+  it('test_logout_clears_session', async () => {
+    const logoutMock = vi.fn()
+    vi.mocked(useAuthModule.useAuth).mockReturnValue({
+      token: 'valid-token', isLoading: false, user: { id: 'u1', email: 'u@test.com' } as any, login: vi.fn(), logout: logoutMock, register: vi.fn()
+    })
+    vi.mocked(client.listProjects).mockResolvedValue([])
+
+    const user = userEvent.setup()
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Logout/i })).toBeInTheDocument()
     })
 
-    const user = userEvent.setup()
-    render(<App />)
-
-    await user.upload(
-      screen.getByLabelText('GTFS ZIP'),
-      new File(['zip'], 'gtfs.zip', { type: 'application/zip' })
-    )
-    await user.click(screen.getByRole('button', { name: /lancer/i }))
-
-    await waitFor(() =>
-      expect(screen.getByLabelText('progress-panel')).toBeInTheDocument()
-    )
-    expect(screen.getByLabelText('download-button')).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: /Logout/i }))
+    expect(logoutMock).toHaveBeenCalled()
   })
 
-  it('enables download button when processing is completed', async () => {
-    vi.spyOn(client, 'createProject').mockResolvedValue(mockProject)
-    vi.spyOn(client, 'uploadGtfs').mockResolvedValue({ msg: 'ok', project_id: 'proj-test' })
-    vi.spyOn(useProjectProgressModule, 'useProjectProgress').mockReturnValue({
-      messages: [makeMsg('处理完成', 'completed')],
-      latestStatus: 'completed',
-      isConnected: false,
+  it('test_project_route_redirects_unauthenticated', async () => {
+    vi.mocked(useAuthModule.useAuth).mockReturnValue({
+      token: null, isLoading: false, user: null, login: vi.fn(), logout: vi.fn(), register: vi.fn(),
+    } as any)
+    window.history.pushState({}, '', '/projects/p1')
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /Login/i })).toBeInTheDocument()
     })
-
-    const user = userEvent.setup()
-    render(<App />)
-
-    await user.upload(
-      screen.getByLabelText('GTFS ZIP'),
-      new File(['zip'], 'gtfs.zip', { type: 'application/zip' })
-    )
-    await user.click(screen.getByRole('button', { name: /lancer/i }))
-
-    await waitFor(() =>
-      expect(screen.getByLabelText('download-button')).not.toBeDisabled()
-    )
-    expect(screen.getByLabelText('download-button')).toHaveAttribute(
-      'href',
-      '/api/v1/projects/proj-test/download'
-    )
   })
 
-  it('shows upload error and returns to idle on API failure', async () => {
-    vi.spyOn(client, 'createProject').mockRejectedValue(new Error('Network error'))
+  it('test_new_project_flow', async () => {
+    vi.mocked(useAuthModule.useAuth).mockReturnValue({
+      token: 'valid-token', isLoading: false, user: { id: 'u1' } as any, login: vi.fn(), logout: vi.fn(), register: vi.fn()
+    })
+    vi.mocked(client.listProjects).mockResolvedValue([])
+    vi.mocked(client.createProject).mockResolvedValue({
+      id: 'new-proj', status: 'pending', created_at: '2026', updated_at: '2026', parameters: {} as any, error_message: null,
+      reseau: null, validite_debut: null, validite_fin: null,
+    })
+    vi.mocked(client.uploadGtfs).mockResolvedValue({ msg: 'ok', project_id: 'new-proj' })
 
     const user = userEvent.setup()
     render(<App />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Nouveau projet/i })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /Nouveau projet/i }))
+
+    await waitFor(() => expect(screen.getByLabelText('GTFS ZIP')).toBeInTheDocument())
 
     await user.upload(
       screen.getByLabelText('GTFS ZIP'),
       new File(['zip'], 'gtfs.zip', { type: 'application/zip' })
     )
-    await user.click(screen.getByRole('button', { name: /lancer/i }))
+    await user.click(screen.getByRole('button', { name: /Lancer le traitement/i }))
 
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent('Network error')
-    )
-    expect(screen.getByLabelText('GTFS ZIP')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(client.createProject).toHaveBeenCalled()
+      expect(client.uploadGtfs).toHaveBeenCalled()
+      expect(screen.getByRole('heading', { name: /Projet new-proj/i })).toBeInTheDocument()
+    })
   })
 })

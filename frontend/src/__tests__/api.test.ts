@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createProject, uploadGtfs, getProject, getDownloadUrl } from '../api/client'
-import type { ProjectCreate } from '../types/api'
+import { createProject, uploadGtfs, getProject, register, login, getMe } from '../api/client'
+import type { ProjectCreate, UserCreate, Token, UserResponse } from '../types/api'
 
 const defaultParams: ProjectCreate = {
   hpm_debut: '07:00',
@@ -75,7 +75,9 @@ describe('getProject', () => {
 
     const result = await getProject('test-uuid')
 
-    expect(fetchSpy).toHaveBeenCalledWith('/api/v1/projects/test-uuid')
+    expect(fetchSpy).toHaveBeenCalledWith('/api/v1/projects/test-uuid', {
+      headers: {}
+    })
     expect(result.status).toBe('pending')
   })
 
@@ -87,8 +89,58 @@ describe('getProject', () => {
   })
 })
 
-describe('getDownloadUrl', () => {
-  it('returns correct download URL', () => {
-    expect(getDownloadUrl('test-uuid')).toBe('/api/v1/projects/test-uuid/download')
+describe('register', () => {
+  it('test_register_call', async () => {
+    const mockToken: Token = { access_token: 'fake-token', token_type: 'bearer' }
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify(mockToken), { status: 201 })
+    )
+
+    const payload: UserCreate = { email: 'u@test.com', password: '123', tenant_name: 't' }
+    const result = await register(payload)
+
+    expect(fetchSpy).toHaveBeenCalledWith('/api/v1/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    expect(result.access_token).toBe('fake-token')
+  })
+})
+
+describe('login', () => {
+  it('test_login_call', async () => {
+    const mockToken: Token = { access_token: 'fake-token', token_type: 'bearer' }
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify(mockToken), { status: 200 })
+    )
+
+    const result = await login('u@test.com', '123')
+
+    expect(fetchSpy).toHaveBeenCalledWith('/api/v1/auth/login', expect.objectContaining({
+      method: 'POST'
+    }))
+    const [, init] = fetchSpy.mock.calls[0]
+    expect((init as RequestInit).body).toBeInstanceOf(URLSearchParams)
+    const bodyParams = (init as RequestInit).body as URLSearchParams
+    expect(bodyParams.get('username')).toBe('u@test.com')
+    expect(bodyParams.get('password')).toBe('123')
+    expect(result.access_token).toBe('fake-token')
+  })
+})
+
+describe('getMe', () => {
+  it('test_getMe_with_auth_header', async () => {
+    const mockUser: UserResponse = { id: '1', email: 'u@test.com', role: 'member', tenant_id: '1', plan: 'free', created_at: '2026' }
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify(mockUser), { status: 200 })
+    )
+
+    const result = await getMe('fake-token')
+
+    expect(fetchSpy).toHaveBeenCalledWith('/api/v1/auth/me', {
+      headers: { 'Authorization': 'Bearer fake-token' }
+    })
+    expect(result.email).toBe('u@test.com')
   })
 })

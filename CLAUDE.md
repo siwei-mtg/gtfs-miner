@@ -50,6 +50,33 @@
 
 ---
 
+## 前端组件架构（Atomic Design）
+
+> 完整规范与代码示例见 `docs/atomic-design.md`。
+
+**强制目录结构**（Phase 2 起，所有新建前端组件必须遵守）：
+
+```
+frontend/src/
+├── components/
+│   ├── atoms/        — 单一 HTML 元素级（Button, Input, Badge, Skeleton…）
+│   ├── molecules/    — 2–3 个 atoms 组合（SearchBar, StatCard, FormField…）
+│   ├── organisms/    — 独立功能区块（AppHeader, ResultTable, UploadForm…）
+│   └── templates/    — 纯布局骨架，不含具体内容（AppShell, AuthLayout, DashboardLayout）
+├── pages/            — 完整路由页面，组装 template + organisms
+└── lib/utils.ts      — cn() 工具函数（clsx + tailwind-merge）
+```
+
+**硬规则（违反视为 bug，立即修复）**：
+
+- **A0 — Atom 零依赖**：`atoms/` 下的组件禁止 import 任何自定义组件，只允许 import `cn`、Lucide 图标、React 内置。
+- **A1 — className 穿透**：所有组件必须接受并透传 `className` prop，用 `cn()` 合并。
+- **A2 — 无魔法数字**：样式值只来自 Tailwind 工具类或 `docs/atomic-design.md` 定义的 CSS 变量；禁止 `style={{ color: '#abc' }}` 形式的内联魔法值。
+- **A3 — 复用优先**：新建组件前必须先检查 `atoms/` 和 `molecules/` 是否已有可复用实现。
+- **A4 — 层级疑问查决策树**：不确定放哪一层时，按 `docs/atomic-design.md §层级判断决策树` 依次判断，不得凭感觉放置。
+
+---
+
 ## SOLID 约束
 
 > 完整分析与重构方案见 `docs/SOLID_analysis.md`。
@@ -70,3 +97,16 @@ cd backend && pytest
 - 测试数据集位于 `backend/tests/Resources/raw/`（SEM、SOLEA、ginko 三个最小样本）。
 - 禁止在测试中引入新的 GTFS 样本数据（保持最小化）。
 - 大数据集（IDFM 规模 >5 万站点）处理时间约 30 分钟，集成测试中避免使用。
+
+---
+
+## Bug 追踪
+
+**每次运行 pytest 后**，若出现新的失败测试，Claude 必须执行以下操作：
+
+1. 判断该 bug 是否已记录在 `docs/BUGS_AND_TECH_DEBT.md` 中。
+2. **若未记录**：在文件的 Bug 列表表格末尾追加一行，并在文件末尾新增对应的详情小节，格式与已有条目一致，包含：ID、状态（🔴 Open）、严重度、标题、影响测试、错误信息、根因、修复方案（可为"待查"）、涉及文件。
+3. **若已记录**：无需重复追加，但如有新信息（如根因确认、修复方案明确）则更新对应条目。
+4. 若某个 bug 已被修复且测试通过，将状态改为 ✅ Resolved 并注明修复 commit。
+
+技术债（非测试失败的代码质量问题）同理维护在同一文件的"技术债列表"中。
