@@ -14,27 +14,27 @@ describe('ProgressPanel', () => {
   })
 
   it('renders 9 step slots', () => {
-    render(<ProgressPanel messages={[makeMsg('[1/9] 读取与解压 GTFS 文件')]} />)
+    render(<ProgressPanel messages={[makeMsg('[1/9] Lecture et décompression du fichier GTFS')]} />)
     expect(screen.getAllByRole('listitem')).toHaveLength(9)
   })
 
   it('recognises [8/9] persist-to-DB step and shows its label', () => {
-    const step = '[8/9] 将结果写入数据库'
+    const step = '[8/9] Écriture des résultats en base de données'
     render(<ProgressPanel messages={[makeMsg(step)]} />)
     expect(screen.getByText(step)).toBeInTheDocument()
   })
 
   it('keeps progressPercentage below 100% while status is processing, even if all steps received', () => {
     const allSteps = [
-      '[1/9] 读取与解压 GTFS 文件',
-      '[2/9] 标准化 GTFS 表',
-      '[3/9] 空间聚类生成站点映射',
-      '[4/9] 生成行程、弧段与班次数据',
-      '[5/9] 生成线路与子线路',
-      '[6/9] 生成服务日期与日类型',
-      '[7/9] 计算通过次数与 KCC 指标',
-      '[8/9] 将结果写入数据库',
-      '[9/9] 构建查询数据库（DWD）',
+      '[1/9] Lecture et décompression du fichier GTFS',
+      '[2/9] Normalisation des tables GTFS',
+      '[3/9] Clustering spatial et cartographie des arrêts',
+      '[4/9] Génération des itinéraires, arcs et courses',
+      '[5/9] Génération des lignes et sous-lignes',
+      '[6/9] Génération des dates de service et types de jour',
+      '[7/9] Calcul des nombres de passages et indicateurs KCC',
+      '[8/9] Écriture des résultats en base de données',
+      '[9/9] Construction de la base de requêtes (DWD)',
     ].map((s) => makeMsg(s, 'processing'))
     render(<ProgressPanel messages={allSteps} status="processing" />)
     // The percentage label sits beside the "Progression" caption — assert it never reads 100%.
@@ -44,27 +44,27 @@ describe('ProgressPanel', () => {
 
   it('reaches 100% only when status flips to completed', () => {
     const msgs = [
-      makeMsg('[9/9] 构建查询数据库（DWD）', 'processing'),
-      makeMsg('处理完成（总耗时 12 秒）', 'completed', 12.0),
+      makeMsg('[9/9] Construction de la base de requêtes (DWD)', 'processing'),
+      makeMsg('Traitement terminé (durée totale : 12 s)', 'completed', 12.0),
     ]
     render(<ProgressPanel messages={msgs} status="completed" />)
     expect(screen.getByText('100%')).toBeInTheDocument()
   })
 
   it('displays the full step text from messages', () => {
-    const step = '[2/7] 标准化 GTFS 表（已加载：stop_times）'
-    render(<ProgressPanel messages={[makeMsg('[1/7] 读取与解压 GTFS 文件'), makeMsg(step)]} />)
+    const step = '[2/7] Normalisation des tables GTFS (chargées : stop_times)'
+    render(<ProgressPanel messages={[makeMsg('[1/7] Lecture et décompression du fichier GTFS'), makeMsg(step)]} />)
     expect(screen.getByText(step)).toBeInTheDocument()
   })
 
   it('shows elapsed time from the latest message', () => {
-    render(<ProgressPanel messages={[makeMsg('[1/7] 读取与解压 GTFS 文件', 'processing', 4.2)]} />)
+    render(<ProgressPanel messages={[makeMsg('[1/7] Lecture et décompression du fichier GTFS', 'processing', 4.2)]} />)
     expect(screen.getByLabelText('elapsed-time')).toHaveTextContent('4.2')
   })
 
   it('shows completed status', () => {
     const msgs = [
-      makeMsg('[7/7] 计算通过次数与 KCC 指标（done）', 'completed', 30.0),
+      makeMsg('[7/7] Calcul des nombres de passages et indicateurs KCC (done)', 'completed', 30.0),
     ]
     render(<ProgressPanel messages={msgs} />)
     expect(screen.getByLabelText('status')).toHaveTextContent('Terminé')
@@ -74,7 +74,7 @@ describe('ProgressPanel', () => {
     const msg: WebSocketMessage = {
       project_id: 'p1',
       status: 'failed',
-      step: '处理失败',
+      step: 'Traitement échoué',
       time_elapsed: 5.0,
       error: 'FileNotFoundError',
     }
@@ -84,14 +84,14 @@ describe('ProgressPanel', () => {
   })
 
   it('shows processing status during intermediate step', () => {
-    render(<ProgressPanel messages={[makeMsg('[3/7] 空间聚类生成站点映射（100 停靠站）')]} />)
+    render(<ProgressPanel messages={[makeMsg('[3/7] Clustering spatial et cartographie des arrêts (100 arrêts)')]} />)
     expect(screen.getByLabelText('status')).toHaveTextContent('En cours')
   })
 
   it('test_progress_panel_completed_step_checkmark', () => {
-    // 完成步骤含 ✓ 文本
+    // L'étape terminée contient le texte ✓
     const msgs = [
-      makeMsg('[1/7] 读取与解压 GTFS 文件', 'processing', 1.0)
+      makeMsg('[1/7] Lecture et décompression du fichier GTFS', 'processing', 1.0)
     ]
     render(<ProgressPanel messages={msgs} />)
     expect(screen.getByText('✓')).toBeInTheDocument()

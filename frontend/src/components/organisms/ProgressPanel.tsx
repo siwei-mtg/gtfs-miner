@@ -10,15 +10,15 @@ interface ProgressPanelProps {
 }
 
 const STEP_LABELS = [
-  '读取与解压 GTFS 文件',
-  '标准化 GTFS 表',
-  '空间聚类生成站点映射',
-  '生成行程、弧段与班次数据',
-  '生成线路与子线路',
-  '生成服务日期与日类型',
-  '计算通过次数与 KCC 指标',
-  '将结果写入数据库',
-  '构建查询数据库（DWD）',
+  'Lecture et décompression du fichier GTFS',
+  'Normalisation des tables GTFS',
+  'Clustering spatial et cartographie des arrêts',
+  'Génération des itinéraires, arcs et courses',
+  'Génération des lignes et sous-lignes',
+  'Génération des dates de service et types de jour',
+  'Calcul des nombres de passages et indicateurs KCC',
+  'Écriture des résultats en base de données',
+  'Construction de la base de requêtes (DWD)',
 ]
 
 function getStepIndex(step: string): number {

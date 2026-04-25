@@ -218,7 +218,7 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
     # Ensure calendar DB is seeded (noop if already populated)
     ensure_calendar(db)
 
-    send_progress("[1/9] 读取与解压 GTFS 文件")
+    send_progress("[1/9] Lecture et décompression du fichier GTFS")
 
     try:
         # ── 1. Load raw GTFS ──────────────────────────────────────────────
@@ -228,7 +228,7 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
             raise ValueError("No GTFS .txt tables found in the uploaded ZIP.")
         tables_found = list(raw_dict.keys())
 
-        send_progress(f"[2/9] 标准化 GTFS 表（已加载：{', '.join(tables_found)}）")
+        send_progress(f"[2/9] Normalisation des tables GTFS (chargées : {', '.join(tables_found)})")
 
         # ── 2. Normalize ──────────────────────────────────────────────────
         normed = gtfs_normalize(raw_dict)
@@ -239,14 +239,14 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
         project.reseau = extract_reseau(normed['agency'])
         db.commit()
 
-        send_progress(f"[3/9] 空间聚类生成站点映射（{n_stops} 停靠站，{n_routes} 线路，{n_trips} 班次）")
+        send_progress(f"[3/9] Clustering spatial et cartographie des arrêts ({n_stops} arrêts, {n_routes} lignes, {n_trips} courses)")
 
         # ── 3. Spatial clustering (A_1 / A_2) ────────────────────────────
         AP, AG, marker = ag_ap_generate_reshape(normed['stops'])
         AG.to_csv(out_dir / "A_1_Arrets_Generiques.csv", **CSV_OPTS)
         AP.to_csv(out_dir / "A_2_Arrets_Physiques.csv",  **CSV_OPTS)
 
-        send_progress(f"[4/9] 生成行程、弧段与班次数据（聚类方式：{marker}，{len(AG)} AG / {len(AP)} AP）")
+        send_progress(f"[4/9] Génération des itinéraires, arcs et courses (méthode de clustering : {marker}, {len(AG)} AG / {len(AP)} AP)")
 
         # ── 4. Itinerary, arcs & courses (C_1 / C_2 / C_3) ──────────────
         lignes         = ligne_generate(normed['routes'])
@@ -262,7 +262,7 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
         itineraire_export.to_csv(out_dir / "C_2_Itineraire.csv",    **CSV_OPTS)
         iti_arc_export.to_csv(out_dir    / "C_3_Itineraire_Arc.csv",**CSV_OPTS)
 
-        send_progress(f"[5/9] 生成线路与子线路（{len(courses)} 班次，{len(itineraire_arc)} 弧段）")
+        send_progress(f"[5/9] Génération des lignes et sous-lignes ({len(courses)} courses, {len(itineraire_arc)} arcs)")
 
         # ── 5. Lignes & sous-lignes (B_1 / B_2) ─────────────────────────
         sous_ligne    = sl_generate(courses, AG, lignes)
@@ -271,7 +271,7 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
         lignes_export.to_csv(out_dir / "B_1_Lignes.csv",      **CSV_OPTS)
         sous_ligne.to_csv(out_dir    / "B_2_Sous_Lignes.csv", **CSV_OPTS)
 
-        send_progress(f"[6/9] 生成服务日期与日类型（{len(lignes_export)} 线路，{len(sous_ligne)} 子线路）")
+        send_progress(f"[6/9] Génération des dates de service et types de jour ({len(lignes_export)} lignes, {len(sous_ligne)} sous-lignes)")
 
         # ── 6. Service dates (D_1 / D_2) ─────────────────────────────────
         Dates = build_dates_table(normed['calendar'], normed['calendar_dates'])
@@ -293,7 +293,7 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
         MEF_servjour(service_jour_type, normed['route_id_coor'], normed['ser_id_coor'], type_vac).to_csv(
             out_dir / "D_2_Service_Jourtype.csv", **CSV_OPTS)
 
-        send_progress(f"[7/9] 计算通过次数与 KCC 指标（{msg}）")
+        send_progress(f"[7/9] Calcul des nombres de passages et indicateurs KCC ({msg})")
 
         # ── 7. Passage counts & KCC (E_1 / E_4 / F_1–F_4) ───────────────
         pnode = AG[['id_ag_num', 'stop_name', 'stop_lon', 'stop_lat']].rename(
@@ -317,11 +317,11 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
         zip_path_obj.unlink(missing_ok=True)
 
         # ── Step 8: persist CSV results to DB ────────────────────────────
-        send_progress("[8/9] 将结果写入数据库")
+        send_progress("[8/9] Écriture des résultats en base de données")
         _persist_results_to_db(project_id, out_dir, db)
 
         # ── Step 9: Load to DWD SQLite (Phase 3 LLM Agent 查询用) ──────────
-        send_progress("[9/9] 构建查询数据库（DWD）")
+        send_progress("[9/9] Construction de la base de requêtes (DWD)")
         load_outputs_to_dwd(project_id, out_dir)
 
         # ── Mark as completed ─────────────────────────────────────────────
@@ -329,14 +329,14 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
         db.commit()
 
         elapsed = round(time.time() - start_time, 2)
-        send_progress(f"处理完成（总耗时 {elapsed} 秒）", status="completed")
+        send_progress(f"Traitement terminé (durée totale : {elapsed} s)", status="completed")
 
     except Exception as e:
         error_msg = f"{str(e)}\n{traceback.format_exc()}"
         project.status = "failed"
         project.error_message = error_msg[:4000]  # SQLite TEXT column guard
         db.commit()
-        send_progress("处理失败", status="failed", error=str(e))
+        send_progress("Traitement échoué", status="failed", error=str(e))
 
     finally:
         db.close()
