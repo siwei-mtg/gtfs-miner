@@ -129,7 +129,8 @@
       "Bash(\"/c/Program Files/nodejs/npm.cmd\" test -- --run src/__tests__/App.test.tsx src/__tests__/DashboardPage.test.tsx)",
       "Bash(\"/c/Program Files/nodejs/npm.cmd\" --prefix \"C:/Users/wei.si/Projets/GTFS Miner/frontend\" test -- --run src/__tests__/App.test.tsx src/__tests__/DashboardPage.test.tsx)",
       "PowerShell(& \"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" --prefix \"C:\\\\Users\\\\wei.si\\\\Projets\\\\GTFS Miner\\\\frontend\" test -- --run src/__tests__/App.test.tsx src/__tests__/DashboardPage.test.tsx 2>&1 | Select-Object -Last 60)",
-      "Bash(venv/Scripts/python -m pytest tests/test_api_pipeline_integration.py -k \"delete or not_found or create_project or get_project_list\" -v)"
+      "Bash(venv/Scripts/python -m pytest tests/test_api_pipeline_integration.py -k \"delete or not_found or create_project or get_project_list\" -v)",
+      "Bash(venv/Scripts/python -m alembic current)"
     ]
   }
 }
