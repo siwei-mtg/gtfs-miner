@@ -15,6 +15,7 @@ from ...db.models import Project, ProgressEvent, User
 from ...db.result_models import ResultA1ArretGenerique, ResultE1PassageAG
 from ...schemas.project import ProjectCreate, ProjectResponse
 from ...services.worker import run_project_task_sync
+from ...services import storage
 from ...services.result_query import TABLE_REGISTRY, ResultQueryError, query_table
 from ...services.map_builder import build_passage_ag_geojson, build_passage_arc_geojson, export_geopackage
 from ...services.charts_builder import (
@@ -184,10 +185,18 @@ async def upload_gtfs(
     project.status = "uploading"
     db.commit()
 
-    # Save to temp area
-    temp_zip_path = TEMP_DIR / f"{project_id}_{file.filename}"
-    with temp_zip_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Hand the upload off to shared storage so the Worker container can
+    # fetch it (the API and Worker each have their own filesystem on
+    # Zeabur). With R2 configured we stream straight to the bucket; in
+    # local single-process dev we fall back to the on-disk TEMP_DIR.
+    if settings.use_r2:
+        zip_arg = f"{current_user.tenant_id}/projects/{project_id}/upload/{file.filename}"
+        storage.upload_fileobj(file.file, zip_arg)
+    else:
+        temp_zip_path = TEMP_DIR / f"{project_id}_{file.filename}"
+        with temp_zip_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        zip_arg = str(temp_zip_path)
 
     project.status = "pending"
     db.commit()
@@ -195,14 +204,14 @@ async def upload_gtfs(
     if settings.REDIS_URL:
         # Celery mode: dispatch to worker queue
         from ...services.worker import process_project_task
-        process_project_task.delay(project_id, str(temp_zip_path), project.parameters)
+        process_project_task.delay(project_id, zip_arg, project.parameters)
     else:
         # BackgroundTasks fallback (dev/test — no Redis required)
         loop = asyncio.get_running_loop()
         background_tasks.add_task(
             run_project_task_sync,
             project_id=project_id,
-            zip_path=str(temp_zip_path),
+            zip_path=zip_arg,
             parameters=project.parameters,
             loop=loop,
         )

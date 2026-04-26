@@ -22,6 +22,7 @@ from ..db.database import SessionLocal, engine as _db_engine
 from ..db.models import Project, ProgressEvent
 from ..db import result_models as _r  # noqa: F401 — registers result tables with Base.metadata
 from ..api.websockets.progress import manager
+from . import storage
 
 # Import individual pipeline functions (not main, to allow step-by-step progress)
 from .gtfs_core.pipeline import build_dates_table, DEFAULT_TYPE_VAC, CSV_OPTS
@@ -222,7 +223,16 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
 
     try:
         # ── 1. Load raw GTFS ──────────────────────────────────────────────
+        # Resolve the input ZIP onto the worker's local filesystem. With R2
+        # the API uploaded the file to an object key (relative path); with
+        # local mode the API saved an absolute path in TEMP_DIR that's only
+        # valid in single-process setups.
         zip_path_obj = Path(zip_path)
+        if not zip_path_obj.is_absolute() or not zip_path_obj.exists():
+            TEMP_DIR.mkdir(parents=True, exist_ok=True)
+            local_zip = TEMP_DIR / f"{project_id}_input.zip"
+            storage.download_to_path(zip_path, local_zip)
+            zip_path_obj = local_zip
         raw_dict = read_gtfs_zip(zip_path_obj)
         if not raw_dict:
             raise ValueError("No GTFS .txt tables found in the uploaded ZIP.")
