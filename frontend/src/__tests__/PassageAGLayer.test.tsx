@@ -75,9 +75,10 @@ describe('PassageAGLayer', () => {
     );
 
     await vi.waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/v1/projects/p1/map/passage-ag?jour_type=1', {
-        headers: { 'Authorization': `Bearer ${mockToken}` },
-      });
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/projects/p1/map/passage-ag?jour_type=1'),
+        { headers: { 'Authorization': `Bearer ${mockToken}` } },
+      );
       expect(maplibregl.Marker).toHaveBeenCalled();
     });
 

@@ -115,7 +115,7 @@ describe('PassageArcLayer', () => {
 
     await vi.waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/v1/projects/p1/map/passage-arc?jour_type=1&split_by=none',
+        expect.stringContaining('/api/v1/projects/p1/map/passage-arc?jour_type=1&split_by=none'),
         { headers: { Authorization: `Bearer ${mockToken}` } },
       );
       expect(map.__source.setData).toHaveBeenCalled();

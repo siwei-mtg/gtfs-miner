@@ -118,6 +118,10 @@ export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
     map.on('mouseenter', LAYER_ID, onEnter);
     map.on('mouseleave', LAYER_ID, onLeave);
 
+    // Guard against late responses from a previous fetch overwriting fresh
+    // bandwidth data — same race as PassageAGLayer.
+    let cancelled = false;
+
     const fetchData = async () => {
       onLoadingChange?.(true);
       try {
@@ -127,17 +131,19 @@ export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
         );
         if (!res.ok) throw new Error('Failed to fetch arc passage data');
         const data = await res.json();
+        if (cancelled) return;
         const src = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
         src?.setData(data);
       } catch (err) {
-        console.error('Error loading PassageArcLayer:', err);
+        if (!cancelled) console.error('Error loading PassageArcLayer:', err);
       } finally {
-        onLoadingChange?.(false);
+        if (!cancelled) onLoadingChange?.(false);
       }
     };
     fetchData();
 
     return () => {
+      cancelled = true;
       map.off('click', LAYER_ID, onClick);
       map.off('mouseenter', LAYER_ID, onEnter);
       map.off('mouseleave', LAYER_ID, onLeave);

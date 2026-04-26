@@ -7,9 +7,10 @@
  * inside ResultTable are lifted to the dashboard context so filters
  * persist across popups and light the sidebar funnel icon.
  */
+import { useCallback, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ResultTable } from '@/components/organisms/ResultTable'
-import { useDashboardSync } from '@/hooks/useDashboardSync'
+import { useDashboardSync, type FilterState } from '@/hooks/useDashboardSync'
 import { cn } from '@/lib/utils'
 
 interface TablePopupProps {
@@ -21,6 +22,27 @@ interface TablePopupProps {
 
 export function TablePopup({ projectId, tableId, tableLabel, onClose }: TablePopupProps) {
   const { state, dispatch } = useDashboardSync()
+
+  // `state.ligneIds.map(String)` would otherwise rebuild the array on every
+  // render, churning ResultTable's externalEnumValues prop and tripping
+  // "Maximum update depth exceeded" inside Radix Dialog's usePresence.
+  const externalEnumValues = useMemo<string[] | undefined>(() => {
+    if (tableId === 'b1') return state.routeTypes
+    if (tableId === 'b2') return state.ligneIds.map(String)
+    return undefined
+  }, [tableId, state.routeTypes, state.ligneIds])
+
+  const handleFilterChange = useCallback(
+    (f: Partial<FilterState>) => {
+      if (f.routeTypes !== undefined) {
+        dispatch({ type: 'SET_ROUTE_TYPES', payload: f.routeTypes })
+      }
+      if (f.ligneIds !== undefined) {
+        dispatch({ type: 'SET_LIGNE_IDS', payload: f.ligneIds })
+      }
+    },
+    [dispatch],
+  )
 
   return (
     <Dialog
@@ -42,21 +64,8 @@ export function TablePopup({ projectId, tableId, tableLabel, onClose }: TablePop
           <ResultTable
             projectId={projectId}
             tableName={tableId}
-            externalEnumValues={
-              tableId === 'b1'
-                ? state.routeTypes
-                : tableId === 'b2'
-                  ? state.ligneIds.map(String)
-                  : undefined
-            }
-            onFilterChange={(f) => {
-              if (f.routeTypes !== undefined) {
-                dispatch({ type: 'SET_ROUTE_TYPES', payload: f.routeTypes })
-              }
-              if (f.ligneIds !== undefined) {
-                dispatch({ type: 'SET_LIGNE_IDS', payload: f.ligneIds })
-              }
-            }}
+            externalEnumValues={externalEnumValues}
+            onFilterChange={handleFilterChange}
           />
         )}
       </DialogContent>

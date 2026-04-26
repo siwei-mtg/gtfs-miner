@@ -91,6 +91,11 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
       return;
     }
 
+    // Guard against late responses from a previous fetch overwriting fresh
+    // markers — e.g. the slow initial unfiltered fetch returning after the
+    // user has already picked a ligne and the filtered fetch landed.
+    let cancelled = false;
+
     const fetchData = async () => {
       onLoadingChange?.(true);
       try {
@@ -99,6 +104,7 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
         });
         if (!response.ok) throw new Error('Failed to fetch AG passage data');
         const data = await response.json();
+        if (cancelled) return;
 
         markersRef.current.forEach((m) => m.remove());
         markersRef.current = [];
@@ -167,15 +173,16 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
         ) as string[];
         onRouteTypesChange?.(routeTypes);
       } catch (error) {
-        console.error('Error loading PassageAGLayer:', error);
+        if (!cancelled) console.error('Error loading PassageAGLayer:', error);
       } finally {
-        onLoadingChange?.(false);
+        if (!cancelled) onLoadingChange?.(false);
       }
     };
 
     fetchData();
 
     return () => {
+      cancelled = true;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       popupRef.current?.remove();
