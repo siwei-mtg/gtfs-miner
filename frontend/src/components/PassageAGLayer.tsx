@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
+import { API_ORIGIN } from '@/api/client';
 import { useMap } from '@/contexts/MapContext';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { generatePieSvg, generateFallbackCircleSvg, getRouteTypeColor, getRouteTypeLabel } from '@/lib/map-utils';
@@ -83,7 +84,7 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
     const fetchData = async () => {
       onLoadingChange?.(true);
       try {
-        const response = await fetch(`/api/v1/projects/${projectId}/map/passage-ag?jour_type=${jourType}`, {
+        const response = await fetch(`${API_ORIGIN}/api/v1/projects/${projectId}/map/passage-ag?jour_type=${jourType}`, {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         });
         if (!response.ok) throw new Error('Failed to fetch AG passage data');

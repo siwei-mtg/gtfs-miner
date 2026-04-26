@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import { cn } from '@/lib/utils';
+import { API_ORIGIN } from '@/api/client';
 import { MapContext } from '@/contexts/MapContext';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { PieChartLegend } from '@/components/molecules/PieChartLegend';
@@ -43,7 +44,7 @@ export const MapView: React.FC<MapViewProps> = ({
     const init = async () => {
       let bounds: [[number, number], [number, number]] | undefined;
       try {
-        const res = await fetch(`/api/v1/projects/${projectId}/map/bounds`, {
+        const res = await fetch(`${API_ORIGIN}/api/v1/projects/${projectId}/map/bounds`, {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         });
         if (res.ok) {

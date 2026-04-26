@@ -5,7 +5,7 @@ function normalizeOrigin(raw: string | undefined): string {
   const s = raw.replace(/\/$/, '')
   return /^https?:\/\//.test(s) ? s : `https://${s}`
 }
-const API_ORIGIN = normalizeOrigin(import.meta.env.VITE_API_URL as string | undefined)
+export const API_ORIGIN = normalizeOrigin(import.meta.env.VITE_API_URL as string | undefined)
 const BASE = `${API_ORIGIN}/api/v1/projects`
 const AUTH_BASE = `${API_ORIGIN}/api/v1/auth`
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
+import { API_ORIGIN } from '@/api/client';
 import { useMap } from '@/contexts/MapContext';
 import { useAuthContext } from '@/contexts/AuthContext';
 
@@ -111,7 +112,7 @@ export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
       onLoadingChange?.(true);
       try {
         const res = await fetch(
-          `/api/v1/projects/${projectId}/map/passage-arc?jour_type=${jourType}&split_by=none`,
+          `${API_ORIGIN}/api/v1/projects/${projectId}/map/passage-arc?jour_type=${jourType}&split_by=none`,
           { headers: token ? { Authorization: `Bearer ${token}` } : {} },
         );
         if (!res.ok) throw new Error('Failed to fetch arc passage data');
