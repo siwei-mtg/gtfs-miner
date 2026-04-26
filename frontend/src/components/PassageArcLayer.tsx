@@ -3,10 +3,15 @@ import maplibregl from 'maplibre-gl';
 import { API_ORIGIN } from '@/api/client';
 import { useMap } from '@/contexts/MapContext';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { buildPassageMapQuery, type SousLigneKey } from '@/lib/passage-map-query';
 
 interface PassageArcLayerProps {
   projectId: string;
   jourType: number;
+  /** Optional: restrict bandwidth to these lignes (id_ligne_num).  Empty = no filter. */
+  ligneIds?: number[];
+  /** Optional: restrict bandwidth to these (id_ligne_num, sous_ligne) pairs.  Empty = no filter. */
+  sousLigneKeys?: SousLigneKey[];
   visible?: boolean;
   maxWidthPx?: number;
   onLoadingChange?: (loading: boolean) => void;
@@ -43,6 +48,8 @@ function escapeHtml(s: string): string {
 export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
   projectId,
   jourType,
+  ligneIds,
+  sousLigneKeys,
   visible = true,
   maxWidthPx = 40,
   onLoadingChange,
@@ -50,6 +57,9 @@ export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
   const { map } = useMap();
   const { token } = useAuthContext();
   const popupRef = useRef<maplibregl.Popup | null>(null);
+
+  // Stable fetch key — strings compare by value so array refs don't cause refetch loops.
+  const qs = buildPassageMapQuery({ jourType, ligneIds, sousLigneKeys, splitBy: 'none' });
 
   useEffect(() => {
     if (!map) return;
@@ -112,7 +122,7 @@ export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
       onLoadingChange?.(true);
       try {
         const res = await fetch(
-          `${API_ORIGIN}/api/v1/projects/${projectId}/map/passage-arc?jour_type=${jourType}&split_by=none`,
+          `${API_ORIGIN}/api/v1/projects/${projectId}/map/passage-arc?${qs}`,
           { headers: token ? { Authorization: `Bearer ${token}` } : {} },
         );
         if (!res.ok) throw new Error('Failed to fetch arc passage data');
@@ -135,7 +145,7 @@ export const PassageArcLayer: React.FC<PassageArcLayerProps> = ({
       popupRef.current?.remove();
       popupRef.current = null;
     };
-  }, [map, visible, projectId, jourType, maxWidthPx, token, onLoadingChange]);
+  }, [map, visible, projectId, qs, maxWidthPx, token, onLoadingChange]);
 
   return null;
 };

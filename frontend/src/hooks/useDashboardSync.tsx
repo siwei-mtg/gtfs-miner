@@ -18,6 +18,12 @@ import {
   type ReactNode,
 } from 'react'
 
+/** Composite key identifying a sous-ligne (sub-line direction/variant). */
+export interface SousLigneKey {
+  id_ligne_num: number
+  sous_ligne: string
+}
+
 export interface FilterState {
   /** Active jour_type (required everywhere — maps / charts / tables). */
   jourType: number
@@ -28,6 +34,9 @@ export interface FilterState {
   routeTypes: string[]
   /** id_ligne_num values the user has opted into. */
   ligneIds: number[]
+  /** Sous-ligne pairs the user has opted into.  Independent of ligneIds —
+   *  both filters AND together when sent to the map endpoints. */
+  sousLigneKeys: SousLigneKey[]
   /** id_ag_num values the user has opted into (map pie-chart click selection). */
   agIds: number[]
   /** Hours of day (0..23) the user has opted into via the hourly bar chart. */
@@ -39,6 +48,7 @@ export type FilterAction =
   | { type: 'TOGGLE_ROUTE_TYPE'; payload: string }
   | { type: 'SET_ROUTE_TYPES'; payload: string[] }
   | { type: 'SET_LIGNE_IDS'; payload: number[] }
+  | { type: 'SET_SOUS_LIGNE_KEYS'; payload: SousLigneKey[] }
   | { type: 'TOGGLE_AG_ID'; payload: number; shift: boolean }
   | { type: 'SET_AG_IDS'; payload: number[] }
   | { type: 'TOGGLE_HOUR'; payload: number }
@@ -62,6 +72,18 @@ function sameArray<T>(a: readonly T[], b: readonly T[]): boolean {
   return true
 }
 
+/** Same-content check for SousLigneKey arrays (objects with two scalar fields). */
+function sameSousLigneKeys(a: readonly SousLigneKey[], b: readonly SousLigneKey[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].id_ligne_num !== b[i].id_ligne_num || a[i].sous_ligne !== b[i].sous_ligne) {
+      return false
+    }
+  }
+  return true
+}
+
 export function dashboardSyncReducer(state: FilterState, action: FilterAction): FilterState {
   switch (action.type) {
     case 'SET_JOUR_TYPE':
@@ -78,6 +100,10 @@ export function dashboardSyncReducer(state: FilterState, action: FilterAction): 
     case 'SET_LIGNE_IDS':
       if (sameArray(state.ligneIds, action.payload)) return state
       return { ...state, ligneIds: action.payload }
+
+    case 'SET_SOUS_LIGNE_KEYS':
+      if (sameSousLigneKeys(state.sousLigneKeys, action.payload)) return state
+      return { ...state, sousLigneKeys: action.payload }
 
     case 'TOGGLE_AG_ID':
       if (action.shift) {
@@ -106,6 +132,7 @@ export function dashboardSyncReducer(state: FilterState, action: FilterAction): 
         jourType: state.initialJourType,
         routeTypes: [],
         ligneIds: [],
+        sousLigneKeys: [],
         agIds: [],
         hoursSelected: [],
       }
@@ -121,6 +148,7 @@ export function activeFilterCount(state: FilterState): number {
   if (state.jourType !== state.initialJourType) n += 1
   if (state.routeTypes.length > 0) n += 1
   if (state.ligneIds.length > 0) n += 1
+  if (state.sousLigneKeys.length > 0) n += 1
   if (state.agIds.length > 0) n += 1
   if (state.hoursSelected.length > 0) n += 1
   return n
@@ -133,7 +161,8 @@ export function activeFilterCount(state: FilterState): number {
  */
 const TABLES_AFFECTED: Record<keyof Omit<FilterState, 'jourType' | 'initialJourType'> | 'jourType', string[]> = {
   routeTypes: ['b1', 'b2', 'f1', 'f3', 'e1', 'e4'],
-  ligneIds: ['b1', 'b2', 'f1', 'f3'],
+  ligneIds: ['b1', 'b2', 'f1', 'f3', 'e1', 'e4'],
+  sousLigneKeys: ['b2', 'e1', 'e4'],
   agIds: ['a1', 'e1', 'e4'],
   hoursSelected: ['f1', 'e1', 'e4'],
   jourType: ['f1', 'f3', 'e1', 'e4'],
@@ -142,6 +171,7 @@ const TABLES_AFFECTED: Record<keyof Omit<FilterState, 'jourType' | 'initialJourT
 export function isTableFiltered(state: FilterState, tableId: string): boolean {
   if (state.routeTypes.length > 0 && TABLES_AFFECTED.routeTypes.includes(tableId)) return true
   if (state.ligneIds.length > 0 && TABLES_AFFECTED.ligneIds.includes(tableId)) return true
+  if (state.sousLigneKeys.length > 0 && TABLES_AFFECTED.sousLigneKeys.includes(tableId)) return true
   if (state.agIds.length > 0 && TABLES_AFFECTED.agIds.includes(tableId)) return true
   if (state.hoursSelected.length > 0 && TABLES_AFFECTED.hoursSelected.includes(tableId)) return true
   if (state.jourType !== state.initialJourType && TABLES_AFFECTED.jourType.includes(tableId)) return true
@@ -167,6 +197,7 @@ export function DashboardSyncProvider({
     initialJourType,
     routeTypes: [],
     ligneIds: [],
+    sousLigneKeys: [],
     agIds: [],
     hoursSelected: [],
   })

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import geopandas as gpd
 from shapely.geometry import Point, LineString
-from sqlalchemy import func
+from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
 
 from ..db.result_models import (
@@ -28,7 +28,170 @@ from ..db.result_models import (
 _GPKG_BATCH = 500  # max AG ids per GeoDataFrame chunk for memory-efficient export
 
 
-def build_passage_ag_geojson(project_id: str, jour_type: int, db: Session) -> dict:
+def _build_sous_ligne_filter(model, sous_ligne_keys: list[tuple[int, str]]):
+    """Portable OR-of-ANDs filter for (id_ligne_num, sous_ligne) pairs.
+
+    Tuple-IN is not supported on SQLite, so we group keys by id_ligne_num
+    and emit one ``id_ligne_num = X AND sous_ligne IN (...)`` clause per
+    line, joined by OR.  Works on both SQLite (Phase 0) and Postgres.
+    """
+    groups: dict[int, list[str]] = defaultdict(list)
+    for ln, sl in sous_ligne_keys:
+        groups[ln].append(sl)
+    return or_(*[
+        and_(model.id_ligne_num == ln, model.sous_ligne.in_(sls))
+        for ln, sls in groups.items()
+    ])
+
+
+def _query_passage_ag_filtered(
+    project_id: str,
+    jour_type: int,
+    db: Session,
+    ligne_ids: list[int] | None,
+    sous_ligne_keys: list[tuple[int, str]] | None,
+) -> tuple[dict[int, dict[int, int]], dict[int, tuple[str | None, float | None, float | None]]]:
+    """Compute filtered passage counts per (AG, route_type) and gather coords.
+
+    Mirrors the join graph already used in :func:`build_passage_ag_geojson`
+    (C2 → B1 → D2) and adds optional filters on ``id_ligne_num`` and
+    ``(id_ligne_num, sous_ligne)``.  When at least one filter is active the
+    function bypasses E1 entirely — the filtered total is the sum of the
+    per-route_type counts it returns.
+
+    Returns:
+        ``(by_ag, ag_meta)`` where
+        ``by_ag[ag_num][route_type] = nb_passage`` and
+        ``ag_meta[ag_num] = (stop_name, lat, lon)`` from A1.
+    """
+    q = (
+        db.query(
+            ResultC2Itineraire.id_ag_num,
+            ResultB1Ligne.route_type,
+            func.count(ResultC2Itineraire.id_course_num.distinct()).label("n"),
+        )
+        .join(
+            ResultB1Ligne,
+            (ResultB1Ligne.id_ligne_num == ResultC2Itineraire.id_ligne_num)
+            & (ResultB1Ligne.project_id == ResultC2Itineraire.project_id),
+        )
+        .join(
+            ResultD2ServiceJourtype,
+            (ResultD2ServiceJourtype.id_service_num == ResultC2Itineraire.id_service_num)
+            & (ResultD2ServiceJourtype.id_ligne_num == ResultC2Itineraire.id_ligne_num)
+            & (ResultD2ServiceJourtype.project_id == ResultC2Itineraire.project_id),
+        )
+        .filter(
+            ResultC2Itineraire.project_id == project_id,
+            ResultD2ServiceJourtype.Type_Jour == jour_type,
+        )
+    )
+    if ligne_ids:
+        q = q.filter(ResultC2Itineraire.id_ligne_num.in_(ligne_ids))
+    if sous_ligne_keys:
+        q = q.filter(_build_sous_ligne_filter(ResultC2Itineraire, sous_ligne_keys))
+
+    count_rows = q.group_by(
+        ResultC2Itineraire.id_ag_num, ResultB1Ligne.route_type
+    ).all()
+
+    by_ag: dict[int, dict[int, int]] = defaultdict(dict)
+    for ag_num, route_type, count in count_rows:
+        by_ag[ag_num][route_type] = count
+
+    if not by_ag:
+        return {}, {}
+
+    coord_rows = (
+        db.query(ResultA1ArretGenerique)
+        .filter(
+            ResultA1ArretGenerique.project_id == project_id,
+            ResultA1ArretGenerique.id_ag_num.in_(list(by_ag.keys())),
+        )
+        .all()
+    )
+    ag_meta: dict[int, tuple[str | None, float | None, float | None]] = {
+        r.id_ag_num: (r.stop_name, r.stop_lat, r.stop_lon) for r in coord_rows
+    }
+    return by_ag, ag_meta
+
+
+def _query_passage_arc_filtered(
+    project_id: str,
+    jour_type: int,
+    db: Session,
+    ligne_ids: list[int] | None,
+    sous_ligne_keys: list[tuple[int, str]] | None,
+) -> tuple[dict[tuple[int, int], dict[int, int]], dict[int, tuple[float, float]]]:
+    """Compute filtered arc passage counts per ((a,b), route_type).
+
+    Mirrors the join graph used by the existing route_type breakdown in
+    :func:`build_passage_arc_geojson` (C3 → D1 → B1).  Returns the route_type
+    breakdown unconditionally — the caller collapses it for ``split_by=none``
+    and uses it directly for ``split_by=route_type``.
+    """
+    q = (
+        db.query(
+            ResultC3ItineraireArc.id_ag_num_a,
+            ResultC3ItineraireArc.id_ag_num_b,
+            ResultB1Ligne.route_type,
+            func.count(ResultC3ItineraireArc.id_course_num.distinct()).label("n"),
+        )
+        .join(
+            ResultD1ServiceDate,
+            (ResultD1ServiceDate.id_service_num == ResultC3ItineraireArc.id_service_num)
+            & (ResultD1ServiceDate.project_id == ResultC3ItineraireArc.project_id),
+        )
+        .join(
+            ResultB1Ligne,
+            (ResultB1Ligne.id_ligne_num == ResultC3ItineraireArc.id_ligne_num)
+            & (ResultB1Ligne.project_id == ResultC3ItineraireArc.project_id),
+        )
+        .filter(
+            ResultC3ItineraireArc.project_id == project_id,
+            ResultD1ServiceDate.Type_Jour == jour_type,
+        )
+    )
+    if ligne_ids:
+        q = q.filter(ResultC3ItineraireArc.id_ligne_num.in_(ligne_ids))
+    if sous_ligne_keys:
+        q = q.filter(_build_sous_ligne_filter(ResultC3ItineraireArc, sous_ligne_keys))
+
+    rt_rows = q.group_by(
+        ResultC3ItineraireArc.id_ag_num_a,
+        ResultC3ItineraireArc.id_ag_num_b,
+        ResultB1Ligne.route_type,
+    ).all()
+
+    arc_rt_counts: dict[tuple[int, int], dict[int, int]] = defaultdict(dict)
+    for a, b, rt, n in rt_rows:
+        arc_rt_counts[(a, b)][rt] = n
+
+    if not arc_rt_counts:
+        return {}, {}
+
+    ag_ids: set[int] = set()
+    for a, b in arc_rt_counts.keys():
+        ag_ids.add(a)
+        ag_ids.add(b)
+    coords: dict[int, tuple[float, float]] = {
+        r.id_ag_num: (r.stop_lat, r.stop_lon)
+        for r in db.query(ResultA1ArretGenerique).filter(
+            ResultA1ArretGenerique.project_id == project_id,
+            ResultA1ArretGenerique.id_ag_num.in_(list(ag_ids)),
+        ).all()
+        if r.stop_lat is not None and r.stop_lon is not None
+    }
+    return dict(arc_rt_counts), coords
+
+
+def build_passage_ag_geojson(
+    project_id: str,
+    jour_type: int,
+    db: Session,
+    ligne_ids: list[int] | None = None,
+    sous_ligne_keys: list[tuple[int, str]] | None = None,
+) -> dict:
     """
     Build a GeoJSON FeatureCollection of AG (generic stop) points with
     passage counts disaggregated by route_type.
@@ -52,6 +215,35 @@ def build_passage_ag_geojson(project_id: str, jour_type: int, db: Session) -> di
     Returns:
         GeoJSON FeatureCollection dict.
     """
+    # Filtered path: when ligne_ids or sous_ligne_keys are supplied, bypass
+    # E1 entirely and recompute totals from C2 → B1 → D2.  The filtered total
+    # is the sum of the per-route_type counts.
+    if ligne_ids or sous_ligne_keys:
+        by_ag, ag_meta_filtered = _query_passage_ag_filtered(
+            project_id, jour_type, db, ligne_ids, sous_ligne_keys
+        )
+        if not by_ag:
+            return {"type": "FeatureCollection", "features": []}
+        features = []
+        for ag_num, by_rt in by_ag.items():
+            meta = ag_meta_filtered.get(ag_num)
+            if meta is None:
+                continue
+            stop_name, lat, lon = meta
+            if lat is None or lon is None:
+                continue
+            features.append({
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                "properties": {
+                    "id_ag_num": ag_num,
+                    "stop_name": stop_name,
+                    "nb_passage_total": int(sum(by_rt.values())),
+                    "by_route_type": {str(k): v for k, v in by_rt.items()},
+                },
+            })
+        return {"type": "FeatureCollection", "features": features}
+
     # Step 1: fetch all AGs present in E1 for this project + jour_type.
     # E1 carries stop coordinates so no A1 join is needed.
     e1_rows = (
@@ -139,6 +331,8 @@ def build_passage_arc_geojson(
     jour_type: int,
     db: Session,
     split_by: str = "none",
+    ligne_ids: list[int] | None = None,
+    sous_ligne_keys: list[tuple[int, str]] | None = None,
 ) -> dict:
     """
     Build a GeoJSON FeatureCollection of directed arcs (E_4) for
@@ -176,6 +370,73 @@ def build_passage_arc_geojson(
     Returns:
         GeoJSON FeatureCollection dict.
     """
+    # Filtered path: bypass E4 entirely and recompute arc totals from C3 → D1 → B1
+    # when ligne / sous-ligne filters are present.  The route_type breakdown is
+    # always computed; for split_by="none" we collapse it back to a single feature.
+    if ligne_ids or sous_ligne_keys:
+        arc_rt_counts, coords = _query_passage_arc_filtered(
+            project_id, jour_type, db, ligne_ids, sous_ligne_keys
+        )
+        if not arc_rt_counts:
+            return {"type": "FeatureCollection", "features": []}
+
+        arc_totals: dict[tuple[int, int], float] = {
+            ab: float(sum(rt_dict.values())) for ab, rt_dict in arc_rt_counts.items()
+        }
+        max_passage = max(arc_totals.values(), default=1.0) or 1.0
+
+        features: list[dict] = []
+        for (a, b), nb_passage in arc_totals.items():
+            if a not in coords or b not in coords:
+                continue
+            lat_a, lon_a = coords[a]
+            lat_b, lon_b = coords[b]
+            if a <= b:
+                direction = "AB"
+                line_coords = [[lon_a, lat_a], [lon_b, lat_b]]
+            else:
+                direction = "BA"
+                line_coords = [[lon_b, lat_b], [lon_a, lat_a]]
+            weight = round(nb_passage / max_passage, 6)
+            geom = {"type": "LineString", "coordinates": line_coords}
+
+            if split_by == "route_type":
+                rt_dict = arc_rt_counts[(a, b)]
+                total_rt = sum(rt_dict.values()) or 1
+                cumul = 0.0
+                for rt in sorted(rt_dict):
+                    fraction = rt_dict[rt] / total_rt
+                    features.append({
+                        "type": "Feature",
+                        "geometry": geom,
+                        "properties": {
+                            "id_ag_num_a": a,
+                            "id_ag_num_b": b,
+                            "direction": direction,
+                            "weight": weight,
+                            "split_by": "route_type",
+                            "category_value": str(rt),
+                            "nb_passage_category": round(nb_passage * fraction, 2),
+                            "fraction_of_direction": round(fraction, 6),
+                            "cumulative_fraction_start": round(cumul, 6),
+                        },
+                    })
+                    cumul += fraction
+            else:
+                features.append({
+                    "type": "Feature",
+                    "geometry": geom,
+                    "properties": {
+                        "id_ag_num_a": a,
+                        "id_ag_num_b": b,
+                        "nb_passage": nb_passage,
+                        "direction": direction,
+                        "weight": weight,
+                        "split_by": "none",
+                    },
+                })
+        return {"type": "FeatureCollection", "features": features}
+
     # 1. Fetch E4 rows filtered by project + day-type
     e4_rows = (
         db.query(ResultE4PassageArc)

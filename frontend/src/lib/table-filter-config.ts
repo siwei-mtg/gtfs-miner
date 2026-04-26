@@ -16,7 +16,11 @@ export interface FilterOption {
 /** Primary enum column to render a MultiSelectFilter for, keyed by table short key. */
 export const PRIMARY_ENUM_FIELD: Record<string, string> = {
   b1: 'route_type',
-  b2: 'direction_id',
+  // B2 (Sous-lignes) exposes `id_ligne_num` as primary so picking specific
+  // lignes here feeds the global `ligneIds` filter and propagates to the
+  // maps (passage-ag, passage-arc).  direction_id stays visible as a column
+  // and can be filtered via row search.
+  b2: 'id_ligne_num',
   c1: 'direction_id',
   d1: 'Type_Jour',
   d2: 'Type_Jour',

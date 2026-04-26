@@ -12,6 +12,7 @@ function freshState(overrides: Partial<FilterState> = {}): FilterState {
     initialJourType: 1,
     routeTypes: [],
     ligneIds: [],
+    sousLigneKeys: [],
     agIds: [],
     hoursSelected: [],
     ...overrides,

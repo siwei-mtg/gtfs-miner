@@ -4,10 +4,15 @@ import { API_ORIGIN } from '@/api/client';
 import { useMap } from '@/contexts/MapContext';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { generatePieSvg, generateFallbackCircleSvg, getRouteTypeColor, getRouteTypeLabel } from '@/lib/map-utils';
+import { buildPassageMapQuery, type SousLigneKey } from '@/lib/passage-map-query';
 
 interface PassageAGLayerProps {
   projectId: string;
   jourType: number;
+  /** Optional: restrict pies to these lignes (id_ligne_num).  Empty = no filter. */
+  ligneIds?: number[];
+  /** Optional: restrict pies to these (id_ligne_num, sous_ligne) pairs.  Empty = no filter. */
+  sousLigneKeys?: SousLigneKey[];
   visible?: boolean;
   onRouteTypesChange?: (routeTypes: string[]) => void;
   onLoadingChange?: (loading: boolean) => void;
@@ -61,6 +66,8 @@ function buildPopupHTML(
 export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
   projectId,
   jourType,
+  ligneIds,
+  sousLigneKeys,
   visible = true,
   onRouteTypesChange,
   onLoadingChange,
@@ -70,6 +77,9 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
   const { token } = useAuthContext();
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const popupRef = useRef<maplibregl.Popup | null>(null);
+
+  // Stable fetch key — strings compare by value so array refs don't matter.
+  const qs = buildPassageMapQuery({ jourType, ligneIds, sousLigneKeys });
 
   useEffect(() => {
     if (!map || !visible) {
@@ -84,7 +94,7 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
     const fetchData = async () => {
       onLoadingChange?.(true);
       try {
-        const response = await fetch(`${API_ORIGIN}/api/v1/projects/${projectId}/map/passage-ag?jour_type=${jourType}`, {
+        const response = await fetch(`${API_ORIGIN}/api/v1/projects/${projectId}/map/passage-ag?${qs}`, {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         });
         if (!response.ok) throw new Error('Failed to fetch AG passage data');
@@ -171,7 +181,7 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
       popupRef.current?.remove();
       popupRef.current = null;
     };
-  }, [map, visible, projectId, jourType, onRouteTypesChange, onLoadingChange]);
+  }, [map, visible, projectId, qs, onRouteTypesChange, onLoadingChange]);
 
   return null;
 };

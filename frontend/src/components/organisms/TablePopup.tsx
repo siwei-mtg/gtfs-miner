@@ -42,10 +42,19 @@ export function TablePopup({ projectId, tableId, tableLabel, onClose }: TablePop
           <ResultTable
             projectId={projectId}
             tableName={tableId}
-            externalEnumValues={tableId === 'b1' ? state.routeTypes : undefined}
+            externalEnumValues={
+              tableId === 'b1'
+                ? state.routeTypes
+                : tableId === 'b2'
+                  ? state.ligneIds.map(String)
+                  : undefined
+            }
             onFilterChange={(f) => {
               if (f.routeTypes !== undefined) {
                 dispatch({ type: 'SET_ROUTE_TYPES', payload: f.routeTypes })
+              }
+              if (f.ligneIds !== undefined) {
+                dispatch({ type: 'SET_LIGNE_IDS', payload: f.ligneIds })
               }
             }}
           />

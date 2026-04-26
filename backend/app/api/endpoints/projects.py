@@ -313,10 +313,59 @@ def download_table_csv(
     )
 
 
+def _parse_ligne_ids(raw: str | None) -> list[int] | None:
+    """Parse ``?ligne_ids=1,2,3``.  Empty / blank is treated as 'no filter'."""
+    if not raw or not raw.strip():
+        return None
+    out: list[int] = []
+    for tok in raw.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            out.append(int(tok))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail=f"Invalid ligne_ids token: {tok!r}"
+            ) from exc
+    return out or None
+
+
+def _parse_sous_ligne_keys(raw: str | None) -> list[tuple[int, str]] | None:
+    """Parse ``?sous_ligne_keys=1:A,1:B,2:R`` into ``[(1,'A'),(1,'B'),(2,'R')]``.
+
+    Front-end is responsible for URL-encoding sous_ligne values that contain
+    ``:`` or ``,``.  Empty input means 'no filter'.
+    """
+    if not raw or not raw.strip():
+        return None
+    out: list[tuple[int, str]] = []
+    for tok in raw.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        if ":" not in tok:
+            raise HTTPException(
+                status_code=422,
+                detail=f"sous_ligne_keys token missing ':': {tok!r}",
+            )
+        ln_str, sl = tok.split(":", 1)
+        try:
+            out.append((int(ln_str), sl))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid id_ligne_num in sous_ligne_keys token: {tok!r}",
+            ) from exc
+    return out or None
+
+
 @router.get("/{project_id}/map/passage-ag")
 def get_passage_ag(
     project_id: str,
     jour_type: int,
+    ligne_ids: str | None = None,
+    sous_ligne_keys: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -327,6 +376,14 @@ def get_passage_ag(
     one generic stop (AG) with its total passage count and a breakdown by
     transport mode (route_type).
 
+    Optional filters (AND-ed with jour_type):
+      - ligne_ids: comma-separated ``id_ligne_num`` (e.g. ``1,2,3``)
+      - sous_ligne_keys: comma-separated ``id_ligne_num:sous_ligne``
+        pairs (e.g. ``1:A,1:B,2:R``)
+
+    When either filter is present, totals are recomputed via C2 → B1 → D2
+    instead of read from E_1.
+
     jour_type parameter is required; omitting it returns HTTP 422.
     """
     project = db.query(Project).filter(
@@ -335,7 +392,13 @@ def get_passage_ag(
     ).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    return build_passage_ag_geojson(project_id, jour_type, db)
+    return build_passage_ag_geojson(
+        project_id,
+        jour_type,
+        db,
+        ligne_ids=_parse_ligne_ids(ligne_ids),
+        sous_ligne_keys=_parse_sous_ligne_keys(sous_ligne_keys),
+    )
 
 
 @router.get("/{project_id}/map/passage-arc")
@@ -343,6 +406,8 @@ def get_passage_arc(
     project_id: str,
     jour_type: int,
     split_by: str = "none",
+    ligne_ids: str | None = None,
+    sous_ligne_keys: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -352,6 +417,10 @@ def get_passage_arc(
     split_by="none": one Feature per arc with weight (0–1 normalised).
     split_by="route_type": one Feature per (arc × route_type), includes
     fraction_of_direction and cumulative_fraction_start for stacked rendering.
+
+    Optional filters (AND-ed with jour_type), same format as /map/passage-ag:
+      - ligne_ids: ``1,2,3``
+      - sous_ligne_keys: ``1:A,1:B,2:R``
 
     Frontend renders pixel-based bandwidth:
         line_width  = weight × max_width_px
@@ -364,7 +433,14 @@ def get_passage_arc(
     ).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    return build_passage_arc_geojson(project_id, jour_type, db, split_by)
+    return build_passage_arc_geojson(
+        project_id,
+        jour_type,
+        db,
+        split_by,
+        ligne_ids=_parse_ligne_ids(ligne_ids),
+        sous_ligne_keys=_parse_sous_ligne_keys(sous_ligne_keys),
+    )
 
 
 @router.get("/{project_id}/map/bounds")

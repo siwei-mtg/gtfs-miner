@@ -192,8 +192,18 @@ function DashboardShell({
       map={
         <ErrorBoundary scope="Map pane">
           <MapView projectId={projectId} jourType={state.jourType}>
-            <PassageAGLayer projectId={projectId} jourType={state.jourType} />
-            <PassageArcLayer projectId={projectId} jourType={state.jourType} />
+            <PassageAGLayer
+              projectId={projectId}
+              jourType={state.jourType}
+              ligneIds={state.ligneIds}
+              sousLigneKeys={state.sousLigneKeys}
+            />
+            <PassageArcLayer
+              projectId={projectId}
+              jourType={state.jourType}
+              ligneIds={state.ligneIds}
+              sousLigneKeys={state.sousLigneKeys}
+            />
           </MapView>
         </ErrorBoundary>
       }
