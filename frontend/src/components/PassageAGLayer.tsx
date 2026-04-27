@@ -113,10 +113,14 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
 
         // Proportional-area scaling: radius ∝ √(count / maxCount).
         // Flannery's perception principle — area, not radius, should scale with value.
-        const maxCount = Math.max(
-          1,
+        // Prefer the global max returned by the backend (independent of ligne /
+        // sous-ligne filters) so a filtered view stays visually comparable to the
+        // unfiltered one.  Fall back to a local max for legacy responses.
+        const localMax = Math.max(
+          0,
           ...data.features.map((f: any) => f.properties.nb_passage_total ?? 0),
         );
+        const maxCount = Math.max(1, data.max_passage_total ?? localMax);
 
         data.features.forEach((feature: any) => {
           const { coordinates } = feature.geometry;

@@ -217,6 +217,41 @@ def test_passage_ag_fallback_when_d2_type_jour_null(isolated_client_authed, map_
     assert ag3["by_route_type"] == {}
 
 
+def test_passage_ag_response_includes_global_max(isolated_client_authed, map_data):
+    """Response carries `max_passage_total` = max E_1 nb_passage across the
+    whole jour_type (ignoring any filter).  Frontend uses it to size piecharts
+    so a filtered view stays visually comparable to the unfiltered one."""
+    r = isolated_client_authed.get(BASE_URL, params={"jour_type": JOUR_TYPE})
+    assert r.status_code == 200
+    body = r.json()
+    # Seeded E_1 jour_type=1 nb_passage values: AG1=2.0, AG2=2.0, AG3=5.0.
+    # Global max = 5.
+    assert body["max_passage_total"] == 5
+
+
+def test_passage_ag_global_max_independent_of_ligne_filter(
+    isolated_client_authed, map_data
+):
+    """Filtering by ligne_ids must NOT change `max_passage_total` — it stays
+    anchored to the unfiltered jour_type max.  This is the load-bearing
+    invariant for stable piechart sizing across filter changes.
+
+    (Note: the `map_data` fixture only seeds E_1 — not A1 — so the filtered
+    path returns an empty feature list because coordinates can't be looked
+    up.  That's a fixture limitation, not a bug under test; the assertion
+    here is purely about `max_passage_total`.)
+    """
+    r = isolated_client_authed.get(
+        BASE_URL,
+        params={"jour_type": JOUR_TYPE, "ligne_ids": "2"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    # Global max stays at 5 (AG3 nb_passage=5 in E_1 jour_type=1) regardless
+    # of the ligne filter.
+    assert body["max_passage_total"] == 5
+
+
 def test_jour_types_returns_present_values(isolated_client_authed, map_data):
     """The /jour-types endpoint returns only jour_types that have E_1 rows,
     with labels from TYPE_JOUR_VAC_LABELS."""
@@ -523,6 +558,39 @@ def test_passage_arc_split_fractions_sum_to_one(isolated_client_authed, arc_spli
     ]
     total_fraction = sum(f["properties"]["fraction_of_direction"] for f in ab_features)
     assert total_fraction == pytest.approx(1.0, abs=1e-5)
+
+
+def test_passage_arc_filtered_weight_uses_global_max(
+    isolated_client_authed, arc_split_data
+):
+    """Regression guard for the filtered-bandwidth normalisation bug.
+
+    Before the fix, `max_passage` was recomputed on the filtered subset, so
+    filtering down to a low-traffic ligne re-stretched its top arc to
+    weight=1.0 — visually identical to a high-traffic ligne.  After the fix,
+    the denominator is the *global* E_4 max for the (project, jour_type),
+    independent of the ligne / sous_ligne filter.
+
+    Setup (`arc_split_data`):
+      - E4 totals: arc (1→2) nb_passage=100 ; arc (2→1) nb_passage=40
+      - C3 carries 2 courses on arc (1→2): course 10 (ligne 1), course 11 (ligne 2)
+      - Filtering by ligne_ids=[1] selects 1 distinct course on arc (1→2).
+
+    Filtered subset has 1 feature, so a local-max formula would yield
+    weight=1.0.  The global-max formula yields weight = 1.0 / 100 = 0.01.
+    """
+    r = isolated_client_authed.get(
+        BASE_URL_ARC_SPLIT,
+        params={"jour_type": JOUR_TYPE_ARC, "ligne_ids": "1"},
+    )
+    assert r.status_code == 200
+    features = r.json()["features"]
+    assert len(features) >= 1
+    weights = [f["properties"]["weight"] for f in features]
+    assert max(weights) < 0.5, (
+        f"Expected filtered weights to stay small relative to global max; "
+        f"got max={max(weights)} (the bug returns 1.0 here)"
+    )
 
 
 def test_passage_arc_split_cumulative_start_ordered(isolated_client_authed, arc_split_data):

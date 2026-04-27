@@ -208,6 +208,44 @@ describe('PassageAGLayer', () => {
     expect(lastCall?.[0]).toBe(false);
   });
 
+  it('uses backend max_passage_total to size piecharts when provided', async () => {
+    // Total = 250, global max = 1000 → expected radius = 30 * sqrt(0.25) = 15
+    // (and SVG width = radius * 2 = 30).  Without max_passage_total, the same
+    // feature alone would re-stretch to localMax = 250 → radius = 30 → width = 60.
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        type: 'FeatureCollection',
+        max_passage_total: 1000,
+        features: [
+          {
+            geometry: { type: 'Point', coordinates: [2.35, 48.85] },
+            properties: {
+              id_ag_num: 1,
+              stop_name: 'Quart-de-pie',
+              nb_passage_total: 250,
+              by_route_type: { '3': 250 },
+            },
+          },
+        ],
+      }),
+    });
+
+    render(
+      <MapContext.Provider value={{ map: mockMap as any }}>
+        <PassageAGLayer projectId="p1" jourType={1} visible={true} />
+      </MapContext.Provider>
+    );
+
+    await vi.waitFor(() => expect(maplibregl.Marker).toHaveBeenCalled());
+
+    const el = getMarkerElement();
+    const svg = el.querySelector('svg');
+    expect(svg).toBeTruthy();
+    const width = parseFloat(svg!.getAttribute('width') ?? '0');
+    expect(width).toBeCloseTo(30, 0); // radius = 15 → width = 30
+  });
+
   it('should emit unique route_types via onRouteTypesChange after fetch', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => mockData });
     const onRouteTypesChange = vi.fn();

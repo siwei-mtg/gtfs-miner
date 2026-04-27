@@ -218,12 +218,29 @@ def build_passage_ag_geojson(
     # Filtered path: when ligne_ids or sous_ligne_keys are supplied, bypass
     # E1 entirely and recompute totals from C2 → B1 → D2.  The filtered total
     # is the sum of the per-route_type counts.
+    # Global normalisation denominator: max E1 passage across the whole jour_type,
+    # *independent* of the ligne / sous-ligne filter.  The frontend uses this to
+    # size piecharts so that a filtered view stays visually comparable to the
+    # unfiltered view (a small ligne shows small pies, not re-stretched ones).
+    max_passage_total = (
+        db.query(func.max(ResultE1PassageAG.nb_passage))
+        .filter(
+            ResultE1PassageAG.project_id == project_id,
+            ResultE1PassageAG.type_jour == jour_type,
+        )
+        .scalar()
+    ) or 0
+
     if ligne_ids or sous_ligne_keys:
         by_ag, ag_meta_filtered = _query_passage_ag_filtered(
             project_id, jour_type, db, ligne_ids, sous_ligne_keys
         )
         if not by_ag:
-            return {"type": "FeatureCollection", "features": []}
+            return {
+                "type": "FeatureCollection",
+                "features": [],
+                "max_passage_total": int(max_passage_total),
+            }
         features = []
         for ag_num, by_rt in by_ag.items():
             meta = ag_meta_filtered.get(ag_num)
@@ -242,7 +259,11 @@ def build_passage_ag_geojson(
                     "by_route_type": {str(k): v for k, v in by_rt.items()},
                 },
             })
-        return {"type": "FeatureCollection", "features": features}
+        return {
+            "type": "FeatureCollection",
+            "features": features,
+            "max_passage_total": int(max_passage_total),
+        }
 
     # Step 1: fetch all AGs present in E1 for this project + jour_type.
     # E1 carries stop coordinates so no A1 join is needed.
@@ -255,7 +276,11 @@ def build_passage_ag_geojson(
         .all()
     )
     if not e1_rows:
-        return {"type": "FeatureCollection", "features": []}
+        return {
+            "type": "FeatureCollection",
+            "features": [],
+            "max_passage_total": 0,
+        }
 
     # Fourth element is the authoritative nb_passage from E_1 (per type_jour).
     ag_meta: dict[int, tuple[str | None, float | None, float | None, float]] = {
@@ -322,7 +347,17 @@ def build_passage_ag_geojson(
             }
         )
 
-    return {"type": "FeatureCollection", "features": features}
+    # Already iterating E1 rows; cheap to derive the global max here without
+    # another query (mirrors the unfiltered arc path).
+    max_passage_total = max(
+        (m[3] for m in ag_meta.values()),
+        default=0,
+    ) or 0
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "max_passage_total": int(max_passage_total),
+    }
 
 
 def build_passage_arc_geojson(
@@ -383,7 +418,18 @@ def build_passage_arc_geojson(
         arc_totals: dict[tuple[int, int], float] = {
             ab: float(sum(rt_dict.values())) for ab, rt_dict in arc_rt_counts.items()
         }
-        max_passage = max(arc_totals.values(), default=1.0) or 1.0
+        # Normalise against the *global* arc max for this jour_type — the same
+        # denominator the unfiltered path computes from E_4 below — so the top
+        # arc of a filtered ligne keeps its proportion to the network max
+        # instead of being re-scaled to weight=1.0.
+        max_passage = (
+            db.query(func.max(ResultE4PassageArc.nb_passage))
+            .filter(
+                ResultE4PassageArc.project_id == project_id,
+                ResultE4PassageArc.type_jour  == jour_type,
+            )
+            .scalar()
+        ) or 1.0
 
         features: list[dict] = []
         for (a, b), nb_passage in arc_totals.items():
