@@ -15,6 +15,7 @@ function freshState(overrides: Partial<FilterState> = {}): FilterState {
     sousLigneKeys: [],
     agIds: [],
     hoursSelected: [],
+    tableFilters: {},
     ...overrides,
   }
 }
@@ -50,6 +51,7 @@ describe('dashboardSyncReducer — CLEAR_FILTERS', () => {
       ligneIds: [10, 11],
       agIds: [42],
       hoursSelected: [8, 9],
+      tableFilters: { b2: { route_long_name: { kind: 'in', values: ['Ligne 1'] } } },
     })
     const next = dashboardSyncReducer(s, { type: 'CLEAR_FILTERS' })
     expect(next.jourType).toBe(1)
@@ -57,6 +59,62 @@ describe('dashboardSyncReducer — CLEAR_FILTERS', () => {
     expect(next.ligneIds).toEqual([])
     expect(next.agIds).toEqual([])
     expect(next.hoursSelected).toEqual([])
+    expect(next.tableFilters).toEqual({})
+  })
+})
+
+describe('dashboardSyncReducer — SET_TABLE_FILTERS', () => {
+  it('inserts a new per-table filter map', () => {
+    const next = dashboardSyncReducer(freshState(), {
+      type: 'SET_TABLE_FILTERS',
+      tableId: 'b2',
+      payload: { route_long_name: { kind: 'in', values: ['Ligne 1'] } },
+    })
+    expect(next.tableFilters).toEqual({
+      b2: { route_long_name: { kind: 'in', values: ['Ligne 1'] } },
+    })
+  })
+
+  it('returns the same state reference when payload is unchanged (no-op guard)', () => {
+    const s = freshState({
+      tableFilters: { b2: { route_long_name: { kind: 'in', values: ['Ligne 1'] } } },
+    })
+    const next = dashboardSyncReducer(s, {
+      type: 'SET_TABLE_FILTERS',
+      tableId: 'b2',
+      payload: { route_long_name: { kind: 'in', values: ['Ligne 1'] } },
+    })
+    expect(next).toBe(s)
+  })
+
+  it('removes the tableId entry when payload is empty', () => {
+    const s = freshState({
+      tableFilters: { b2: { route_long_name: { kind: 'in', values: ['Ligne 1'] } } },
+    })
+    const next = dashboardSyncReducer(s, {
+      type: 'SET_TABLE_FILTERS',
+      tableId: 'b2',
+      payload: {},
+    })
+    expect(next.tableFilters).toEqual({})
+  })
+
+  it('only mutates the targeted tableId, leaving others untouched', () => {
+    const s = freshState({
+      tableFilters: {
+        b1: { route_short_name: { kind: 'in', values: ['L1'] } },
+        b2: { route_long_name: { kind: 'in', values: ['Ligne 1'] } },
+      },
+    })
+    const next = dashboardSyncReducer(s, {
+      type: 'SET_TABLE_FILTERS',
+      tableId: 'b2',
+      payload: { route_long_name: { kind: 'in', values: ['Ligne 7'] } },
+    })
+    expect(next.tableFilters.b1).toBe(s.tableFilters.b1)
+    expect(next.tableFilters.b2).toEqual({
+      route_long_name: { kind: 'in', values: ['Ligne 7'] },
+    })
   })
 })
 
@@ -78,6 +136,16 @@ describe('activeFilterCount', () => {
       hoursSelected: [8, 9],
     })
     expect(activeFilterCount(s)).toBe(4) // jourType + routeTypes + agIds + hoursSelected
+  })
+
+  it('counts each table with non-empty local filters', () => {
+    const s = freshState({
+      tableFilters: {
+        b2: { route_long_name: { kind: 'in', values: ['Ligne 1'] } },
+        e1: { id_ag_num: { kind: 'in', values: ['42'] } },
+      },
+    })
+    expect(activeFilterCount(s)).toBe(2)
   })
 })
 
@@ -109,5 +177,13 @@ describe('isTableFiltered', () => {
     for (const t of ['f1', 'f3', 'e1', 'e4']) {
       expect(isTableFiltered(s, t)).toBe(true)
     }
+  })
+
+  it('marks a table when it has a local non-mapped filter, even if no slot is set', () => {
+    const s = freshState({
+      tableFilters: { b2: { route_long_name: { kind: 'in', values: ['Ligne 1'] } } },
+    })
+    expect(isTableFiltered(s, 'b2')).toBe(true)
+    expect(isTableFiltered(s, 'b1')).toBe(false)
   })
 })

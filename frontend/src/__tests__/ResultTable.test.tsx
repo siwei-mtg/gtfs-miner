@@ -2,15 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ResultTable } from '@/components/organisms/ResultTable';
+import type { ColumnFilter } from '@/types/api';
 import * as apiClient from '../api/client';
 
 vi.mock('../api/client', () => ({
   getTableData: vi.fn(),
   downloadTableCsv: vi.fn(),
+  getColumnDistinct: vi.fn(),
 }));
 
 // Radix Select only renders a hidden <select> when inside a <form>.
-// Mock it with a plain native select so tests can interact with it normally.
+// Mock with a native select so tests can interact with it normally.
 vi.mock('@/components/ui/select', () => ({
   Select: ({ onValueChange, value, name, children }: any) => (
     <select
@@ -28,6 +30,16 @@ vi.mock('@/components/ui/select', () => ({
   SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
 }));
 
+// Radix Popover uses portals + non-interactive defaults that fight JSDOM.
+// Render trigger only, swallow the (closed) popover content so we never
+// instantiate cmdk (which needs ResizeObserver).
+vi.mock('@/components/ui/popover', () => ({
+  Popover: ({ children }: any) => <>{children}</>,
+  PopoverTrigger: ({ children }: any) => <>{children}</>,
+  PopoverAnchor: ({ children }: any) => <>{children}</>,
+  PopoverContent: () => null,
+}));
+
 const mockData = {
   total: 105,
   columns: ['id', 'name', 'value'],
@@ -35,12 +47,22 @@ const mockData = {
     { id: 1, name: 'Test 1', value: 'A' },
     { id: 2, name: 'Test 2', value: 'B' },
   ],
+  column_meta: {
+    id: { type: 'numeric' as const, total_distinct: -1 },
+    name: { type: 'enum' as const, total_distinct: 2 },
+    value: { type: 'enum' as const, total_distinct: 2 },
+  },
 };
 
 describe('ResultTable', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(apiClient.downloadTableCsv).mockResolvedValue(undefined);
+    vi.mocked(apiClient.getColumnDistinct).mockResolvedValue({
+      values: [],
+      total_distinct: 0,
+      truncated: false,
+    });
   });
 
   it('test_renders_table_headers', async () => {
@@ -79,6 +101,27 @@ describe('ResultTable', () => {
     expect(screen.getByText(/Loading table data/i)).toBeInTheDocument();
   });
 
+  it('requests column_meta on every fetch', async () => {
+    const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    render(<ResultTable projectId="p1" tableName="t1" />);
+
+    await waitFor(() => {
+      expect(getTableMock).toHaveBeenCalledWith(
+        'p1', 't1', expect.objectContaining({ column_meta: true }),
+      );
+    });
+  });
+
+  it('renders one filter trigger per column', async () => {
+    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    render(<ResultTable projectId="p1" tableName="t1" />);
+
+    await waitFor(() => {
+      const triggers = screen.getAllByRole('button', { name: /Filtrer la colonne|Filtre actif/ });
+      expect(triggers.length).toBe(3);
+    });
+  });
+
   it('test_pagination_controls', async () => {
     const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
     const user = userEvent.setup();
@@ -86,13 +129,11 @@ describe('ResultTable', () => {
 
     await waitFor(() => expect(screen.getByText('id')).toBeInTheDocument());
 
-    // Next page — shadcn PaginationNext renders as <a aria-label="Go to next page"> (no href → not role=link)
     await user.click(screen.getByLabelText(/Go to next page/i));
     expect(getTableMock).toHaveBeenLastCalledWith(
       'p1', 't1', expect.objectContaining({ skip: 50 }),
     );
 
-    // Change limit — mocked Select renders a plain <select aria-label="Rows per page">
     const limitSelect = screen.getByRole('combobox', { name: /Rows per page/i });
     await user.selectOptions(limitSelect, '100');
     expect(getTableMock).toHaveBeenLastCalledWith(
@@ -107,13 +148,11 @@ describe('ResultTable', () => {
 
     await waitFor(() => expect(screen.getByText('name')).toBeInTheDocument());
 
-    // First click: ascending sort
     await user.click(screen.getByRole('button', { name: 'name' }));
     expect(getTableMock).toHaveBeenLastCalledWith(
       'p1', 't1', expect.objectContaining({ sort_by: 'name', sort_order: 'asc' }),
     );
 
-    // Second click: reverse sort (SVG icon has aria-hidden so button name stays 'name')
     await user.click(screen.getByRole('button', { name: 'name' }));
     expect(getTableMock).toHaveBeenLastCalledWith(
       'p1', 't1', expect.objectContaining({ sort_by: 'name', sort_order: 'desc' }),
@@ -130,153 +169,190 @@ describe('ResultTable', () => {
     });
   });
 
-  // ── New tests for Task 45 ──────────────────────────────────────────────
-
-  it('test_result_table_renders_shadcn_header', async () => {
-    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
-    render(<ResultTable projectId="p1" tableName="t1" />);
-
-    // shadcn TableHead renders <th role="columnheader">
-    await waitFor(() => {
-      const columnHeaders = screen.getAllByRole('columnheader');
-      expect(columnHeaders.length).toBe(3); // id, name, value
-    });
-  });
-
-  it('test_result_table_sort_toggle_icon', async () => {
-    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
-    const user = userEvent.setup();
-    render(<ResultTable projectId="p1" tableName="t1" />);
-
-    await waitFor(() => expect(screen.getByRole('button', { name: 'name' })).toBeInTheDocument());
-
-    // No sort icon before clicking
-    expect(screen.getByRole('button', { name: 'name' }).querySelector('svg')).toBeNull();
-
-    // Click → triggers API reload; wait for table to re-appear, then check for SVG
-    await user.click(screen.getByRole('button', { name: 'name' }));
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'name' }).querySelector('svg')).toBeInTheDocument();
-    });
-
-    // Click again → descending; re-query after reload
-    await user.click(screen.getByRole('button', { name: 'name' }));
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'name' }).querySelector('svg')).toBeInTheDocument();
-    });
-  });
-
-  it('test_result_table_pagination_prev_next', async () => {
-    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
-    render(<ResultTable projectId="p1" tableName="t1" />);
-
-    await waitFor(() => {
-      // shadcn PaginationPrevious renders <a aria-label="Go to previous page"> (no href)
-      expect(screen.getByLabelText(/Go to previous page/i)).toBeInTheDocument();
-      // shadcn PaginationNext renders <a aria-label="Go to next page"> (no href)
-      expect(screen.getByLabelText(/Go to next page/i)).toBeInTheDocument();
-    });
-  });
-
-  // ── New tests for Task 38B: filter UI ──────────────────────────────────
-
-  it('test_multi_select_filter_renders_for_enum_columns', async () => {
-    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
-    render(<ResultTable projectId="p1" tableName="b1" />);
-
-    await waitFor(() => {
-      expect(screen.getByLabelText('route_type-filter-trigger')).toBeInTheDocument();
-    });
-  });
-
-  it('test_range_filter_renders_for_numeric_columns', async () => {
-    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
-    render(<ResultTable projectId="p1" tableName="f1" />);
-
-    await waitFor(() => {
-      expect(screen.getByLabelText('nb_course min')).toBeInTheDocument();
-      expect(screen.getByLabelText('nb_course max')).toBeInTheDocument();
-    });
-  });
-
-  it('test_enum_selection_triggers_api_call_with_filter_values', async () => {
+  it('externalColumnFilters seed the API call as multi-filter params', async () => {
     const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
-    const user = userEvent.setup();
-    render(<ResultTable projectId="p1" tableName="b1" />);
-
-    await waitFor(() => expect(getTableMock).toHaveBeenCalled());
-
-    const checkbox = screen.getByLabelText('route_type-option-3');
-    await user.click(checkbox);
-
-    await waitFor(() => {
-      expect(getTableMock).toHaveBeenLastCalledWith(
-        'p1',
-        'b1',
-        expect.objectContaining({
-          filter_field: 'route_type',
-          filter_values: ['3'],
-        }),
-      );
-    });
-  });
-
-  it('test_range_input_triggers_api_call_with_range_params', async () => {
-    const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
-    const user = userEvent.setup();
-    render(<ResultTable projectId="p1" tableName="f1" />);
-
-    await waitFor(() => expect(getTableMock).toHaveBeenCalled());
-
-    const minInput = screen.getByLabelText('nb_course min');
-    await user.clear(minInput);
-    await user.type(minInput, '25');
-
-    await waitFor(() => {
-      expect(getTableMock).toHaveBeenLastCalledWith(
-        'p1',
-        'f1',
-        expect.objectContaining({
-          range_field: 'nb_course',
-          range_min: 25,
-        }),
-      );
-    });
-  });
-
-  it('test_on_filter_change_callback_emits_route_types', async () => {
-    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
-    const user = userEvent.setup();
-    const onFilterChange = vi.fn();
-    render(<ResultTable projectId="p1" tableName="b1" onFilterChange={onFilterChange} />);
-
-    await waitFor(() => expect(screen.getByLabelText('route_type-filter-trigger')).toBeInTheDocument());
-
-    const checkbox = screen.getByLabelText('route_type-option-3');
-    await user.click(checkbox);
-
-    await waitFor(() => {
-      expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ routeTypes: ['3'] }));
-    });
-  });
-
-  it('test_filter_state_resets_when_table_name_changes', async () => {
-    const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
-    const user = userEvent.setup();
-    const { rerender } = render(<ResultTable projectId="p1" tableName="b1" />);
-
-    await waitFor(() => expect(screen.getByLabelText('route_type-option-3')).toBeInTheDocument());
-    await user.click(screen.getByLabelText('route_type-option-3'));
-    await waitFor(() =>
-      expect(getTableMock).toHaveBeenLastCalledWith('p1', 'b1', expect.objectContaining({ filter_values: ['3'] })),
+    const external: Record<string, ColumnFilter> = {
+      route_type: { kind: 'in', values: ['3'] },
+    };
+    render(
+      <ResultTable
+        projectId="p1"
+        tableName="b1"
+        externalColumnFilters={external}
+      />,
     );
 
-    // Switch tables — filter should be cleared, no filter_values on next call.
-    rerender(<ResultTable projectId="p1" tableName="f1" />);
     await waitFor(() => {
-      const lastCall = getTableMock.mock.calls[getTableMock.mock.calls.length - 1];
-      expect(lastCall[1]).toBe('f1');
-      expect(lastCall[2]).toEqual(expect.objectContaining({ filter_values: undefined }));
+      const lastCall = getTableMock.mock.calls.at(-1);
+      expect(lastCall?.[2].filters).toMatchObject({
+        route_type: { kind: 'in', values: ['3'] },
+      });
+    });
+  });
+
+  it('chip ✕ removes the matching filter and re-fetches', async () => {
+    const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const user = userEvent.setup();
+    const external: Record<string, ColumnFilter> = {
+      route_type: { kind: 'in', values: ['3'] },
+    };
+    render(
+      <ResultTable projectId="p1" tableName="b1" externalColumnFilters={external} />,
+    );
+
+    await waitFor(() =>
+      expect(getTableMock).toHaveBeenCalledWith(
+        'p1', 'b1', expect.objectContaining({ filters: { route_type: { kind: 'in', values: ['3'] } } }),
+      ),
+    );
+
+    await user.click(screen.getByLabelText(/Retirer le filtre route_type/));
+
+    await waitFor(() => {
+      const lastCall = getTableMock.mock.calls.at(-1);
+      expect(lastCall?.[2].filters).toEqual({});
+    });
+  });
+
+  it('lifts onFilterChange for mapped columns when filter clears', async () => {
+    // Mount-time + mirror-sync should NOT lift back to context (that was the
+    // regression behind the dashboard-linkage bug).  Only the user clicking
+    // the chip ✕ should emit an empty routeTypes payload.
+    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const onFilterChange = vi.fn();
+    const external: Record<string, ColumnFilter> = {
+      route_type: { kind: 'in', values: ['3'] },
+    };
+    const user = userEvent.setup();
+    render(
+      <ResultTable
+        projectId="p1"
+        tableName="b1"
+        externalColumnFilters={external}
+        onFilterChange={onFilterChange}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('id')).toBeInTheDocument());
+    expect(onFilterChange).not.toHaveBeenCalled();
+
+    await user.click(screen.getByLabelText(/Retirer le filtre route_type/));
+
+    await waitFor(() => {
+      const lastEmit = onFilterChange.mock.calls.at(-1)?.[0];
+      expect(lastEmit?.routeTypes).toEqual([]);
+    });
+  });
+
+  it('does not lift onFilterChange on mount or when only external filters change', async () => {
+    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const onFilterChange = vi.fn();
+    const { rerender } = render(
+      <ResultTable
+        projectId="p1"
+        tableName="f1"
+        onFilterChange={onFilterChange}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('id')).toBeInTheDocument());
+    expect(onFilterChange).not.toHaveBeenCalled();
+
+    // Mirroring an external filter in must not leak back as a lift-up.
+    const external: Record<string, ColumnFilter> = {
+      route_type: { kind: 'in', values: ['3'] },
+    };
+    rerender(
+      <ResultTable
+        projectId="p1"
+        tableName="f1"
+        externalColumnFilters={external}
+        onFilterChange={onFilterChange}
+      />,
+    );
+
+    await waitFor(() => {
+      const lastCall = vi.mocked(apiClient.getTableData).mock.calls.at(-1);
+      expect(lastCall?.[2].filters).toMatchObject({
+        route_type: { kind: 'in', values: ['3'] },
+      });
+    });
+    expect(onFilterChange).not.toHaveBeenCalled();
+  });
+
+  it('emits only the touched slot, not all three', async () => {
+    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const onFilterChange = vi.fn();
+    const external: Record<string, ColumnFilter> = {
+      id_ligne_num: { kind: 'in', values: ['42'] },
+    };
+    const user = userEvent.setup();
+    render(
+      <ResultTable
+        projectId="p1"
+        tableName="b2"
+        externalColumnFilters={external}
+        onFilterChange={onFilterChange}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('id')).toBeInTheDocument());
+
+    await user.click(screen.getByLabelText(/Retirer le filtre id_ligne_num/));
+
+    await waitFor(() => expect(onFilterChange).toHaveBeenCalled());
+    const lastEmit = onFilterChange.mock.calls.at(-1)?.[0];
+    expect(Object.keys(lastEmit ?? {})).toEqual(['ligneIds']);
+    expect(lastEmit?.ligneIds).toEqual([]);
+  });
+
+  it('lifts the FULL filter map via onAllColumnFiltersChange when the user removes a filter', async () => {
+    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const onAllColumnFiltersChange = vi.fn();
+    const external: Record<string, ColumnFilter> = {
+      route_long_name: { kind: 'in', values: ['Ligne 1'] },
+    };
+    const user = userEvent.setup();
+    render(
+      <ResultTable
+        projectId="p1"
+        tableName="b2"
+        externalColumnFilters={external}
+        onAllColumnFiltersChange={onAllColumnFiltersChange}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('id')).toBeInTheDocument());
+    // Mount must not lift (mirror is not user-action).
+    expect(onAllColumnFiltersChange).not.toHaveBeenCalled();
+
+    await user.click(screen.getByLabelText(/Retirer le filtre route_long_name/));
+
+    await waitFor(() => expect(onAllColumnFiltersChange).toHaveBeenCalled());
+    expect(onAllColumnFiltersChange.mock.calls.at(-1)?.[0]).toEqual({});
+  });
+
+  it('filters reset when tableName changes', async () => {
+    const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const external: Record<string, ColumnFilter> = {
+      route_type: { kind: 'in', values: ['3'] },
+    };
+    const { rerender } = render(
+      <ResultTable projectId="p1" tableName="b1" externalColumnFilters={external} />,
+    );
+
+    await waitFor(() =>
+      expect(getTableMock).toHaveBeenLastCalledWith(
+        'p1', 'b1', expect.objectContaining({ filters: { route_type: { kind: 'in', values: ['3'] } } }),
+      ),
+    );
+
+    rerender(<ResultTable projectId="p1" tableName="f1" />);
+
+    await waitFor(() => {
+      const lastCall = getTableMock.mock.calls.at(-1);
+      expect(lastCall?.[1]).toBe('f1');
+      expect(lastCall?.[2].filters).toEqual({});
     });
   });
 });

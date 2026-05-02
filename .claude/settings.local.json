@@ -130,7 +130,16 @@
       "Bash(\"/c/Program Files/nodejs/npm.cmd\" --prefix \"C:/Users/wei.si/Projets/GTFS Miner/frontend\" test -- --run src/__tests__/App.test.tsx src/__tests__/DashboardPage.test.tsx)",
       "PowerShell(& \"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" --prefix \"C:\\\\Users\\\\wei.si\\\\Projets\\\\GTFS Miner\\\\frontend\" test -- --run src/__tests__/App.test.tsx src/__tests__/DashboardPage.test.tsx 2>&1 | Select-Object -Last 60)",
       "Bash(venv/Scripts/python -m pytest tests/test_api_pipeline_integration.py -k \"delete or not_found or create_project or get_project_list\" -v)",
-      "Bash(venv/Scripts/python -m alembic current)"
+      "Bash(venv/Scripts/python -m alembic current)",
+      "PowerShell(Get-CimInstance *)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_calendar_task.py -v)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_worker_celery.py tests/test_api_pipeline_integration.py -v)",
+      "Bash(venv/Scripts/python.exe -m alembic revision -m \"widen_sous_ligne_to_string\")",
+      "Bash(venv/Scripts/python.exe -m alembic heads)",
+      "Bash(venv/Scripts/python.exe -m alembic history)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/ -x --ignore=tests/test_e2e_pipeline.py -q)",
+      "Bash(/mingw64/bin/cat \"C:/Users/wei.si/AppData/Local/Temp/claude/C--Users-wei-si-Projets-GTFS-Miner/f8623651-6a0b-4d83-801a-c2cb27a0bb06/tasks/bs9divtsm.output\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" --prefix \"C:\\\\Users\\\\wei.si\\\\Projets\\\\GTFS Miner\\\\frontend\" run build 2>&1 | Select-Object -Last 15)"
     ]
   }
 }

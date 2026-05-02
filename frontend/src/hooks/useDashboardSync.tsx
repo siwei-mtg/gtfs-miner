@@ -18,6 +18,8 @@ import {
   type ReactNode,
 } from 'react'
 
+import type { ColumnFilter } from '@/types/api'
+
 /** Composite key identifying a sous-ligne (sub-line direction/variant). */
 export interface SousLigneKey {
   id_ligne_num: number
@@ -41,6 +43,11 @@ export interface FilterState {
   agIds: number[]
   /** Hours of day (0..23) the user has opted into via the hourly bar chart. */
   hoursSelected: number[]
+  /** Per-table column filter cache (keyed by tableId, then column).  Survives
+   *  Dialog/ResultTable unmount so filters reappear when the user reopens the
+   *  same table.  Also feeds `isTableFiltered` so non-mapped column filters
+   *  light up the sidebar ring. */
+  tableFilters: Record<string, Record<string, ColumnFilter>>
 }
 
 export type FilterAction =
@@ -52,6 +59,7 @@ export type FilterAction =
   | { type: 'TOGGLE_AG_ID'; payload: number; shift: boolean }
   | { type: 'SET_AG_IDS'; payload: number[] }
   | { type: 'TOGGLE_HOUR'; payload: number }
+  | { type: 'SET_TABLE_FILTERS'; tableId: string; payload: Record<string, ColumnFilter> }
   | { type: 'CLEAR_FILTERS' }
 
 function toggleInArray<T>(arr: T[], value: T): T[] {
@@ -80,6 +88,31 @@ function sameSousLigneKeys(a: readonly SousLigneKey[], b: readonly SousLigneKey[
     if (a[i].id_ligne_num !== b[i].id_ligne_num || a[i].sous_ligne !== b[i].sous_ligne) {
       return false
     }
+  }
+  return true
+}
+
+/** Shallow value equality for one ColumnFilter clause. */
+function sameColumnFilter(a: ColumnFilter, b: ColumnFilter): boolean {
+  if (a.kind !== b.kind) return false
+  if (a.kind === 'in' && b.kind === 'in') return sameArray(a.values, b.values)
+  if (a.kind === 'range' && b.kind === 'range') return a.min === b.min && a.max === b.max
+  if (a.kind === 'contains' && b.kind === 'contains') return a.term === b.term
+  return false
+}
+
+/** Equality on Record<column, ColumnFilter> — used by the SET_TABLE_FILTERS
+ *  reducer to suppress no-op dispatches and short-circuit re-renders. */
+function sameColumnFilterMap(
+  a: Record<string, ColumnFilter>,
+  b: Record<string, ColumnFilter>,
+): boolean {
+  const ka = Object.keys(a)
+  const kb = Object.keys(b)
+  if (ka.length !== kb.length) return false
+  for (const k of ka) {
+    if (!(k in b)) return false
+    if (!sameColumnFilter(a[k], b[k])) return false
   }
   return true
 }
@@ -126,6 +159,18 @@ export function dashboardSyncReducer(state: FilterState, action: FilterAction): 
       return { ...state, hoursSelected: next }
     }
 
+    case 'SET_TABLE_FILTERS': {
+      const prev = state.tableFilters[action.tableId] ?? {}
+      if (sameColumnFilterMap(prev, action.payload)) return state
+      const nextMap = { ...state.tableFilters }
+      if (Object.keys(action.payload).length === 0) {
+        delete nextMap[action.tableId]
+      } else {
+        nextMap[action.tableId] = action.payload
+      }
+      return { ...state, tableFilters: nextMap }
+    }
+
     case 'CLEAR_FILTERS':
       return {
         ...state,
@@ -135,6 +180,7 @@ export function dashboardSyncReducer(state: FilterState, action: FilterAction): 
         sousLigneKeys: [],
         agIds: [],
         hoursSelected: [],
+        tableFilters: {},
       }
 
     default:
@@ -151,6 +197,11 @@ export function activeFilterCount(state: FilterState): number {
   if (state.sousLigneKeys.length > 0) n += 1
   if (state.agIds.length > 0) n += 1
   if (state.hoursSelected.length > 0) n += 1
+  // Each table that carries local non-mapped filters counts once.  Even if a
+  // table has multiple per-column filters, it's still one "filtered table".
+  for (const cols of Object.values(state.tableFilters)) {
+    if (Object.keys(cols).length > 0) n += 1
+  }
   return n
 }
 
@@ -159,7 +210,10 @@ export function activeFilterCount(state: FilterState): number {
  * filters.  Mapping is taken straight from DASHBOARD_REFONTE_PLAN.md §
  * "筛选维度 → 表格 映射".
  */
-const TABLES_AFFECTED: Record<keyof Omit<FilterState, 'jourType' | 'initialJourType'> | 'jourType', string[]> = {
+const TABLES_AFFECTED: Record<
+  keyof Omit<FilterState, 'jourType' | 'initialJourType' | 'tableFilters'> | 'jourType',
+  string[]
+> = {
   routeTypes: ['b1', 'b2', 'f1', 'f3', 'e1', 'e4'],
   ligneIds: ['b1', 'b2', 'f1', 'f3', 'e1', 'e4'],
   sousLigneKeys: ['b2', 'e1', 'e4'],
@@ -175,6 +229,10 @@ export function isTableFiltered(state: FilterState, tableId: string): boolean {
   if (state.agIds.length > 0 && TABLES_AFFECTED.agIds.includes(tableId)) return true
   if (state.hoursSelected.length > 0 && TABLES_AFFECTED.hoursSelected.includes(tableId)) return true
   if (state.jourType !== state.initialJourType && TABLES_AFFECTED.jourType.includes(tableId)) return true
+  // Local per-table column filters (route_long_name etc.) — light up the ring
+  // even when no mapped slot is set.
+  const local = state.tableFilters[tableId]
+  if (local && Object.keys(local).length > 0) return true
   return false
 }
 
@@ -200,6 +258,7 @@ export function DashboardSyncProvider({
     sousLigneKeys: [],
     agIds: [],
     hoursSelected: [],
+    tableFilters: {},
   })
   const value = useMemo(() => ({ state, dispatch }), [state])
   return <DashboardSyncContext.Provider value={value}>{children}</DashboardSyncContext.Provider>

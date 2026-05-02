@@ -232,3 +232,225 @@ def test_internal_field_not_filterable(isolated_client_authed, result_data):
         f"{BASE_URL}/b1?filter_field=project_id&filter_values={PROJECT_ID}"
     )
     assert r.status_code == 400
+
+
+# ── Task 38B: generic per-column filter[<col>]=op:val ───────────────────────
+
+def test_filter_in_via_bracket_syntax(isolated_client_authed, result_data):
+    """filter[route_type]=in:3 returns the same rows as the legacy syntax."""
+    r = isolated_client_authed.get(f"{BASE_URL}/b1?filter[route_type]=in:3")
+    assert r.status_code == 200
+    rows = r.json()["rows"]
+    assert len(rows) == 2
+    assert all(row["route_type"] == 3 for row in rows)
+
+
+def test_filter_in_csv_list_via_bracket(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(f"{BASE_URL}/b1?filter[route_type]=in:3,0")
+    assert r.status_code == 200
+    rows = r.json()["rows"]
+    assert len(rows) == 3
+    assert all(row["route_type"] in (3, 0) for row in rows)
+
+
+def test_filter_range_open_lower(isolated_client_authed, result_data):
+    """range:lo: (no upper bound) clips to col >= lo."""
+    r = isolated_client_authed.get(f"{BASE_URL}/f1?filter[nb_course]=range:50:")
+    assert r.status_code == 200
+    assert {row["nb_course"] for row in r.json()["rows"]} == {50.0, 80.0, 150.0}
+
+
+def test_filter_range_open_upper(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(f"{BASE_URL}/f1?filter[nb_course]=range::40")
+    assert r.status_code == 200
+    assert {row["nb_course"] for row in r.json()["rows"]} == {10.0, 25.0}
+
+
+def test_range_filter_on_integer_column_does_not_400(isolated_client_authed, result_data):
+    # Regression: id_ligne_num is Integer; the URL parser produces float bounds
+    # (1.0 / 2.0).  Coercing back through int(str(1.0)) used to raise
+    # ValueError("invalid literal for int() with base 10: '1.0'").
+    r = isolated_client_authed.get(f"{BASE_URL}/b1?filter[id_ligne_num]=range:1:2")
+    assert r.status_code == 200
+    assert {row["id_ligne_num"] for row in r.json()["rows"]} == {1, 2}
+
+
+# ── Phase 2: /tables/{name}/resolve — pre-resolution for cross-pane sync ────
+
+
+def test_resolve_endpoint_returns_distinct_canonical_ids(
+    isolated_client_authed, result_data
+):
+    # B_1 fixture: (id_ligne_num=1, route_short_name=L1, route_type=3),
+    #              (2, L2, 3), (3, T3, 0).  Filtering on a non-canonical column
+    #              (route_short_name) must collapse to canonical ligne_ids /
+    #              route_types of matching rows.
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/b1/resolve?filter[route_short_name]=in:L1,L2"
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ligne_ids"] == [1, 2]
+    assert body["route_types"] == ["3"]
+
+
+def test_resolve_endpoint_no_filters_returns_all(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(f"{BASE_URL}/b1/resolve")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ligne_ids"] == [1, 2, 3]
+    assert body["route_types"] == ["0", "3"]
+
+
+def test_resolve_endpoint_404_for_unknown_table(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(f"{BASE_URL}/zzz/resolve")
+    assert r.status_code == 404
+
+
+def test_resolve_endpoint_400_for_unknown_column(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(f"{BASE_URL}/b1/resolve?filter[bogus]=in:x")
+    assert r.status_code == 400
+
+
+def test_resolve_endpoint_empty_when_table_lacks_canonical_columns(
+    isolated_client_authed, result_data
+):
+    # A_1 has neither id_ligne_num nor route_type — both lists must be empty.
+    r = isolated_client_authed.get(f"{BASE_URL}/a1/resolve")
+    assert r.status_code == 200
+    assert r.json() == {"ligne_ids": [], "route_types": []}
+
+
+def test_resolve_endpoint_wrong_project(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(
+        f"/api/v1/projects/{OTHER_PROJECT_ID}/tables/b1/resolve"
+    )
+    assert r.status_code == 404
+
+
+def test_filter_contains_case_insensitive(isolated_client_authed, result_data):
+    """contains:<term> matches case-insensitively on a text column."""
+    r = isolated_client_authed.get(f"{BASE_URL}/a1?filter[stop_name]=contains:STOP+a")
+    assert r.status_code == 200
+    rows = r.json()["rows"]
+    assert len(rows) == 1
+    assert rows[0]["stop_name"] == "Stop A"
+
+
+def test_filter_contains_escapes_wildcards(isolated_client_authed, result_data):
+    """A user typing ``%`` should match the literal char, not every row."""
+    r = isolated_client_authed.get(f"{BASE_URL}/a1?filter[stop_name]=contains:%25")
+    assert r.status_code == 200
+    # No stop_name contains '%' literally → no rows.
+    assert r.json()["rows"] == []
+
+
+def test_filter_multi_columns_AND(isolated_client_authed, result_data):
+    """Two filter[…] params combine with AND: only rows matching both."""
+    # B1 fixture has 3 rows (route_type=3, 3, 0).  Stack a contains filter on
+    # route_short_name to slice further.
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/b1?filter[route_type]=in:3&filter[route_short_name]=contains:L1"
+    )
+    assert r.status_code == 200
+    rows = r.json()["rows"]
+    assert len(rows) == 1
+    assert rows[0]["route_short_name"] == "L1"
+    assert rows[0]["route_type"] == 3
+
+
+def test_filter_invalid_column_via_bracket_400(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(f"{BASE_URL}/b1?filter[bogus]=in:x")
+    assert r.status_code == 400
+
+
+def test_filter_unknown_op_422(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(f"{BASE_URL}/b1?filter[route_type]=lt:3")
+    assert r.status_code == 422
+
+
+def test_filter_internal_column_blocked_via_bracket(isolated_client_authed, result_data):
+    """Tenant-leak guard: filter[project_id] must be rejected at the service."""
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/b1?filter[project_id]=in:{PROJECT_ID}"
+    )
+    assert r.status_code == 400
+
+
+def test_column_meta_only_when_requested(isolated_client_authed, result_data):
+    """column_meta absent by default to avoid the cardinality scan on every page."""
+    r = isolated_client_authed.get(f"{BASE_URL}/b1")
+    assert r.status_code == 200
+    assert "column_meta" not in r.json()
+
+
+def test_column_meta_classifies_columns(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(f"{BASE_URL}/b1?column_meta=true")
+    assert r.status_code == 200
+    meta = r.json()["column_meta"]
+    # B1 columns: id_ligne_num (int → numeric), route_short_name (3 distinct strings → enum),
+    # route_type (int → numeric).
+    assert meta["id_ligne_num"]["type"] == "numeric"
+    assert meta["route_type"]["type"] == "numeric"
+    assert meta["route_short_name"]["type"] == "enum"
+    assert meta["route_short_name"]["total_distinct"] == 3
+
+
+# ── Task 38B: distinct-values endpoint for the filter popover ───────────────
+
+def test_distinct_returns_values_with_counts(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/b1/columns/route_type/distinct"
+    )
+    assert r.status_code == 200
+    body = r.json()
+    # B1 fixture: route_type=3 (×2), route_type=0 (×1).
+    by_value = {entry["value"]: entry["count"] for entry in body["values"]}
+    assert by_value == {3: 2, 0: 1}
+    assert body["total_distinct"] == 2
+    assert body["truncated"] is False
+
+
+def test_distinct_q_filters_substring(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/a1/columns/stop_name/distinct?q=Stop+A"
+    )
+    assert r.status_code == 200
+    values = [v["value"] for v in r.json()["values"]]
+    assert values == ["Stop A"]
+
+
+def test_distinct_q_escapes_wildcards(isolated_client_authed, result_data):
+    """``q='%'`` must match the literal char, not every row."""
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/a1/columns/stop_name/distinct?q=%25"
+    )
+    assert r.status_code == 200
+    assert r.json()["values"] == []
+
+
+def test_distinct_invalid_column_400(isolated_client_authed, result_data):
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/b1/columns/bogus/distinct"
+    )
+    assert r.status_code == 400
+
+
+def test_distinct_internal_column_blocked(isolated_client_authed, result_data):
+    """``project_id`` must not be reachable via the distinct API either."""
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/b1/columns/project_id/distinct"
+    )
+    assert r.status_code == 400
+
+
+def test_distinct_truncated_flag(isolated_client_authed, result_data):
+    """Limit lower than the row count flips ``truncated`` to True."""
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/a1/columns/stop_name/distinct?limit=2"
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["values"]) == 2
+    assert body["truncated"] is True
+    assert body["total_distinct"] == 5  # all 5 fixture stops

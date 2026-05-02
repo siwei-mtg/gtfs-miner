@@ -34,10 +34,38 @@ export interface UploadResponse {
   project_id: string
 }
 
+export type ColumnDataType = 'enum' | 'numeric' | 'text'
+
+export interface ColumnMeta {
+  type: ColumnDataType
+  total_distinct: number
+}
+
 export interface TableDataResponse {
   total: number
   rows: Record<string, any>[]
   columns: string[]
+  /** Present only when the request asked for it (?column_meta=true).  Powers
+   *  the per-header Excel-style filter popover layout (Task 38B). */
+  column_meta?: Record<string, ColumnMeta>
+}
+
+/** UI-side per-column filter shape — the column is keyed by the parent
+ *  Map<col, ColumnFilter>, so it does not appear in this discriminated union. */
+export type ColumnFilter =
+  | { kind: 'in'; values: string[] }
+  | { kind: 'range'; min?: number; max?: number }
+  | { kind: 'contains'; term: string }
+
+export interface DistinctValue {
+  value: string | number | null
+  count: number
+}
+
+export interface ColumnDistinctResponse {
+  values: DistinctValue[]
+  total_distinct: number
+  truncated: boolean
 }
 
 export interface UserCreate {

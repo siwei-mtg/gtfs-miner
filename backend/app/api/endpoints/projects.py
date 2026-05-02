@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks
+import re
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -16,7 +17,14 @@ from ...db.result_models import ResultA1ArretGenerique, ResultE1PassageAG
 from ...schemas.project import ProjectCreate, ProjectResponse
 from ...services.worker import run_project_task_sync
 from ...services import storage
-from ...services.result_query import TABLE_REGISTRY, ResultQueryError, query_table
+from ...services.result_query import (
+    TABLE_REGISTRY,
+    ColumnFilter,
+    ResultQueryError,
+    query_table,
+    resolve_table_filters,
+)
+from ...services.table_distinct import list_distinct_values
 from ...services.map_builder import build_passage_ag_geojson, build_passage_arc_geojson, export_geopackage
 from ...services.charts_builder import (
     build_courses_by_hour,
@@ -218,10 +226,74 @@ async def upload_gtfs(
 
     return {"msg": "Upload successful, processing started.", "project_id": project_id}
 
+# ── Task 38B: per-column filter parser ──────────────────────────────────────
+
+# Matches the bracketed query-param syntax ``filter[<column>]=…`` that FastAPI
+# does not parse natively.  Names are kept loose; column whitelisting happens
+# downstream in result_query._resolve_column so unknown columns return 400.
+_FILTER_KEY_RE = re.compile(r"^filter\[([^\]]+)\]$")
+
+_LEGACY_FILTER_LOG = logging.getLogger(__name__)
+
+
+def _parse_column_filters(query_params) -> list[ColumnFilter]:
+    """Walk the request's query string and turn every ``filter[col]=op:val``
+    into a :class:`ColumnFilter`.
+
+    Encoded value formats (everything after the first ``:``):
+      * ``in:a,b,c``         → enum multi-select
+      * ``range:<lo>:<hi>``  → numeric range (either bound may be empty)
+      * ``contains:<term>``  → case-insensitive substring search
+
+    Unknown ops raise HTTP 422 right here so callers don't reach the service
+    with an obviously malformed clause.  Empty / whitespace-only values are
+    silently dropped (treated as 'no filter on this column').
+    """
+    out: list[ColumnFilter] = []
+    for key, raw_value in query_params.multi_items():
+        match = _FILTER_KEY_RE.match(key)
+        if not match:
+            continue
+        column = match.group(1)
+        if not raw_value or not raw_value.strip():
+            continue
+        if ":" not in raw_value:
+            raise HTTPException(
+                status_code=422,
+                detail=f"filter[{column}] missing op:value separator",
+            )
+        op, _, payload = raw_value.partition(":")
+        op = op.strip()
+        if op == "in":
+            values = [v for v in payload.split(",") if v != ""]
+            if not values:
+                continue
+            out.append({"column": column, "op": "in", "values": values})
+        elif op == "range":
+            lo_str, _, hi_str = payload.partition(":")
+            lo = float(lo_str) if lo_str.strip() else None
+            hi = float(hi_str) if hi_str.strip() else None
+            if lo is None and hi is None:
+                continue
+            out.append({"column": column, "op": "range", "min": lo, "max": hi})
+        elif op == "contains":
+            term = payload
+            if not term.strip():
+                continue
+            out.append({"column": column, "op": "contains", "term": term})
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail=f"filter[{column}] unknown op {op!r}",
+            )
+    return out
+
+
 @router.get("/{project_id}/tables/{table_name}")
 def get_table_data(
     project_id: str,
     table_name: str,
+    request: Request,
     skip: int = 0,
     limit: int = 50,
     sort_by: str | None = None,
@@ -232,17 +304,30 @@ def get_table_data(
     range_field: str | None = None,
     range_min: float | None = None,
     range_max: float | None = None,
+    column_meta: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     获取项目处理完成后的特定 CSV 表格的分页数据。
 
-    返回：{"total": int, "rows": list[dict], "columns": list[str]}
+    返回：{"total": int, "rows": list[dict], "columns": list[str],
+            "column_meta"?: dict}
 
-    Task 38A adds optional filtering:
+    Task 38A (legacy) — single-column filtering:
       - filter_field + filter_values (comma-separated): SQL IN (...)
       - range_field + range_min / range_max: numeric [min, max] inclusive
+
+    Task 38B — generic per-column filters (Excel-style header popovers):
+      - filter[<col>]=in:v1,v2,v3        → SQL IN (...)
+      - filter[<col>]=range:<min>:<max>  → numeric [min, max] inclusive
+      - filter[<col>]=contains:<term>    → case-insensitive substring (LIKE)
+
+    Multiple ``filter[…]`` params combine with AND.  Legacy and new filters
+    can coexist (also AND-ed) while the frontend migrates.
+
+    ``column_meta=true`` adds a per-column type+cardinality map used by the
+    frontend to pick the popover layout (enum / numeric / text).
     """
     if table_name not in TABLE_REGISTRY:
         raise HTTPException(status_code=404, detail="Table not found")
@@ -257,6 +342,12 @@ def get_table_data(
         raise HTTPException(status_code=400, detail="Project data not ready")
 
     values_list = filter_values.split(",") if filter_values else None
+    if filter_field or range_field:
+        _LEGACY_FILTER_LOG.warning(
+            "legacy filter params used on table=%s; please migrate to filter[col]=…",
+            table_name,
+        )
+    column_filters = _parse_column_filters(request.query_params)
 
     try:
         return query_table(
@@ -267,9 +358,89 @@ def get_table_data(
             range_field=range_field,
             range_min=range_min,
             range_max=range_max,
+            filters=column_filters,
+            include_column_meta=column_meta,
         )
     except ResultQueryError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{project_id}/tables/{table_name}/columns/{column}/distinct",
+)
+def get_table_column_distinct(
+    project_id: str,
+    table_name: str,
+    column: str,
+    q: str | None = None,
+    limit: int = 200,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """List distinct values of one column for the Excel-style filter popover.
+
+    Returns ``{"values": [{value, count}], "total_distinct": int, "truncated": bool}``.
+    See :func:`app.services.table_distinct.list_distinct_values` for full
+    semantics (q escaping, hard caps).
+    """
+    if table_name not in TABLE_REGISTRY:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.status != "completed":
+        raise HTTPException(status_code=400, detail="Project data not ready")
+
+    try:
+        return list_distinct_values(
+            db, TABLE_REGISTRY[table_name], project_id, column, q=q, limit=limit
+        )
+    except ResultQueryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@router.get("/{project_id}/tables/{table_name}/resolve")
+def resolve_table(
+    project_id: str,
+    table_name: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Translate per-row filters on a result table into canonical IDs the rest
+    of the dashboard understands.
+
+    Same filter syntax as ``GET /tables/{name}`` (``filter[col]=op:value``).
+    Returns ``{"ligne_ids": [...], "route_types": [...]}`` — each list is empty
+    if the source table doesn't have the corresponding column.
+
+    Used by the dashboard popup to propagate non-mapped column filters
+    (e.g. ``route_long_name``) onto the map / KPI panes via SET_LIGNE_IDS /
+    SET_ROUTE_TYPES.
+    """
+    if table_name not in TABLE_REGISTRY:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.tenant_id == current_user.tenant_id,
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.status != "completed":
+        raise HTTPException(status_code=400, detail="Project data not ready")
+
+    filters = _parse_column_filters(request.query_params)
+    try:
+        return resolve_table_filters(
+            db, TABLE_REGISTRY[table_name], project_id, filters
+        )
+    except ResultQueryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 
 @router.get("/{project_id}/tables/{table_name}/download")
 def download_table_csv(

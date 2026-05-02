@@ -1,81 +1,87 @@
 /**
- * table-filter-config.ts — Known filterable columns per result table (Task 38B).
+ * table-filter-config.ts — Cross-pane filter routing for dashboard charts.
  *
- * The backend `query_table` only honours ONE filter_field and ONE range_field
- * per request.  To keep the UI predictable we expose a primary enum column and
- * a primary numeric column per table; richer multi-column filtering can be
- * layered on top later without schema churn.
+ * Since Task 38C the table filtering UI itself moved into per-header
+ * Excel-style popovers (see `ColumnFilterPopover`).  This module now only
+ * carries the metadata that ties dashboard chart selections (route_type,
+ * id_ligne_num, id_ag_num) to the corresponding column on each result table.
+ *
+ * Responsibilities:
+ *   - EXTERNAL_FILTER_COLUMNS: which column of each table receives chart-driven
+ *     filter values (so a click on a route_type pie pre-fills the route_type
+ *     column popover when the user opens table B_1).
+ *   - ENUM_FIELD_TO_FILTER_STATE_KEY: reverse map used when ResultTable lifts
+ *     a popover change back into the global FilterState context.
+ *   - getRouteTypeLabel / getDirectionIdLabel: GTFS-spec value labelling for
+ *     popover items (so the user sees "Bus" instead of just "3").
  */
 import { getRouteTypeLabel } from './map-utils'
+import type { ColumnDataType } from '@/types/api'
 
 export interface FilterOption {
   value: string
   label: string
 }
 
-/** Primary enum column to render a MultiSelectFilter for, keyed by table short key. */
-export const PRIMARY_ENUM_FIELD: Record<string, string> = {
-  b1: 'route_type',
-  // B2 (Sous-lignes) exposes `id_ligne_num` as primary so picking specific
-  // lignes here feeds the global `ligneIds` filter and propagates to the
-  // maps (passage-ag, passage-arc).  direction_id stays visible as a column
-  // and can be filtered via row search.
-  b2: 'id_ligne_num',
-  c1: 'direction_id',
-  d1: 'Type_Jour',
-  d2: 'Type_Jour',
-  e1: 'type_jour',
-  e4: 'type_jour',
-  f1: 'type_jour',
-  f2: 'Type_Jour',
-  f3: 'type_jour',
-  f4: 'type_jour',
-}
-
-/** Primary numeric column to render a RangeFilter for, keyed by table short key. */
-export const PRIMARY_NUMERIC_FIELD: Record<string, string> = {
-  e1: 'nb_passage',
-  e4: 'nb_passage',
-  f1: 'nb_course',
-  f3: 'kcc',
-  f4: 'kcc',
+/**
+ * Force certain ID-like columns to render as ``enum`` (cocher des valeurs)
+ * regardless of the backend's column_meta type.
+ *
+ * The backend marks any Integer column ``numeric`` (range inputs only), but
+ * for canonical IDs the user needs an enum picker — searching by stop name or
+ * line number is the natural workflow.  The /distinct endpoint paginates so
+ * even high-cardinality lists stay usable.
+ */
+export const COLUMN_TYPE_OVERRIDES: Record<string, ColumnDataType> = {
+  id_ag_num: 'enum',
+  id_ag_num_a: 'enum',
+  id_ag_num_b: 'enum',
+  id_ag_num_debut: 'enum',
+  id_ag_num_terminus: 'enum',
+  id_ligne_num: 'enum',
+  route_type: 'enum',
+  direction_id: 'enum',
 }
 
 /**
- * Hardcoded option list for enums whose domain is fixed by the GTFS spec.
- * For project-local enums (type_jour) we fall back to deriving options from
- * the rows the table already fetched.
+ * For each table that participates in the dashboard's filter sync, the column
+ * whose values the global FilterState pushes into.  Tables not listed here
+ * still have the per-column filter UI — they just don't reflect chart clicks.
  */
-const ROUTE_TYPE_VALUES = ['0', '1', '2', '3', '4', '5', '6', '7', '11', '12']
-const DIRECTION_ID_VALUES = ['0', '1', '999']
-
-export function getEnumOptions(
-  field: string,
-  derivedValues: Array<string | number | null | undefined>,
-): FilterOption[] {
-  if (field === 'route_type') {
-    return ROUTE_TYPE_VALUES.map((v) => ({ value: v, label: `${v} · ${getRouteTypeLabel(v)}` }))
-  }
-  if (field === 'direction_id') {
-    return DIRECTION_ID_VALUES.map((v) => ({
-      value: v,
-      label: v === '0' ? '0 · Aller' : v === '1' ? '1 · Retour' : '999 · Inconnu',
-    }))
-  }
-  // Generic: derive from the rows we already fetched.
-  const distinct = Array.from(
-    new Set(
-      derivedValues
-        .filter((v): v is string | number => v != null)
-        .map((v) => String(v)),
-    ),
-  ).sort()
-  return distinct.map((v) => ({ value: v, label: v }))
+export const EXTERNAL_FILTER_COLUMNS: Record<string, string> = {
+  b1: 'route_type',
+  b2: 'id_ligne_num',
+  e1: 'id_ag_num',
+  e4: 'id_ag_num',
 }
 
-/** Map an enum field to the corresponding global `FilterState` key, if any. */
+/** Reverse: column name → which FilterState slot it lifts changes into. */
 export const ENUM_FIELD_TO_FILTER_STATE_KEY: Record<string, 'routeTypes' | 'ligneIds' | 'agIds'> = {
   route_type: 'routeTypes',
   id_ligne_num: 'ligneIds',
   id_ag_num: 'agIds',
+}
+
+const ROUTE_TYPE_VALUES = ['0', '1', '2', '3', '4', '5', '6', '7', '11', '12']
+const DIRECTION_ID_LABELS: Record<string, string> = {
+  '0': 'Aller',
+  '1': 'Retour',
+  '999': 'Inconnu',
+}
+
+/**
+ * Display label for one distinct value of a known column.  Returns the raw
+ * value as a fallback so unknown columns stay informative.  Used by the
+ * column-filter popover to render "Bus" rather than "3".
+ */
+export function getColumnValueLabel(column: string, value: unknown): string {
+  if (value === null || value === undefined) return '(vide)'
+  const raw = String(value)
+  if (column === 'route_type') {
+    return ROUTE_TYPE_VALUES.includes(raw) ? `${raw} · ${getRouteTypeLabel(raw)}` : raw
+  }
+  if (column === 'direction_id') {
+    return DIRECTION_ID_LABELS[raw] ? `${raw} · ${DIRECTION_ID_LABELS[raw]}` : raw
+  }
+  return raw
 }

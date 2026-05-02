@@ -1,4 +1,14 @@
-import type { ProjectCreate, ProjectResponse, UploadResponse, UserCreate, Token, UserResponse, TableDataResponse } from '../types/api'
+import type {
+  ColumnDistinctResponse,
+  ColumnFilter,
+  ProjectCreate,
+  ProjectResponse,
+  TableDataResponse,
+  Token,
+  UploadResponse,
+  UserCreate,
+  UserResponse,
+} from '../types/api'
 
 function normalizeOrigin(raw: string | undefined): string {
   if (!raw) return ''
@@ -89,13 +99,31 @@ export interface TableQueryParams {
   sort_by?: string
   sort_order?: string
   q?: string
-  /** Task 38A: SQL IN (...) on an enum-like column. */
-  filter_field?: string
-  filter_values?: string[]
-  /** Task 38A: inclusive numeric range [min, max]. */
-  range_field?: string
-  range_min?: number
-  range_max?: number
+  /** Task 38B: per-column filters (Excel-style header popovers).  AND-ed. */
+  filters?: Record<string, ColumnFilter>
+  /** Adds ``column_meta`` to the response (cheap, single bounded distinct
+   *  query per non-numeric column).  Front-end only needs this once per
+   *  table mount to pick the popover layout. */
+  column_meta?: boolean
+}
+
+/** Encode one ColumnFilter into the ``op:rest`` payload accepted by the
+ *  backend.  Returns null when the filter is empty so callers skip the
+ *  query-string entry. */
+function encodeColumnFilter(f: ColumnFilter): string | null {
+  if (f.kind === 'in') {
+    if (f.values.length === 0) return null
+    return `in:${f.values.join(',')}`
+  }
+  if (f.kind === 'range') {
+    if (f.min === undefined && f.max === undefined) return null
+    return `range:${f.min ?? ''}:${f.max ?? ''}`
+  }
+  if (f.kind === 'contains') {
+    if (!f.term) return null
+    return `contains:${f.term}`
+  }
+  return null
 }
 
 export async function getTableData(
@@ -109,20 +137,59 @@ export async function getTableData(
   if (params.sort_by) query.append('sort_by', params.sort_by)
   if (params.sort_order) query.append('sort_order', params.sort_order)
   if (params.q) query.append('q', params.q)
-  if (params.filter_field && params.filter_values && params.filter_values.length > 0) {
-    query.append('filter_field', params.filter_field)
-    query.append('filter_values', params.filter_values.join(','))
+  if (params.filters) {
+    for (const [col, filter] of Object.entries(params.filters)) {
+      const encoded = encodeColumnFilter(filter)
+      if (encoded !== null) query.append(`filter[${col}]`, encoded)
+    }
   }
-  if (params.range_field && (params.range_min !== undefined || params.range_max !== undefined)) {
-    query.append('range_field', params.range_field)
-    if (params.range_min !== undefined) query.append('range_min', params.range_min.toString())
-    if (params.range_max !== undefined) query.append('range_max', params.range_max.toString())
-  }
+  if (params.column_meta) query.append('column_meta', 'true')
 
   const res = await fetch(`${BASE}/${projectId}/tables/${tableName}?${query.toString()}`, {
     headers: getAuthHeaders(),
   })
   if (!res.ok) throw new Error(`getTableData failed: ${res.status}`)
+  return res.json()
+}
+
+export interface ResolveResponse {
+  ligne_ids: number[]
+  route_types: string[]
+}
+
+/** Translate per-table column filters into canonical ligne_ids / route_types
+ *  the rest of the dashboard (map, KPI, charts) consumes.  Empty lists are
+ *  returned for canonical columns the source table doesn't have. */
+export async function resolveTableFilters(
+  projectId: string,
+  tableName: string,
+  filters: Record<string, ColumnFilter>,
+): Promise<ResolveResponse> {
+  const query = new URLSearchParams()
+  for (const [col, filter] of Object.entries(filters)) {
+    const encoded = encodeColumnFilter(filter)
+    if (encoded !== null) query.append(`filter[${col}]`, encoded)
+  }
+  const url = `${BASE}/${projectId}/tables/${tableName}/resolve?${query.toString()}`
+  const res = await fetch(url, { headers: getAuthHeaders() })
+  if (!res.ok) throw new Error(`resolveTableFilters failed: ${res.status}`)
+  return res.json()
+}
+
+export async function getColumnDistinct(
+  projectId: string,
+  tableName: string,
+  column: string,
+  opts: { q?: string; limit?: number } = {},
+): Promise<ColumnDistinctResponse> {
+  const query = new URLSearchParams()
+  if (opts.q) query.append('q', opts.q)
+  if (opts.limit !== undefined) query.append('limit', opts.limit.toString())
+  const url =
+    `${BASE}/${projectId}/tables/${tableName}/columns/${encodeURIComponent(column)}/distinct` +
+    (query.toString() ? `?${query}` : '')
+  const res = await fetch(url, { headers: getAuthHeaders() })
+  if (!res.ok) throw new Error(`getColumnDistinct failed: ${res.status}`)
   return res.json()
 }
 
