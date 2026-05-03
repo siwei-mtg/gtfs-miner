@@ -3,7 +3,9 @@ from __future__ import annotations
 
 
 def test_imports() -> None:
-    from app.services.panel_pipeline import run, peer_groups, aggregator, quality, geo, types  # noqa: F401
+    from app.services.panel_pipeline import (  # noqa: F401
+        run, pan_client, peer_groups, aggregator, quality, geo, types,
+    )
     from app.services.panel_pipeline.indicators import (  # noqa: F401
         productivity, density, structure, coverage,
         frequency, accessibility, environment,

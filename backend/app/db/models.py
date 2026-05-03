@@ -89,3 +89,99 @@ class ProgressEvent(Base):
     __table_args__ = (
         Index("ix_progress_events_project_seq", "project_id", "seq"),
     )
+
+
+# ────────────────────────────────────────────────────────
+# compare-transit.fr panel models — spec §6.3
+# ────────────────────────────────────────────────────────
+
+
+class PanelNetwork(Base):
+    """One row per French AOM / GTFS dataset on PAN — spec §6.3."""
+    __tablename__ = "panel_networks"
+
+    network_id           = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    slug                 = Column(String, unique=True, index=True, nullable=False)
+    pan_dataset_id       = Column(String, unique=True, index=True, nullable=False)
+    display_name         = Column(String, nullable=False)
+    aom_id               = Column(String, index=True)
+    tier                 = Column(String, index=True)            # T1/T2/T3/T4/T5/R/I
+    population           = Column(Integer)
+    area_km2             = Column(Float)
+    first_feed_date      = Column(DateTime)
+    last_feed_date       = Column(DateTime)
+    history_depth_months = Column(Integer)
+    created_at           = Column(DateTime, default=datetime.utcnow)
+    updated_at           = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PanelFeed(Base):
+    """One row per *distinct* feed (after dedup-by-feed_start_date) — spec §6.3."""
+    __tablename__ = "panel_feeds"
+
+    feed_id                 = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    network_id              = Column(String, ForeignKey("panel_networks.network_id"), index=True, nullable=False)
+    pan_resource_id         = Column(String, index=True, nullable=False)             # latest representative resource
+    pan_resource_history_id = Column(String, index=True)                              # resource_history_id from PAN CSV
+    published_at            = Column(DateTime, nullable=False, index=True)            # PAN inserted_at
+    feed_start_date         = Column(DateTime, nullable=False, index=True)            # dedup key
+    feed_end_date           = Column(DateTime)
+    feed_info_sha256        = Column(String, index=True)                              # sig_sha — feed_info.txt hash
+    feed_info_source        = Column(String)                                          # 'feed_info' | 'calendar' | 'calendar_dates'
+    gtfs_url                = Column(String, nullable=False)                          # permanent_url
+    r2_path                 = Column(String)
+    checksum_sha256         = Column(String)                                          # ZIP-level sha256
+    filesize                = Column(Integer)
+    process_status          = Column(String, default="pending", index=True)
+    process_duration_s      = Column(Float)
+    error_message           = Column(String)
+    created_at              = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ux_panel_feeds_network_fsd", "network_id", "feed_start_date", unique=True),
+    )
+
+
+class PanelIndicator(Base):
+    """Computed indicator value per (feed, indicator_id) — spec §6.3."""
+    __tablename__ = "panel_indicators"
+
+    feed_id      = Column(String, ForeignKey("panel_feeds.feed_id"), primary_key=True)
+    indicator_id = Column(String, primary_key=True, index=True)
+    value        = Column(Float)
+    unit         = Column(String, nullable=False)
+    computed_at  = Column(DateTime, default=datetime.utcnow)
+
+
+class PanelIndicatorDerived(Base):
+    """Z-score, percentile, YoY delta per (feed, indicator_id) — spec §5.2."""
+    __tablename__ = "panel_indicators_derived"
+
+    feed_id          = Column(String, ForeignKey("panel_feeds.feed_id"), primary_key=True)
+    indicator_id     = Column(String, primary_key=True, index=True)
+    zscore           = Column(Float)
+    percentile       = Column(Float)
+    yoy_delta_pct    = Column(Float)
+    peer_group_size  = Column(Integer)
+    computed_at      = Column(DateTime, default=datetime.utcnow)
+
+
+class PanelQuality(Base):
+    """GTFS validator output + overall quality grade per feed — spec §5.1 G."""
+    __tablename__ = "panel_quality"
+
+    feed_id          = Column(String, ForeignKey("panel_feeds.feed_id"), primary_key=True)
+    validator_errors = Column(JSON)                      # full MobilityData report
+    overall_grade    = Column(String)                    # A+/A/A-/.../F
+    overall_score    = Column(Float)                     # 0–100
+    computed_at      = Column(DateTime, default=datetime.utcnow)
+
+
+class PanelPeerGroup(Base):
+    """Tier definition metadata — spec §5.3."""
+    __tablename__ = "panel_peer_groups"
+
+    group_id     = Column(String, primary_key=True)      # T1/T2/T3/T4/T5/R/I
+    display_name = Column(String, nullable=False)
+    definition   = Column(JSON)
+    member_count = Column(Integer, default=0)
