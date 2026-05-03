@@ -1,6 +1,7 @@
 # Runtime storage — never commit user data or processed output
 storage/projects/
 storage/temp/
+storage/discovery/
 storage/*.db
 
 # Test output — generated files, never commit
