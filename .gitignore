@@ -2,13 +2,14 @@ __pycache__
 .superpowers/
 help
 i18n
-scripts
+/scripts
 test
 *.bat
 *.ui
 *.png
 *.txt
 !backend/requirements.txt
+!docs/**/*.txt
 *.qrc
 *.html
 !frontend/index.html

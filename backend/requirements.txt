@@ -34,6 +34,12 @@ geopandas==1.0.1
 fiona==1.10.1
 shapely==2.0.6
 
+# PAN discovery + history dedup (D1)
+remotezip==0.12.3
+requests==2.32.3
+pyyaml==6.0.2
+pyarrow==24.0.0  # parquet engine for manifest_*.parquet outputs
+
 # Dev
 pytest==8.3.3
 pytest-asyncio==0.24.0

@@ -1,0 +1,41 @@
+# Spec §5.3 — peer group tier definitions
+tiers:
+  T1:
+    display_name: "Grandes métropoles avec métro"
+    rules:
+      population_min: 1000000
+      requires_mode: metro
+    examples: [paris-idfm, lyon-tcl, marseille-rtm, lille-ilevia, toulouse-tisseo]
+  T2:
+    display_name: "Grandes métropoles sans métro"
+    rules:
+      population_min: 500000
+      population_max: 1000000
+    examples: [bordeaux-tbm, nantes-tan, nice, strasbourg-cts, montpellier, rennes-star]
+  T3:
+    display_name: "Villes moyennes"
+    rules:
+      population_min: 200000
+      population_max: 500000
+    examples: [grenoble-tag, tours-filbleu, reims, le-havre, brest]
+  T4:
+    display_name: "Petites villes"
+    rules:
+      population_min: 100000
+      population_max: 200000
+    examples: []
+  T5:
+    display_name: "Petits AOM"
+    rules:
+      population_max: 100000
+    examples: []
+  R:
+    display_name: "Réseaux régionaux"
+    rules:
+      dominant_mode: train
+    examples: [ter-grand-est, ter-paca, ter-nouvelle-aquitaine]
+  I:
+    display_name: "Réseaux interurbains / départementaux"
+    rules:
+      cross_commune: true
+    examples: []
