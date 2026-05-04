@@ -556,7 +556,7 @@ projection and sjoin_nearest approach for cov_pop_weighted_walk."
 - Create: `docs/superpowers/specs/2026-05-03-validator-integration-discovery.md`
 - Cache: `backend/storage/discovery/d3_validator/` (validator JAR + sample outputs)
 
-- [ ] **Step 1: Verify Java availability + download validator**
+- [x] **Step 1: Verify Java availability + download validator** — OpenJDK 17 (Adoptium Temurin 17.0.19) installed at `C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot`. Downloaded validator v7.1.0 CLI JAR (38 MB) — superseded the v6.0.0 reference URL.
 
 Run: `java -version` (expect Java 11+ available; the validator needs JDK 11)
 If missing, document install path. Document Java version in the report.
@@ -575,7 +575,7 @@ if (-not (Test-Path $jar)) {
 
 (verify latest release version on https://github.com/MobilityData/gtfs-validator/releases)
 
-- [ ] **Step 2: Run validator manually on SEM fixture to inspect JSON shape**
+- [x] **Step 2: Run validator manually on SEM fixture to inspect JSON shape** — Done. Output structure: `{summary: {...}, notices: [{code, severity, totalNotices, sampleNotices: [...]}]}`. SEM produced 0 errors / 166 warnings / 1 info in 3.5s.
 
 ```powershell
 $cache = "backend\storage\discovery\d3_validator"
@@ -589,7 +589,7 @@ New-Item -ItemType Directory -Path $out -Force | Out-Null
 
 Expected: directory with `report.json`, `system_errors_report.json`, `validation_stderr.log`.
 
-- [ ] **Step 3: Implement Python wrapper that runs validator + parses JSON**
+- [x] **Step 3: Implement Python wrapper that runs validator + parses JSON** — Implemented at `backend/scripts/discovery/d3_validator_wrapper.py` with `validate_feed()` reusable function + `ValidationReport`/`NoticeCode` dataclasses. Resolution order for Java/JAR documented (env vars → JAVA_HOME → Adoptium fallback → PATH).
 
 Create `d3_validator_wrapper.py`:
 
@@ -720,14 +720,12 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 4: Run wrapper end-to-end**
+- [x] **Step 4: Run wrapper end-to-end** — Ran on all 3 fixtures: SEM (0E/166W/1I, 3.04s), SOLEA (78E/14118W/0I, 2.26s), ginko (33E/4242W/0I, 0.45s). Output cached at `backend/storage/discovery/d3_validator/{sem,solea,ginko}_output/`. JSON shape matched v7.1.0 structure (`notices[].code/severity/totalNotices/sampleNotices`).
 
 Run: `venv/Scripts/python backend/scripts/discovery/d3_validator_wrapper.py`
 Expected: report file with notice counts; subprocess returns within 2 minutes for SEM.
 
-If validator output JSON shape differs from `parse_validator_report` assumption, adjust parsing in `parse_validator_report` based on actual JSON. The structure changed in v5+.
-
-- [ ] **Step 5: Manually fill decisions in report + commit**
+- [x] **Step 5: Manually fill decisions in report + commit** — Spec doc written at `docs/superpowers/specs/2026-05-03-validator-integration-discovery.md`. Decisions: subprocess-Java approach confirmed; v7.1.0 JSON schema parsed cleanly; per-feed budget 60s (3-fixture max was 3s).
 
 ```powershell
 git add backend/scripts/discovery/d3_validator_wrapper.py

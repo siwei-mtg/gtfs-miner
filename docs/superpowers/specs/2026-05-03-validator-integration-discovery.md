@@ -1,56 +1,99 @@
-# D3 — MobilityData GTFS Validator Integration Discovery
+# D3 — MobilityData GTFS Validator Integration (Plan 1 Task 3)
 
-**Status**: ⏸️ DEFERRED — system dependency missing
+**Status**: ✅ Completed
 
-**Date**: 2026-05-03
+**Date**: 2026-05-05
+**Validator**: gtfs-validator v7.1.0 (CLI)
+**Java**: OpenJDK 17 (Adoptium Temurin)
+**Country code**: FR
 
-## Blocker
+## Setup
 
-The MobilityData GTFS Validator (https://github.com/MobilityData/gtfs-validator) requires **Java 11+** runtime.
+- Java executable: `C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot\bin\java.exe`
+- Validator JAR: `backend\storage\discovery\d3_validator\gtfs-validator-cli.jar` (~38 MB)
+- JAR source: `https://github.com/MobilityData/gtfs-validator/releases/tag/v7.1.0`
 
-The development environment has Java 8 (`1.8.0_341`) installed at `C:\Program Files\Java\jre1.8.0_341`. Running the validator JAR with this JVM produces:
+## Fixture results
 
+| Fixture | Files | Validation (s) | Errors | Warnings | Infos | Distinct codes (E/W) | System errors |
+|---------|-------|----------------|--------|----------|-------|----------------------|---------------|
+| sem | 14 | 3.04 | 0 | 166 | 1 | 0/6 | 0 |
+| solea | 8 | 2.26 | 78 | 14118 | 0 | 1/12 | 0 |
+| ginko | 8 | 0.45 | 33 | 4242 | 0 | 3/4 | 0 |
+
+## Per-fixture notice breakdown
+
+### sem
+
+| Severity | Code | Total |
+|----------|------|-------|
+| WARNING | `equal_shape_distance_same_coordinates` | 103 |
+| WARNING | `expired_calendar` | 34 |
+| WARNING | `stop_too_far_from_shape` | 20 |
+| WARNING | `missing_recommended_field` | 4 |
+| WARNING | `stops_match_shape_out_of_order` | 4 |
+| WARNING | `missing_feed_contact_email_and_url` | 1 |
+| INFO | `unknown_column` | 1 |
+
+### solea
+
+| Severity | Code | Total |
+|----------|------|-------|
+| ERROR | `trip_distance_exceeds_shape_distance` | 78 |
+| WARNING | `trip_distance_exceeds_shape_distance_below_threshold` | 5,528 |
+| WARNING | `mixed_case_recommended_field` | 4,927 |
+| WARNING | `equal_shape_distance_same_coordinates` | 2,924 |
+| WARNING | `stop_too_far_from_shape_using_user_distance` | 406 |
+| WARNING | `equal_shape_distance_diff_coordinates_distance_below_threshold` | 283 |
+| WARNING | `missing_recommended_field` | 33 |
+| WARNING | `stop_too_far_from_shape` | 9 |
+| WARNING | `duplicate_route_name` | 3 |
+| WARNING | `fast_travel_between_consecutive_stops` | 2 |
+| WARNING | `expired_calendar` | 1 |
+| WARNING | `missing_recommended_file` | 1 |
+| WARNING | `route_color_contrast` | 1 |
+
+### ginko
+
+| Severity | Code | Total |
+|----------|------|-------|
+| ERROR | `decreasing_or_equal_stop_time_distance` | 30 |
+| ERROR | `missing_required_field` | 2 |
+| ERROR | `stop_time_with_arrival_before_previous_departure_time` | 1 |
+| WARNING | `missing_timepoint_value` | 4,226 |
+| WARNING | `expired_calendar` | 12 |
+| WARNING | `route_color_contrast` | 3 |
+| WARNING | `trip_coverage_not_active_for_next7_days` | 1 |
+
+## Wrapper API (for Plan 2)
+
+Reusable function: `backend/scripts/discovery/d3_validator_wrapper.py:validate_feed`
+
+```python
+from scripts.discovery.d3_validator_wrapper import validate_feed
+
+report = validate_feed(
+    feed_zip=Path('feed.zip'),
+    output_dir=Path('out/'),
+    country_code='FR',
+)
+report.error_count       # int — for dq_validator_errors indicator
+report.warning_count     # int — for dq_validator_warnings indicator
+report.notices           # list[NoticeCode] — full breakdown
+report.summary_dict()    # JSON-friendly dict for panel_quality storage
 ```
-java.lang.UnsupportedClassVersionError: <class name> has been compiled by a more recent version of the Java Runtime
-```
 
-## Resolution path (manual)
+Resolution order for Java/JAR:
+- `GTFS_VALIDATOR_JAVA` env var → `JAVA_HOME` → Windows Adoptium fallback → `java` in PATH
+- `GTFS_VALIDATOR_JAR` env var → `backend/storage/discovery/d3_validator/gtfs-validator-cli.jar`
 
-1. Install OpenJDK 17 LTS (recommended for production parity):
-   - https://adoptium.net/temurin/releases/?version=17
-   - Or via Chocolatey: `choco install temurin17`
-   - Or the Windows installer for OpenJDK 17 from Adoptium
-2. Confirm: `java -version` returns 17.x
-3. Then re-attempt D3 by running:
+## Plan 2 integration
 
-```powershell
-# Download validator JAR (verify latest release version)
-$cache = "backend\storage\discovery\d3_validator"
-New-Item -ItemType Directory -Path $cache -Force | Out-Null
-$url = "https://github.com/MobilityData/gtfs-validator/releases/download/v6.0.0/gtfs-validator-6.0.0-cli.jar"
-Invoke-WebRequest -Uri $url -OutFile "$cache\gtfs-validator-cli.jar"
+- `panel_pipeline/quality.py` will import `validate_feed`, persist the JSON output to
+  `panel_quality.validator_report_json` (compressed) and emit:
+    - `dq_validator_errors` = `report.error_count`
+    - `dq_validator_warnings` = `report.warning_count`
+- CI requirement: OpenJDK 17 must be available on the build machine (document in `backend/README.md`).
+- Per-feed validation budget: ~3-10s on the dev fixtures; budget 60s/feed in production for safety.
 
-# Run on SEM fixture
-java -jar "$cache\gtfs-validator-cli.jar" `
-  --input "backend\tests\Resources\raw\SEM-GTFS(2).zip" `
-  --output_base "$cache\sample_sem_output" `
-  --country_code FR
-```
-
-4. Implement the wrapper at `backend/scripts/discovery/d3_validator_wrapper.py` per Plan 1 Task 3 (subprocess invocation + JSON parsing).
-
-## Backup plan if Java install blocked
-
-Two alternatives if Java install isn't possible:
-
-1. **Containerize**: run the validator in Docker (`docker run --rm -v ${PWD}:/data mobilitydata/gtfs-validator --input /data/feed.zip --output_base /data/out --country_code FR`). This isolates Java from the host.
-
-2. **Use Python port**: `gtfs-validator-py` (community port, less complete but pure-Python). Limited rule coverage but no Java needed.
-
-## Decision for Plan 1
-
-This blocker does not affect Plan 1 foundation work (panel_pipeline skeleton, models, migration, PAN client, peer groups all independent of validator). The validator integration is a Plan 2 prerequisite for the `dq_validator_errors` and `dq_validator_warnings` indicators.
-
-**Action**: Plan 2 Task X (validator integration) requires Java 17 on the build machine. Document in CI requirements.
-
-_Generated by D3 deferral note (2026-05-03)._
+_Generated by `backend/scripts/discovery/d3_validator_wrapper.py`._
