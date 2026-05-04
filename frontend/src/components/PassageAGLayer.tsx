@@ -5,6 +5,7 @@ import { useMap } from '@/contexts/MapContext';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { generatePieSvg, generateFallbackCircleSvg, getRouteTypeColor, getRouteTypeLabel } from '@/lib/map-utils';
 import { buildPassageMapQuery, type SousLigneKey } from '@/lib/passage-map-query';
+import { fetchPassageAG } from '@/lib/passage-ag-cache';
 
 interface PassageAGLayerProps {
   projectId: string;
@@ -99,11 +100,9 @@ export const PassageAGLayer: React.FC<PassageAGLayerProps> = ({
     const fetchData = async () => {
       onLoadingChange?.(true);
       try {
-        const response = await fetch(`${API_ORIGIN}/api/v1/projects/${projectId}/map/passage-ag?${qs}`, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        });
-        if (!response.ok) throw new Error('Failed to fetch AG passage data');
-        const data = await response.json();
+        const url = `${API_ORIGIN}/api/v1/projects/${projectId}/map/passage-ag?${qs}`;
+        const cacheKey = `${projectId}|${qs}`;
+        const data = await fetchPassageAG<any>(url, cacheKey, token);
         if (cancelled) return;
 
         markersRef.current.forEach((m) => m.remove());

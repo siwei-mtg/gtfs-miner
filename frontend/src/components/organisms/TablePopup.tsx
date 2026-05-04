@@ -5,21 +5,35 @@
  * click / Escape.  Only one table can be open at a time (enforced by the
  * parent page via a single `openTableId` state).
  *
- * Filter wiring (post-Bug-A fix):
- *   - `externalColumnFilters` reads from `state.tableFilters[tableId]` only.
- *     The previous mirror "mapped slot → primary column" was removed because
- *     it caused a visual loop after Phase-2 resolution (resolved ligne_ids
- *     would re-appear as a chip in the same table).
- *   - `handleFilterChange` (Partial<FilterState>) keeps the existing direct
- *     dispatch path for mapped columns (route_type / id_ligne_num / id_ag_num).
- *   - `handleAllFiltersChange` is the new persistence + cross-pane path:
- *     dispatches `SET_TABLE_FILTERS` (Phase 1 — survives unmount) AND
- *     debounce-calls /tables/{name}/resolve to translate any non-trivial
- *     filter set into canonical ligne_ids / route_types (Phase 2).
- *   - When the user clears all filters on a table, we deliberately SKIP the
- *     resolve call — wiping `state.routeTypes` / `state.ligneIds` from this
- *     path would silently undo unrelated chart-driven selections.  For a
- *     global reset use the "Effacer tout" button in DashboardHeader.
+ * Filter wiring:
+ *   - `externalColumnFilters` mirrors `state.tableFilters[tableId]` only —
+ *     the user's local per-column filters that survive Dialog unmount.
+ *   - `contextFilters` is the NEW path: when another table's filter or a
+ *     chart click set canonical slots (state.ligneIds / .routeTypes /
+ *     .agIds), we AND-merge the matching columns into THIS table's fetch
+ *     so the data the user sees actually reflects the global context.
+ *     Restricted by `TABLE_COLUMNS` so we don't try to filter by a column
+ *     the table doesn't have (E_1/E_4 lack id_ligne_num — they stay
+ *     unfiltered, and `isTableFiltered` matches that reality).
+ *     contextFilters are NOT shown as chips and NOT lifted back, so they
+ *     can't loop into `tableFilters[tableId]` and persist as a fake user
+ *     filter.
+ *   - The "source" table — whose own tableFilters drove the current
+ *     ligneIds/routeTypes via /resolve — is exempted from contextFilters
+ *     (state.resolveSource === tableId).  Re-applying the canonical IDs
+ *     there is a no-op (the local filter is strictly more restrictive)
+ *     but would surface a "filtered by context" banner on the very table
+ *     the user is filtering, which is confusing.
+ *
+ * Resolve dispatch:
+ *   - `handleAllFiltersChange` dispatches `SET_TABLE_FILTERS` (Phase 1 —
+ *     survives unmount) AND debounce-calls /tables/{name}/resolve.  The
+ *     resolve result fires ONE combined `APPLY_RESOLVED` action that
+ *     atomically writes ligneIds + routeTypes + resolveSource.
+ *   - When the user clears all filters on a table, we deliberately SKIP
+ *     the resolve call — wiping state.routeTypes / state.ligneIds from
+ *     this path would silently undo unrelated chart-driven selections.
+ *     For a global reset use "Effacer tout" in DashboardHeader.
  */
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 
@@ -27,6 +41,7 @@ import { resolveTableFilters } from '@/api/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ResultTable } from '@/components/organisms/ResultTable'
 import { useDashboardSync, type FilterState } from '@/hooks/useDashboardSync'
+import { TABLE_COLUMNS } from '@/lib/table-filter-config'
 import type { ColumnFilter } from '@/types/api'
 import { cn } from '@/lib/utils'
 
@@ -39,6 +54,26 @@ interface TablePopupProps {
   onClose: () => void
 }
 
+function describeContext(ctx: Record<string, ColumnFilter>): string {
+  const parts: string[] = []
+  const ligne = ctx.id_ligne_num
+  if (ligne?.kind === 'in') {
+    const n = ligne.values.length
+    parts.push(`${n} ligne${n > 1 ? 's' : ''}`)
+  }
+  const rt = ctx.route_type
+  if (rt?.kind === 'in') {
+    const n = rt.values.length
+    parts.push(`${n} type${n > 1 ? 's' : ''} d'arrêt`)
+  }
+  const ag = ctx.id_ag_num
+  if (ag?.kind === 'in') {
+    const n = ag.values.length
+    parts.push(`${n} arrêt${n > 1 ? 's' : ''}`)
+  }
+  return parts.join(', ')
+}
+
 export function TablePopup({ projectId, tableId, tableLabel, onClose }: TablePopupProps) {
   const { state, dispatch } = useDashboardSync()
 
@@ -46,6 +81,35 @@ export function TablePopup({ projectId, tableId, tableLabel, onClose }: TablePop
     if (!tableId) return {}
     return state.tableFilters[tableId] ?? {}
   }, [tableId, state.tableFilters])
+
+  const contextFilters = useMemo<Record<string, ColumnFilter>>(() => {
+    if (!tableId) return {}
+    // The table whose local filter triggered the current resolution skips
+    // its own context — its tableFilters is strictly more restrictive.
+    if (state.resolveSource === tableId) return {}
+    const cols = TABLE_COLUMNS[tableId] ?? new Set<string>()
+    const local = state.tableFilters[tableId] ?? {}
+    const out: Record<string, ColumnFilter> = {}
+    if (cols.has('id_ligne_num') && state.ligneIds.length > 0 && !local.id_ligne_num) {
+      out.id_ligne_num = { kind: 'in', values: state.ligneIds.map(String) }
+    }
+    if (cols.has('route_type') && state.routeTypes.length > 0 && !local.route_type) {
+      out.route_type = { kind: 'in', values: state.routeTypes }
+    }
+    if (cols.has('id_ag_num') && state.agIds.length > 0 && !local.id_ag_num) {
+      out.id_ag_num = { kind: 'in', values: state.agIds.map(String) }
+    }
+    return out
+  }, [
+    tableId,
+    state.resolveSource,
+    state.ligneIds,
+    state.routeTypes,
+    state.agIds,
+    state.tableFilters,
+  ])
+
+  const contextDescription = useMemo(() => describeContext(contextFilters), [contextFilters])
 
   const handleFilterChange = useCallback(
     (f: Partial<FilterState>) => {
@@ -85,8 +149,15 @@ export function TablePopup({ projectId, tableId, tableLabel, onClose }: TablePop
         lastResolveKeyRef.current = key
         resolveTableFilters(projectId, tid, filters)
           .then((res) => {
-            dispatch({ type: 'SET_LIGNE_IDS', payload: res.ligne_ids })
-            dispatch({ type: 'SET_ROUTE_TYPES', payload: res.route_types })
+            dispatch({
+              type: 'APPLY_RESOLVED',
+              payload: {
+                ligneIds: res.ligne_ids,
+                routeTypes: res.route_types,
+                agIds: res.ag_ids,
+                source: tid,
+              },
+            })
           })
           .catch((err) => {
             console.error('resolveTableFilters failed:', err)
@@ -145,11 +216,24 @@ export function TablePopup({ projectId, tableId, tableLabel, onClose }: TablePop
             {tableLabel ?? tableId?.toUpperCase() ?? 'Table'}
           </DialogTitle>
         </DialogHeader>
+        {tableId && contextDescription && (
+          <div
+            className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+            data-testid="context-filter-banner"
+          >
+            <span className="font-medium text-foreground">Filtré par contexte global · </span>
+            {contextDescription}
+            <span className="ml-1">
+              — utilisez « Effacer tout » dans l'en-tête pour réinitialiser.
+            </span>
+          </div>
+        )}
         {tableId && (
           <ResultTable
             projectId={projectId}
             tableName={tableId}
             externalColumnFilters={externalColumnFilters}
+            contextFilters={contextFilters}
             onFilterChange={handleFilterChange}
             onAllColumnFiltersChange={handleAllFiltersChange}
           />

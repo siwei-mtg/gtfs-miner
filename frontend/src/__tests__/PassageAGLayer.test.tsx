@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, act } from '@testing-library/react';
 import { PassageAGLayer } from '@/components/PassageAGLayer';
 import { MapContext } from '@/contexts/MapContext';
+import { invalidatePassageAGCache } from '@/lib/passage-ag-cache';
 import maplibregl from 'maplibre-gl';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ function getMarkerElement(): HTMLElement {
 describe('PassageAGLayer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    invalidatePassageAGCache();
   });
 
   it('should fetch data with Authorization header and create markers when visible', async () => {

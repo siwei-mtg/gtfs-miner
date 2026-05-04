@@ -163,15 +163,49 @@ def build_courses_by_jour_type(project_id: str, db: Session) -> dict:
     }
 
 
+def _coerce_int_list(values: list[int] | list[str] | None) -> list[int]:
+    """Cast a heterogeneous list (URL strings or already-int) to ints, dropping
+    anything that fails.  Used for ligne_ids / id_ag_num query params."""
+    if not values:
+        return []
+    out: list[int] = []
+    for raw in values:
+        try:
+            out.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _ag_to_lignes(db: Session, project_id: str, ag_ids: list[int]) -> list[int]:
+    """Translate a stop set into the lines passing through them via C_2.
+    Used to push an `id_ag_num` filter all the way through line-indexed
+    aggregations (F_1 / F_3 / B_1) so the dashboard stays coherent."""
+    if not ag_ids:
+        return []
+    rows = (
+        db.query(func.distinct(ResultC2Itineraire.id_ligne_num))
+        .filter(ResultC2Itineraire.project_id == project_id)
+        .filter(ResultC2Itineraire.id_ag_num.in_(ag_ids))
+        .filter(ResultC2Itineraire.id_ligne_num.isnot(None))
+        .all()
+    )
+    return [int(r[0]) for r in rows]
+
+
 def build_courses_by_hour(
     project_id: str,
     jour_type: int,
     route_types: list[str] | None,
     db: Session,
+    *,
+    ligne_ids: list[int] | None = None,
+    ag_ids: list[int] | None = None,
 ) -> dict:
     """
     Aggregate distinct C_1 courses into 24 hourly buckets (0..23) for a
-    jour_type, optionally restricted to a list of GTFS route_types.
+    jour_type, optionally restricted to a list of GTFS route_types and/or
+    canonical ligne / stop IDs (from a table filter or a map click).
 
     Hour is extracted from `C_1.heure_depart` (HH:MM:SS) via substr; values
     >= 24 (GTFS next-day notation) are wrapped into 0..23 with `% 24`.
@@ -179,10 +213,19 @@ def build_courses_by_hour(
     Join chain (C_1 × D_2 × B_1):
       - D_2 filters courses to those running on `jour_type`
       - B_1 is joined only when `route_types` is non-empty
+      - `ag_ids` is funneled through C_2.id_ligne_num so we keep the chart
+        as a course-count (not a stop-passage count).
     """
     from sqlalchemy import Integer
 
     rt_ints = _coerce_route_types(route_types)
+    ll_ints = _coerce_int_list(ligne_ids)
+    ag_ints = _coerce_int_list(ag_ids)
+    if ag_ints:
+        # Intersect with the ligne_ids filter when both are present so the
+        # narrower of the two wins.
+        derived = _ag_to_lignes(db, project_id, ag_ints)
+        ll_ints = sorted(set(ll_ints) & set(derived)) if ll_ints else derived
 
     # Raw hour int from "HH:MM:SS" via substr; wrapping > 23 is done in Python
     # below so GTFS next-day notation (24/25/26…) still falls into a bucket.
@@ -207,6 +250,9 @@ def build_courses_by_hour(
             ResultC1Course.heure_depart.isnot(None),
         )
     )
+
+    if ll_ints:
+        q = q.filter(ResultC1Course.id_ligne_num.in_(ll_ints))
 
     if rt_ints:
         q = q.join(
@@ -235,6 +281,9 @@ def build_kpis(
     jour_type: int,
     route_types: list[str] | None,
     db: Session,
+    *,
+    ligne_ids: list[int] | None = None,
+    ag_ids: list[int] | None = None,
 ) -> dict:
     """
     Compute 4 dashboard KPIs in a single pass:
@@ -243,13 +292,31 @@ def build_kpis(
       - nb_courses : SUM(F_1.nb_course) on `jour_type`
       - kcc_total  : SUM(F_3.kcc) on `jour_type` (rounded to 2 decimals)
 
-    `route_types` (optional) narrows nb_lignes / nb_courses / kcc_total via
-    B_1.  nb_arrets is left at the project-wide count on purpose — joining
-    E_1 back to B_1 through passages would triple the query cost for a
-    marginal UX gain and we already expose that narrower number through the
-    A_1 / E_1 tables themselves.
+    Filters (all optional, all AND-combined):
+      - ``route_types`` narrows the line-indexed KPIs via B_1 join.
+      - ``ligne_ids`` directly restricts every KPI to the given lines (and
+        ``nb_arrets`` to AGs served by them via C_2).
+      - ``ag_ids`` directly restricts ``nb_arrets``; for the line-indexed
+        KPIs it's translated through C_2 to "lines passing through any of
+        these stops" so the four numbers stay mutually coherent.
+
+    Composition rule when both ``ligne_ids`` and ``ag_ids`` are present:
+    intersect (lines AND stops-of-stops), so narrower wins.
     """
     rt_ints = _coerce_route_types(route_types)
+    ll_ints = _coerce_int_list(ligne_ids)
+    ag_ints = _coerce_int_list(ag_ids)
+
+    # If only stops are filtered, still constrain line-indexed KPIs by the
+    # set of lines those stops belong to.  Intersect with explicit ligne_ids
+    # when both are present so the narrower wins (rather than overwriting).
+    line_constraint: list[int] = list(ll_ints)
+    if ag_ints:
+        derived = _ag_to_lignes(db, project_id, ag_ints)
+        if line_constraint:
+            line_constraint = sorted(set(line_constraint) & set(derived))
+        else:
+            line_constraint = derived
 
     def _join_b1(q, model):
         """Join `model` onto B_1 (same project) so we can filter on route_type."""
@@ -261,6 +328,11 @@ def build_kpis(
             ),
         ).filter(ResultB1Ligne.route_type.in_(rt_ints))
 
+    def _apply_line_constraint(q, model):
+        if not line_constraint:
+            return q
+        return q.filter(model.id_ligne_num.in_(line_constraint))
+
     # --- nb_lignes ---------------------------------------------------------
     lignes_q = db.query(
         func.count(func.distinct(ResultF1CourseLigne.id_ligne_num))
@@ -271,6 +343,7 @@ def build_kpis(
     )
     if rt_ints:
         lignes_q = _join_b1(lignes_q, ResultF1CourseLigne)
+    lignes_q = _apply_line_constraint(lignes_q, ResultF1CourseLigne)
     nb_lignes = int(lignes_q.scalar() or 0)
 
     # --- nb_arrets ---------------------------------------------------------
@@ -280,6 +353,15 @@ def build_kpis(
         ResultE1PassageAG.project_id == project_id,
         ResultE1PassageAG.type_jour == jour_type,
     )
+    if ag_ints:
+        arrets_q = arrets_q.filter(ResultE1PassageAG.id_ag_num.in_(ag_ints))
+    elif line_constraint:
+        # Lines without an explicit stop set → AGs served by those lines.
+        served_ag = _lignes_to_ags(db, project_id, line_constraint)
+        if served_ag:
+            arrets_q = arrets_q.filter(ResultE1PassageAG.id_ag_num.in_(served_ag))
+        else:
+            arrets_q = arrets_q.filter(ResultE1PassageAG.id_ag_num.in_([]))  # empty -> 0
     nb_arrets = int(arrets_q.scalar() or 0)
 
     # --- nb_courses --------------------------------------------------------
@@ -291,6 +373,7 @@ def build_kpis(
     )
     if rt_ints:
         courses_q = _join_b1(courses_q, ResultF1CourseLigne)
+    courses_q = _apply_line_constraint(courses_q, ResultF1CourseLigne)
     nb_courses = int(courses_q.scalar() or 0)
 
     # --- kcc_total ---------------------------------------------------------
@@ -302,6 +385,7 @@ def build_kpis(
     )
     if rt_ints:
         kcc_q = _join_b1(kcc_q, ResultF3KCCLigne)
+    kcc_q = _apply_line_constraint(kcc_q, ResultF3KCCLigne)
     kcc_total = float(kcc_q.scalar() or 0.0)
 
     return {
@@ -310,3 +394,19 @@ def build_kpis(
         "nb_courses": nb_courses,
         "kcc_total": round(kcc_total, 2),
     }
+
+
+def _lignes_to_ags(db: Session, project_id: str, ligne_ids: list[int]) -> list[int]:
+    """Translate a line set into the AGs served by them via C_2.  Symmetric to
+    `_ag_to_lignes` — used by ``build_kpis`` to narrow ``nb_arrets`` when
+    only a line filter is set."""
+    if not ligne_ids:
+        return []
+    rows = (
+        db.query(func.distinct(ResultC2Itineraire.id_ag_num))
+        .filter(ResultC2Itineraire.project_id == project_id)
+        .filter(ResultC2Itineraire.id_ligne_num.in_(ligne_ids))
+        .filter(ResultC2Itineraire.id_ag_num.isnot(None))
+        .all()
+    )
+    return [int(r[0]) for r in rows]

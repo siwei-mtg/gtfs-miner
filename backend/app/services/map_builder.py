@@ -5,7 +5,9 @@ Builds GeoJSON payloads derived from Phase 1 result tables.
 No schema changes required; all data already exists post-pipeline.
 """
 import tempfile
-from collections import defaultdict
+import threading
+import time
+from collections import OrderedDict, defaultdict
 from pathlib import Path
 
 import geopandas as gpd
@@ -26,6 +28,30 @@ from ..db.result_models import (
 )
 
 _GPKG_BATCH = 500  # max AG ids per GeoDataFrame chunk for memory-efficient export
+
+# ── In-memory LRU+TTL cache for build_passage_ag_geojson ──────────────────────
+# Keyed by (project_id, jour_type, ligne_ids_tuple, sous_ligne_keys_tuple).
+# Sized for ~16 active projects × 8 distinct filter combinations.
+_PASSAGE_AG_CACHE_MAXSIZE = 128
+_PASSAGE_AG_CACHE_TTL = 300.0  # seconds; safety net when explicit invalidation is missed
+_passage_ag_cache: "OrderedDict[tuple, tuple[float, dict]]" = OrderedDict()
+_passage_ag_cache_lock = threading.Lock()
+
+
+def invalidate_passage_ag_cache(project_id: str | None = None) -> None:
+    """Drop cached passage-AG GeoJSON entries.
+
+    Called by the worker after a pipeline run so subsequent map requests reflect
+    the freshly persisted data instead of a stale snapshot. With ``project_id``
+    omitted the entire cache is cleared (used by tests).
+    """
+    with _passage_ag_cache_lock:
+        if project_id is None:
+            _passage_ag_cache.clear()
+            return
+        stale = [k for k in _passage_ag_cache if k[0] == project_id]
+        for k in stale:
+            _passage_ag_cache.pop(k, None)
 
 
 def _build_sous_ligne_filter(model, sous_ligne_keys: list[tuple[int, str]]):
@@ -215,6 +241,29 @@ def build_passage_ag_geojson(
     Returns:
         GeoJSON FeatureCollection dict.
     """
+    cache_key = (
+        project_id,
+        jour_type,
+        tuple(sorted(ligne_ids)) if ligne_ids else None,
+        tuple(sorted(sous_ligne_keys)) if sous_ligne_keys else None,
+    )
+    with _passage_ag_cache_lock:
+        hit = _passage_ag_cache.get(cache_key)
+        if hit is not None:
+            ts, payload = hit
+            if time.monotonic() - ts < _PASSAGE_AG_CACHE_TTL:
+                _passage_ag_cache.move_to_end(cache_key)
+                return payload
+            _passage_ag_cache.pop(cache_key, None)
+
+    def _store(payload: dict) -> dict:
+        with _passage_ag_cache_lock:
+            _passage_ag_cache[cache_key] = (time.monotonic(), payload)
+            _passage_ag_cache.move_to_end(cache_key)
+            while len(_passage_ag_cache) > _PASSAGE_AG_CACHE_MAXSIZE:
+                _passage_ag_cache.popitem(last=False)
+        return payload
+
     # Filtered path: when ligne_ids or sous_ligne_keys are supplied, bypass
     # E1 entirely and recompute totals from C2 → B1 → D2.  The filtered total
     # is the sum of the per-route_type counts.
@@ -236,11 +285,11 @@ def build_passage_ag_geojson(
             project_id, jour_type, db, ligne_ids, sous_ligne_keys
         )
         if not by_ag:
-            return {
+            return _store({
                 "type": "FeatureCollection",
                 "features": [],
                 "max_passage_total": int(max_passage_total),
-            }
+            })
         features = []
         for ag_num, by_rt in by_ag.items():
             meta = ag_meta_filtered.get(ag_num)
@@ -259,11 +308,11 @@ def build_passage_ag_geojson(
                     "by_route_type": {str(k): v for k, v in by_rt.items()},
                 },
             })
-        return {
+        return _store({
             "type": "FeatureCollection",
             "features": features,
             "max_passage_total": int(max_passage_total),
-        }
+        })
 
     # Step 1: fetch all AGs present in E1 for this project + jour_type.
     # E1 carries stop coordinates so no A1 join is needed.
@@ -276,11 +325,11 @@ def build_passage_ag_geojson(
         .all()
     )
     if not e1_rows:
-        return {
+        return _store({
             "type": "FeatureCollection",
             "features": [],
             "max_passage_total": 0,
-        }
+        })
 
     # Fourth element is the authoritative nb_passage from E_1 (per type_jour).
     ag_meta: dict[int, tuple[str | None, float | None, float | None, float]] = {
@@ -353,11 +402,11 @@ def build_passage_ag_geojson(
         (m[3] for m in ag_meta.values()),
         default=0,
     ) or 0
-    return {
+    return _store({
         "type": "FeatureCollection",
         "features": features,
         "max_passage_total": int(max_passage_total),
-    }
+    })
 
 
 def build_passage_arc_geojson(

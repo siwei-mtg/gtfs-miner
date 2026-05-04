@@ -332,6 +332,75 @@ describe('ResultTable', () => {
     expect(onAllColumnFiltersChange.mock.calls.at(-1)?.[0]).toEqual({});
   });
 
+  it('merges contextFilters into the fetch query', async () => {
+    const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const context: Record<string, ColumnFilter> = {
+      id_ligne_num: { kind: 'in', values: ['1', '2'] },
+    };
+    render(
+      <ResultTable
+        projectId="p1"
+        tableName="f1"
+        contextFilters={context}
+      />,
+    );
+
+    await waitFor(() => {
+      const lastCall = getTableMock.mock.calls.at(-1);
+      expect(lastCall?.[2].filters).toEqual({
+        id_ligne_num: { kind: 'in', values: ['1', '2'] },
+      });
+    });
+  });
+
+  it('local externalColumnFilters override contextFilters on conflicting columns', async () => {
+    const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const context: Record<string, ColumnFilter> = {
+      id_ligne_num: { kind: 'in', values: ['1'] },
+    };
+    const external: Record<string, ColumnFilter> = {
+      id_ligne_num: { kind: 'in', values: ['9'] },
+    };
+    render(
+      <ResultTable
+        projectId="p1"
+        tableName="f1"
+        contextFilters={context}
+        externalColumnFilters={external}
+      />,
+    );
+
+    await waitFor(() => {
+      const lastCall = getTableMock.mock.calls.at(-1);
+      expect(lastCall?.[2].filters).toEqual({
+        id_ligne_num: { kind: 'in', values: ['9'] },
+      });
+    });
+  });
+
+  it('does NOT lift contextFilters back via onAllColumnFiltersChange', async () => {
+    vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
+    const onAllColumnFiltersChange = vi.fn();
+    const context: Record<string, ColumnFilter> = {
+      id_ligne_num: { kind: 'in', values: ['1'] },
+    };
+    render(
+      <ResultTable
+        projectId="p1"
+        tableName="f1"
+        contextFilters={context}
+        onAllColumnFiltersChange={onAllColumnFiltersChange}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('id')).toBeInTheDocument());
+
+    // Mount + context-only render must not trigger a lift-back; otherwise
+    // the context value would persist as a fake user filter in
+    // state.tableFilters[tableId] and re-trigger /resolve in a loop.
+    expect(onAllColumnFiltersChange).not.toHaveBeenCalled();
+  });
+
   it('filters reset when tableName changes', async () => {
     const getTableMock = vi.mocked(apiClient.getTableData).mockResolvedValue(mockData);
     const external: Record<string, ColumnFilter> = {

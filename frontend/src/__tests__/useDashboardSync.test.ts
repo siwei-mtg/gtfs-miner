@@ -16,6 +16,7 @@ function freshState(overrides: Partial<FilterState> = {}): FilterState {
     agIds: [],
     hoursSelected: [],
     tableFilters: {},
+    resolveSource: null,
     ...overrides,
   }
 }
@@ -52,6 +53,7 @@ describe('dashboardSyncReducer — CLEAR_FILTERS', () => {
       agIds: [42],
       hoursSelected: [8, 9],
       tableFilters: { b2: { route_long_name: { kind: 'in', values: ['Ligne 1'] } } },
+      resolveSource: 'b2',
     })
     const next = dashboardSyncReducer(s, { type: 'CLEAR_FILTERS' })
     expect(next.jourType).toBe(1)
@@ -60,6 +62,60 @@ describe('dashboardSyncReducer — CLEAR_FILTERS', () => {
     expect(next.agIds).toEqual([])
     expect(next.hoursSelected).toEqual([])
     expect(next.tableFilters).toEqual({})
+    expect(next.resolveSource).toBeNull()
+  })
+})
+
+describe('dashboardSyncReducer — APPLY_RESOLVED', () => {
+  it('atomically writes ligneIds, routeTypes, and resolveSource', () => {
+    const next = dashboardSyncReducer(freshState(), {
+      type: 'APPLY_RESOLVED',
+      payload: { ligneIds: [1, 2], routeTypes: ['3'], agIds: [], source: 'b2' },
+    })
+    expect(next.ligneIds).toEqual([1, 2])
+    expect(next.routeTypes).toEqual(['3'])
+    expect(next.resolveSource).toBe('b2')
+  })
+
+  it('returns the same state when payload matches existing slots and source', () => {
+    const s = freshState({ ligneIds: [1, 2], routeTypes: ['3'], resolveSource: 'b2' })
+    const next = dashboardSyncReducer(s, {
+      type: 'APPLY_RESOLVED',
+      payload: { ligneIds: [1, 2], routeTypes: ['3'], agIds: [], source: 'b2' },
+    })
+    expect(next).toBe(s)
+  })
+
+  it('updates resolveSource even when slots are unchanged but the source differs', () => {
+    const s = freshState({ ligneIds: [1, 2], routeTypes: ['3'], resolveSource: 'b2' })
+    const next = dashboardSyncReducer(s, {
+      type: 'APPLY_RESOLVED',
+      payload: { ligneIds: [1, 2], routeTypes: ['3'], agIds: [], source: 'f1' },
+    })
+    expect(next.resolveSource).toBe('f1')
+  })
+})
+
+describe('dashboardSyncReducer — resolveSource invalidation', () => {
+  it('SET_LIGNE_IDS clears resolveSource', () => {
+    const s = freshState({ ligneIds: [1], resolveSource: 'b2' })
+    const next = dashboardSyncReducer(s, { type: 'SET_LIGNE_IDS', payload: [9] })
+    expect(next.ligneIds).toEqual([9])
+    expect(next.resolveSource).toBeNull()
+  })
+
+  it('SET_ROUTE_TYPES clears resolveSource', () => {
+    const s = freshState({ routeTypes: ['3'], resolveSource: 'b2' })
+    const next = dashboardSyncReducer(s, { type: 'SET_ROUTE_TYPES', payload: ['0'] })
+    expect(next.routeTypes).toEqual(['0'])
+    expect(next.resolveSource).toBeNull()
+  })
+
+  it('TOGGLE_ROUTE_TYPE clears resolveSource', () => {
+    const s = freshState({ routeTypes: ['3'], resolveSource: 'b2' })
+    const next = dashboardSyncReducer(s, { type: 'TOGGLE_ROUTE_TYPE', payload: '0' })
+    expect(next.routeTypes).toEqual(['3', '0'])
+    expect(next.resolveSource).toBeNull()
   })
 })
 
@@ -156,19 +212,37 @@ describe('isTableFiltered', () => {
     expect(isTableFiltered(s, 'b1')).toBe(false)
   })
 
-  it('marks B_1/B_2/F_1/F_3/E_1/E_4 when routeTypes is non-empty', () => {
+  it('marks only tables that have route_type when routeTypes is non-empty', () => {
+    // B_1 carries route_type; B_2/F_1/F_3 don't (only id_ligne_num).  E_1/E_4
+    // have neither, so they must NOT light up — that was the "lying mark" bug.
     const s = freshState({ routeTypes: ['3'] })
-    for (const t of ['b1', 'b2', 'f1', 'f3', 'e1', 'e4']) {
-      expect(isTableFiltered(s, t)).toBe(true)
+    expect(isTableFiltered(s, 'b1')).toBe(true)
+    for (const t of ['b2', 'f1', 'f3', 'e1', 'e4', 'a1']) {
+      expect(isTableFiltered(s, t)).toBe(false)
     }
-    expect(isTableFiltered(s, 'a1')).toBe(false)
   })
 
-  it('marks A_1/E_1/E_4 when agIds is non-empty', () => {
+  it('marks only tables that have id_ligne_num when ligneIds is non-empty', () => {
+    // E_1/E_4 are indexed by id_ag_num, NOT id_ligne_num — they must stay
+    // unmarked when only the line filter is set (we can't filter their data
+    // by line without a cross-table JOIN, out of scope).
+    const s = freshState({ ligneIds: [1, 2] })
+    for (const t of ['b1', 'b2', 'f1', 'f3']) {
+      expect(isTableFiltered(s, t)).toBe(true)
+    }
+    for (const t of ['e1', 'e4', 'a1']) {
+      expect(isTableFiltered(s, t)).toBe(false)
+    }
+  })
+
+  it('marks A_1/E_1 (id_ag_num) when agIds is non-empty, NOT E_4', () => {
+    // E_4 has id_ag_num_a / id_ag_num_b (not id_ag_num) — current TABLE_COLUMNS
+    // carries an empty set for E_4 so it doesn't light up.  See plan §"Hors
+    // scope" for the open question on which side (a/b) to filter.
     const s = freshState({ agIds: [42] })
     expect(isTableFiltered(s, 'a1')).toBe(true)
     expect(isTableFiltered(s, 'e1')).toBe(true)
-    expect(isTableFiltered(s, 'e4')).toBe(true)
+    expect(isTableFiltered(s, 'e4')).toBe(false)
     expect(isTableFiltered(s, 'b1')).toBe(false)
   })
 

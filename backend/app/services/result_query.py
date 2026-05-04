@@ -211,17 +211,10 @@ def compute_column_meta(
     return meta
 
 
-# Canonical ID columns we try to project onto from any source table during
-# pre-resolution.  Order is informational; both lookups happen.
-_RESOLVE_COLUMNS: dict[str, str] = {
-    "id_ligne_num": "ligne_ids",
-    "route_type": "route_types",
-}
-
-
 class ResolveResult(TypedDict):
     ligne_ids: list[int]
     route_types: list[str]
+    ag_ids: list[int]
 
 
 def resolve_table_filters(
@@ -231,32 +224,105 @@ def resolve_table_filters(
     filters: list[ColumnFilter] | None,
 ) -> ResolveResult:
     """Translate per-row column filters into the canonical IDs other dashboard
-    panes (map, KPI ribbon, charts) consume.
+    panes (map, KPI ribbon, charts, sibling tables) consume.
 
-    Applies ``filters`` to ``model`` and returns the distinct ``id_ligne_num``
-    and ``route_type`` values of the matching rows — restricted to columns the
-    table actually has.  Used to make a filter on a non-mapped column (e.g.
-    ``route_long_name`` in B_2) propagate to the map.
+    Strategy (bidirectional, single network round-trip):
 
-    Returns empty lists for canonical columns absent from the source table.
+    1. Apply ``filters`` to the source ``model`` once.
+    2. From the filtered source query, project whichever of
+       ``id_ligne_num`` / ``id_ag_num`` the source actually carries.  These
+       are the "primary" canonicals — they're definitive for this filter.
+    3. Cross-derive the missing canonical via ``ResultC2Itineraire`` (the
+       only model that has BOTH columns):
+         - source has lines but not stops → distinct C_2.id_ag_num served by
+           those lines.
+         - source has stops but not lines → distinct C_2.id_ligne_num passing
+           through those stops.
+       This lets a filter on B_1/B_2 (lines) propagate to A_1/A_2/E_1 (stops),
+       AND vice-versa.
+    4. Resolve ``route_types`` from the FINAL set of ligne_ids via B_1.  This
+       gives a coherent route-type set even when the source (e.g. B_2) doesn't
+       carry route_type itself.
+
+    Returns empty lists for canonicals the source has no path to (e.g. D_1
+    has neither id_ligne_num nor id_ag_num — purely calendar data).
     """
     query = db.query(model).filter(model.project_id == project_id)
     for flt in filters or []:
         col = _resolve_column(model, flt["column"])
         query = _apply_column_filter(query, col, flt)
 
-    out: ResolveResult = {"ligne_ids": [], "route_types": []}
-    for col_name, out_key in _RESOLVE_COLUMNS.items():
-        if col_name not in model.__table__.columns:
-            continue
-        col = model.__table__.columns[col_name]
-        rows = query.with_entities(distinct(col)).filter(col.isnot(None)).all()
-        values = [r[0] for r in rows]
-        if out_key == "route_types":
-            out["route_types"] = sorted(str(v) for v in values)
-        else:
-            out["ligne_ids"] = sorted(int(v) for v in values)
-    return out
+    cols = model.__table__.columns
+    src_ligne_ids: list[int] | None = None
+    src_ag_ids: list[int] | None = None
+
+    if "id_ligne_num" in cols:
+        rows = (
+            query.with_entities(distinct(cols["id_ligne_num"]))
+            .filter(cols["id_ligne_num"].isnot(None))
+            .all()
+        )
+        src_ligne_ids = [int(r[0]) for r in rows]
+
+    if "id_ag_num" in cols:
+        rows = (
+            query.with_entities(distinct(cols["id_ag_num"]))
+            .filter(cols["id_ag_num"].isnot(None))
+            .all()
+        )
+        src_ag_ids = [int(r[0]) for r in rows]
+
+    final_ligne_ids: set[int] = set(src_ligne_ids or [])
+    final_ag_ids: set[int] = set(src_ag_ids or [])
+
+    # Cross-derive via C_2 (id_ligne_num × id_ag_num bridge).  Only one
+    # direction fires per call — we never want to "expand" both back into
+    # each other (that would just yield the source set anyway).
+    if src_ligne_ids is not None and src_ag_ids is None and src_ligne_ids:
+        rows = (
+            db.query(distinct(ResultC2Itineraire.id_ag_num))
+            .filter(ResultC2Itineraire.project_id == project_id)
+            .filter(ResultC2Itineraire.id_ligne_num.in_(src_ligne_ids))
+            .filter(ResultC2Itineraire.id_ag_num.isnot(None))
+            .all()
+        )
+        final_ag_ids = {int(r[0]) for r in rows}
+    elif src_ag_ids is not None and src_ligne_ids is None and src_ag_ids:
+        rows = (
+            db.query(distinct(ResultC2Itineraire.id_ligne_num))
+            .filter(ResultC2Itineraire.project_id == project_id)
+            .filter(ResultC2Itineraire.id_ag_num.in_(src_ag_ids))
+            .filter(ResultC2Itineraire.id_ligne_num.isnot(None))
+            .all()
+        )
+        final_ligne_ids = {int(r[0]) for r in rows}
+
+    # Route types: prefer the direct source column if present (B_1 case);
+    # otherwise derive from the final ligne set via B_1.  Either way the
+    # output reflects the FILTERED row set, not the project total.
+    route_types: list[str] = []
+    if "route_type" in cols:
+        rows = (
+            query.with_entities(distinct(cols["route_type"]))
+            .filter(cols["route_type"].isnot(None))
+            .all()
+        )
+        route_types = sorted(str(r[0]) for r in rows)
+    elif final_ligne_ids:
+        rows = (
+            db.query(distinct(ResultB1Ligne.route_type))
+            .filter(ResultB1Ligne.project_id == project_id)
+            .filter(ResultB1Ligne.id_ligne_num.in_(final_ligne_ids))
+            .filter(ResultB1Ligne.route_type.isnot(None))
+            .all()
+        )
+        route_types = sorted(str(r[0]) for r in rows)
+
+    return {
+        "ligne_ids": sorted(final_ligne_ids),
+        "route_types": route_types,
+        "ag_ids": sorted(final_ag_ids),
+    }
 
 
 def query_table(

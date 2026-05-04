@@ -55,6 +55,14 @@ interface ResultTableProps {
   /** Filters pushed down by the parent dashboard (chart clicks, map
    *  selection, etc.).  Keyed by column name. */
   externalColumnFilters?: Record<string, ColumnFilter>
+  /** Read-only filters that come from the global dashboard context
+   *  (state.ligneIds → id_ligne_num, state.routeTypes → route_type,
+   *  state.agIds → id_ag_num).  AND-merged into the fetch query but NOT
+   *  displayed as chips and NOT lifted back via onAllColumnFiltersChange.
+   *  TablePopup computes these from the global state and the target table's
+   *  schema (TABLE_COLUMNS).  Local filters in `filters` take precedence on
+   *  conflicting columns. */
+  contextFilters?: Record<string, ColumnFilter>
 }
 
 const DEFAULT_COLUMN_META: ColumnMeta = { type: 'text', total_distinct: 0 }
@@ -95,6 +103,7 @@ export const ResultTable: React.FC<ResultTableProps> = ({
   onFilterChange,
   onAllColumnFiltersChange,
   externalColumnFilters,
+  contextFilters,
 }) => {
   const [data, setData] = useState<TableDataResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -144,6 +153,21 @@ export const ResultTable: React.FC<ResultTableProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalSerialised])
 
+  // AND-merge context filters (read-only, from global dashboard state) under
+  // local user filters.  Local wins per-column, so a filter the user posts on
+  // id_ligne_num here overrides the context-derived id_ligne_num.  Memoised
+  // by stable serialisation so the fetch effect doesn't refire on identical
+  // context renders.
+  const contextSerialised = useMemo(
+    () => JSON.stringify(contextFilters ?? {}),
+    [contextFilters],
+  )
+  const effectiveFilters = useMemo<Record<string, ColumnFilter>>(
+    () => ({ ...(contextFilters ?? {}), ...filters }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [contextSerialised, filters],
+  )
+
   // Fetch table data on every relevant change.  column_meta=true on every
   // request — backend uses a bounded distinct-count so the cost is small,
   // and this guarantees fresh metadata when the project changes.
@@ -155,7 +179,7 @@ export const ResultTable: React.FC<ResultTableProps> = ({
       limit,
       sort_by: sortBy,
       sort_order: sortOrder,
-      filters,
+      filters: effectiveFilters,
       column_meta: true,
     })
       .then((res) => {
@@ -174,7 +198,7 @@ export const ResultTable: React.FC<ResultTableProps> = ({
     return () => {
       cancelled = true
     }
-  }, [projectId, tableName, skip, limit, sortBy, sortOrder, filters])
+  }, [projectId, tableName, skip, limit, sortBy, sortOrder, effectiveFilters])
 
   // Lift back filter changes inline from user-action callbacks.  We
   // deliberately do NOT do this in a useEffect on `filters` — that would also

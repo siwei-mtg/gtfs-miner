@@ -44,6 +44,10 @@ export const COLUMN_TYPE_OVERRIDES: Record<string, ColumnDataType> = {
 }
 
 /**
+ * @deprecated since the cross-pane sync moved to /resolve + APPLY_RESOLVED.
+ * Kept for any future "chart click → primary column chip" feature.  No
+ * production code path reads this anymore.
+ *
  * For each table that participates in the dashboard's filter sync, the column
  * whose values the global FilterState pushes into.  Tables not listed here
  * still have the per-column filter UI — they just don't reflect chart clicks.
@@ -53,6 +57,39 @@ export const EXTERNAL_FILTER_COLUMNS: Record<string, string> = {
   b2: 'id_ligne_num',
   e1: 'id_ag_num',
   e4: 'id_ag_num',
+}
+
+/**
+ * Frontend mirror of which canonical (cross-pane) columns each result table
+ * actually carries.  Source of truth: backend/app/models/result.py.
+ *
+ * Used by:
+ *   - useDashboardSync.isTableFiltered → decide which sidebar pellets light up.
+ *     A table only "lights up" for state.routeTypes if it actually has the
+ *     route_type column.  Prevents the misleading mark on E_1/E_4 when the
+ *     user filters B_1/B_2 (E tables can't be filtered by line ID without a
+ *     cross-table JOIN, which is out of scope today).
+ *   - TablePopup.contextFilters → AND-merge state.ligneIds / .routeTypes /
+ *     .agIds into the table fetch only for columns the target actually has.
+ *
+ * Keep in sync if a model gains/loses one of these columns.
+ */
+export const TABLE_COLUMNS: Record<string, ReadonlySet<string>> = {
+  a1: new Set(['id_ag_num']),
+  a2: new Set(['id_ag_num']),
+  b1: new Set(['id_ligne_num', 'route_type']),
+  b2: new Set(['id_ligne_num', 'sous_ligne']),
+  c1: new Set(['id_ligne_num', 'sous_ligne']),
+  c2: new Set(['id_ligne_num', 'sous_ligne', 'id_ag_num']),
+  c3: new Set(['id_ligne_num', 'sous_ligne']),
+  d1: new Set([]),
+  d2: new Set(['id_ligne_num']),
+  e1: new Set(['id_ag_num']),
+  e4: new Set([]),
+  f1: new Set(['id_ligne_num']),
+  f2: new Set(['id_ligne_num', 'sous_ligne']),
+  f3: new Set(['id_ligne_num']),
+  f4: new Set(['id_ligne_num', 'sous_ligne']),
 }
 
 /** Reverse: column name → which FilterState slot it lifts changes into. */

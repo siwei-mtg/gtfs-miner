@@ -155,6 +155,7 @@ export async function getTableData(
 export interface ResolveResponse {
   ligne_ids: number[]
   route_types: string[]
+  ag_ids: number[]
 }
 
 /** Translate per-table column filters into canonical ligne_ids / route_types
@@ -297,13 +298,40 @@ function appendRouteTypes(query: URLSearchParams, routeTypes?: string[]): void {
   for (const rt of routeTypes) query.append('route_types', rt)
 }
 
+function appendIntList(
+  query: URLSearchParams,
+  param: string,
+  values?: number[],
+): void {
+  if (!values || values.length === 0) return
+  for (const v of values) query.append(param, String(v))
+}
+
+/** Optional cross-pane context that narrows KPIs / charts the same way the
+ *  map and tables already filter.  Mirrors the backend query params one-to-one
+ *  (route_types repeats, ligne_ids repeats, id_ag_num repeats).  Pass omitted
+ *  fields when no filter is active so the response equals the "base" total.
+ */
+export interface FilterContext {
+  routeTypes?: string[]
+  ligneIds?: number[]
+  agIds?: number[]
+}
+
+function appendFilterContext(query: URLSearchParams, ctx?: FilterContext): void {
+  if (!ctx) return
+  appendRouteTypes(query, ctx.routeTypes)
+  appendIntList(query, 'ligne_ids', ctx.ligneIds)
+  appendIntList(query, 'id_ag_num', ctx.agIds)
+}
+
 export async function getCoursesByHour(
   projectId: string,
   jourType: number,
-  routeTypes?: string[],
+  ctx?: FilterContext,
 ): Promise<{ rows: CoursesByHourRow[] }> {
   const query = new URLSearchParams({ jour_type: String(jourType) })
-  appendRouteTypes(query, routeTypes)
+  appendFilterContext(query, ctx)
   const res = await fetch(
     `${BASE}/${projectId}/charts/courses-by-hour?${query.toString()}`,
     { headers: getAuthHeaders() },
@@ -322,10 +350,10 @@ export interface KpiResponse {
 export async function getKpis(
   projectId: string,
   jourType: number,
-  routeTypes?: string[],
+  ctx?: FilterContext,
 ): Promise<KpiResponse> {
   const query = new URLSearchParams({ jour_type: String(jourType) })
-  appendRouteTypes(query, routeTypes)
+  appendFilterContext(query, ctx)
   const res = await fetch(
     `${BASE}/${projectId}/kpis?${query.toString()}`,
     { headers: getAuthHeaders() },

@@ -42,6 +42,7 @@ from .gtfs_core.gtfs_export import (
     MEF_ligne, MEF_serdate, MEF_servjour,
 )
 from .dwd_loader import load_outputs_to_dwd
+from .map_builder import invalidate_passage_ag_cache
 from .project_metadata import extract_reseau, extract_validite
 
 # HPM/HPS as time fractions — overridable from project parameters
@@ -337,6 +338,10 @@ def run_project_task_sync(project_id: str, zip_path: str, parameters: dict, loop
         # ── Mark as completed ─────────────────────────────────────────────
         project.status = "completed"
         db.commit()
+
+        # Drop any stale map cache for this project so the dashboard reflects
+        # freshly persisted E1/C2/B1/D2 rows on the next request.
+        invalidate_passage_ag_cache(project_id)
 
         elapsed = round(time.time() - start_time, 2)
         send_progress(f"Traitement terminé (durée totale : {elapsed} s)", status="completed")

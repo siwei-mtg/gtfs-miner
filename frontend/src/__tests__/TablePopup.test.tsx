@@ -34,6 +34,7 @@ beforeEach(() => {
   vi.mocked(apiClient.resolveTableFilters).mockResolvedValue({
     ligne_ids: [],
     route_types: [],
+    ag_ids: [],
   })
   vi.useFakeTimers({ shouldAdvanceTime: true })
 })
@@ -142,10 +143,11 @@ describe('TablePopup', () => {
     })
   })
 
-  it('debounces resolveTableFilters and dispatches the resolved canonical IDs', async () => {
+  it('debounces resolveTableFilters and dispatches APPLY_RESOLVED with source', async () => {
     vi.mocked(apiClient.resolveTableFilters).mockResolvedValue({
       ligne_ids: [42, 43],
       route_types: ['3'],
+      ag_ids: [100, 200],
     })
     const probe = vi.fn<(s: any) => void>()
     function Probe() {
@@ -182,11 +184,177 @@ describe('TablePopup', () => {
       { route_long_name: { kind: 'in', values: ['Ligne 1'] } },
     )
 
-    // Reducer should reflect the resolved IDs.
+    // Reducer should reflect the resolved IDs AND the source tableId so the
+    // banner / context-filter logic can suppress redundancy on the source.
     await waitFor(() => {
       const state = probe.mock.calls.at(-1)?.[0].state
       expect(state.ligneIds).toEqual([42, 43])
       expect(state.routeTypes).toEqual(['3'])
+      expect(state.resolveSource).toBe('b2')
+    })
+  })
+
+  describe('contextFilters wiring', () => {
+    it('passes context filters to ResultTable when target table has the column and is NOT the source', async () => {
+      const probe = vi.fn<(s: any) => void>()
+      function Probe() {
+        const ctx = useDashboardSync()
+        probe(ctx)
+        return null
+      }
+      renderWithProvider(
+        <>
+          <Probe />
+          <TablePopup projectId="p1" tableId="f1" onClose={() => {}} />
+        </>,
+      )
+      await waitFor(() => expect(screen.getByTestId('mock-result-table')).toBeInTheDocument())
+
+      // Simulate a previous resolve from a DIFFERENT table (b2) populating
+      // the canonical slot.
+      const dispatch = probe.mock.calls.at(-1)?.[0].dispatch
+      act(() => {
+        dispatch({
+          type: 'APPLY_RESOLVED',
+          payload: { ligneIds: [1, 2], routeTypes: [], agIds: [], source: 'b2' },
+        })
+      })
+
+      // F_1 has id_ligne_num so the context propagates.
+      await waitFor(() => {
+        expect(latestProps().contextFilters).toEqual({
+          id_ligne_num: { kind: 'in', values: ['1', '2'] },
+        })
+      })
+    })
+
+    it('does NOT pass context filters when the target table IS the resolve source', async () => {
+      const probe = vi.fn<(s: any) => void>()
+      function Probe() {
+        const ctx = useDashboardSync()
+        probe(ctx)
+        return null
+      }
+      renderWithProvider(
+        <>
+          <Probe />
+          <TablePopup projectId="p1" tableId="b2" onClose={() => {}} />
+        </>,
+      )
+      await waitFor(() => expect(screen.getByTestId('mock-result-table')).toBeInTheDocument())
+
+      const dispatch = probe.mock.calls.at(-1)?.[0].dispatch
+      act(() => {
+        dispatch({
+          type: 'APPLY_RESOLVED',
+          payload: { ligneIds: [1, 2], routeTypes: [], agIds: [], source: 'b2' },
+        })
+      })
+
+      // B_2 IS the source — its tableFilters local is strictly more
+      // restrictive, so contextFilters must stay empty to avoid noise.
+      await waitFor(() => {
+        expect(latestProps().contextFilters).toEqual({})
+      })
+    })
+
+    it('does NOT pass context for canonical columns the target table lacks', async () => {
+      const probe = vi.fn<(s: any) => void>()
+      function Probe() {
+        const ctx = useDashboardSync()
+        probe(ctx)
+        return null
+      }
+      renderWithProvider(
+        <>
+          <Probe />
+          <TablePopup projectId="p1" tableId="e1" onClose={() => {}} />
+        </>,
+      )
+      await waitFor(() => expect(screen.getByTestId('mock-result-table')).toBeInTheDocument())
+
+      const dispatch = probe.mock.calls.at(-1)?.[0].dispatch
+      act(() => {
+        dispatch({
+          type: 'APPLY_RESOLVED',
+          payload: { ligneIds: [1], routeTypes: ['3'], agIds: [], source: 'b2' },
+        })
+      })
+
+      // E_1 doesn't carry id_ligne_num or route_type, so context stays empty.
+      await waitFor(() => {
+        expect(latestProps().contextFilters).toEqual({})
+      })
+    })
+
+    it('lets a local filter on a canonical column take precedence over context', async () => {
+      const probe = vi.fn<(s: any) => void>()
+      function Probe() {
+        const ctx = useDashboardSync()
+        probe(ctx)
+        return null
+      }
+      renderWithProvider(
+        <>
+          <Probe />
+          <TablePopup projectId="p1" tableId="f1" onClose={() => {}} />
+        </>,
+      )
+      await waitFor(() => expect(screen.getByTestId('mock-result-table')).toBeInTheDocument())
+
+      const dispatch = probe.mock.calls.at(-1)?.[0].dispatch
+      act(() => {
+        dispatch({
+          type: 'APPLY_RESOLVED',
+          payload: { ligneIds: [1, 2], routeTypes: [], agIds: [], source: 'b2' },
+        })
+        dispatch({
+          type: 'SET_TABLE_FILTERS',
+          tableId: 'f1',
+          payload: { id_ligne_num: { kind: 'in', values: ['9'] } },
+        })
+      })
+
+      // The local F_1 filter on id_ligne_num must NOT be shadowed by the
+      // context-derived id_ligne_num — context omits the column entirely.
+      await waitFor(() => {
+        expect(latestProps().contextFilters).toEqual({})
+        expect(latestProps().externalColumnFilters).toEqual({
+          id_ligne_num: { kind: 'in', values: ['9'] },
+        })
+      })
+    })
+
+    it('renders the context banner when context filters are present', async () => {
+      const probe = vi.fn<(s: any) => void>()
+      function Probe() {
+        const ctx = useDashboardSync()
+        probe(ctx)
+        return null
+      }
+      renderWithProvider(
+        <>
+          <Probe />
+          <TablePopup projectId="p1" tableId="f1" onClose={() => {}} />
+        </>,
+      )
+      await waitFor(() => expect(screen.getByTestId('mock-result-table')).toBeInTheDocument())
+
+      // No banner before context exists.
+      expect(screen.queryByTestId('context-filter-banner')).toBeNull()
+
+      const dispatch = probe.mock.calls.at(-1)?.[0].dispatch
+      act(() => {
+        dispatch({
+          type: 'APPLY_RESOLVED',
+          payload: { ligneIds: [1], routeTypes: [], agIds: [], source: 'b2' },
+        })
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('context-filter-banner')).toBeInTheDocument()
+      })
+      expect(screen.getByTestId('context-filter-banner').textContent).toContain('1 ligne')
     })
   })
 

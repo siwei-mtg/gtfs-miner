@@ -30,12 +30,19 @@ export function CoursesByHourChart({ projectId }: Props) {
   const [rows, setRows] = useState<CoursesByHourRow[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Stable serialisations so the effect's dep array stays array-equality-safe.
   const routeTypesKey = state.routeTypes.join(',')
+  const ligneIdsKey = state.ligneIds.join(',')
+  const agIdsKey = state.agIds.join(',')
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    getCoursesByHour(projectId, state.jourType, state.routeTypes)
+    getCoursesByHour(projectId, state.jourType, {
+      routeTypes: state.routeTypes,
+      ligneIds: state.ligneIds,
+      agIds: state.agIds,
+    })
       .then((res) => {
         if (!cancelled) setRows(res.rows)
       })
@@ -43,7 +50,7 @@ export function CoursesByHourChart({ projectId }: Props) {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, state.jourType, routeTypesKey])
+  }, [projectId, state.jourType, routeTypesKey, ligneIdsKey, agIdsKey])
 
   return (
     <Card data-testid="chart-courses-by-hour" className="border-0 shadow-none">

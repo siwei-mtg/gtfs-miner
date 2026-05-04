@@ -745,12 +745,22 @@ def get_courses_by_hour(
     project_id: str,
     jour_type: int,
     route_types: List[str] = Query(default_factory=list, alias="route_types"),
+    ligne_ids: List[int] = Query(default_factory=list, alias="ligne_ids"),
+    ag_ids: List[int] = Query(default_factory=list, alias="id_ag_num"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """24-bucket hourly breakdown of C_1 courses for a jour_type."""
+    """24-bucket hourly breakdown of C_1 courses for a jour_type, narrowed by
+    the global dashboard filter context (route_types / ligne_ids / id_ag_num)."""
     _authorize_project(project_id, db, current_user)
-    return build_courses_by_hour(project_id, jour_type, route_types, db)
+    return build_courses_by_hour(
+        project_id,
+        jour_type,
+        route_types,
+        db,
+        ligne_ids=ligne_ids,
+        ag_ids=ag_ids,
+    )
 
 
 @router.get("/{project_id}/kpis")
@@ -758,12 +768,22 @@ def get_kpis(
     project_id: str,
     jour_type: int,
     route_types: List[str] = Query(default_factory=list, alias="route_types"),
+    ligne_ids: List[int] = Query(default_factory=list, alias="ligne_ids"),
+    ag_ids: List[int] = Query(default_factory=list, alias="id_ag_num"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Return 4 KPIs (nb_lignes, nb_arrets, nb_courses, kcc_total) in one call."""
+    """Return 4 KPIs (nb_lignes, nb_arrets, nb_courses, kcc_total) in one call,
+    narrowed by the global dashboard filter context."""
     _authorize_project(project_id, db, current_user)
-    return build_kpis(project_id, jour_type, route_types, db)
+    return build_kpis(
+        project_id,
+        jour_type,
+        route_types,
+        db,
+        ligne_ids=ligne_ids,
+        ag_ids=ag_ids,
+    )
 
 
 @router.get("/{project_id}/export/geopackage")

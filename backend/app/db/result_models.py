@@ -9,7 +9,7 @@ Pivot tables (E_1, E_4, F_1, F_3, F_4) are stored in long format (melted):
   the worker transforms the wide-format CSV (columns "1"–"7" for Type_Jour)
   into rows with (type_jour, metric) before insertion.
 """
-from sqlalchemy import Column, Integer, String, Float, ForeignKey
+from sqlalchemy import Column, Index, Integer, String, Float, ForeignKey
 from .database import Base
 
 
@@ -53,6 +53,9 @@ class ResultB1Ligne(Base):
     mode             = Column(String)
     Origin           = Column(String)
     Destination      = Column(String)
+    __table_args__ = (
+        Index("ix_b1_project_ligne", "project_id", "id_ligne_num"),
+    )
 
 
 class ResultB2SousLigne(Base):
@@ -111,6 +114,10 @@ class ResultC2Itineraire(Base):
     TH             = Column(Float)
     heure_depart   = Column(String)
     heure_arrive   = Column(String)
+    __table_args__ = (
+        Index("ix_c2_project_ligne_service", "project_id", "id_ligne_num", "id_service_num"),
+        Index("ix_c2_project_ag", "project_id", "id_ag_num"),
+    )
 
 
 class ResultC3ItineraireArc(Base):
@@ -158,6 +165,12 @@ class ResultD2ServiceJourtype(Base):
     id_service_num = Column(Integer)
     Date_GTFS      = Column(String)
     Type_Jour      = Column(Integer)
+    __table_args__ = (
+        Index(
+            "ix_d2_project_ligne_service_jour",
+            "project_id", "id_ligne_num", "id_service_num", "Type_Jour",
+        ),
+    )
 
 
 # ── Pivot tables stored in long format ────────────────────────────────────────
@@ -173,6 +186,9 @@ class ResultE1PassageAG(Base):
     stop_lon   = Column(Float)
     type_jour  = Column(Integer)
     nb_passage = Column(Float)
+    __table_args__ = (
+        Index("ix_e1_project_jour", "project_id", "type_jour"),
+    )
 
 
 class ResultE4PassageArc(Base):

@@ -14,6 +14,7 @@ from app.db.models import Project
 from app.db.result_models import (
     ResultA1ArretGenerique,
     ResultB1Ligne,
+    ResultC2Itineraire,
     ResultF1CourseLigne,
 )
 
@@ -64,13 +65,28 @@ def result_data(test_engine):
         for i, v in enumerate([10.0, 25.0, 50.0, 80.0, 150.0], start=1)
     ])
 
+    # C_2 rows — line × stop bridge used by /resolve to cross-derive ag_ids
+    # from a line filter (and ligne_ids from a stop filter).
+    #   Ligne 1 serves AGs {1, 2, 3}
+    #   Ligne 2 serves AGs {2, 3}
+    #   Ligne 3 serves AGs {4, 5}
+    session.add_all([
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ligne_num=1, id_ag_num=1, ordre=1),
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ligne_num=1, id_ag_num=2, ordre=2),
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ligne_num=1, id_ag_num=3, ordre=3),
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ligne_num=2, id_ag_num=2, ordre=1),
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ligne_num=2, id_ag_num=3, ordre=2),
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ligne_num=3, id_ag_num=4, ordre=1),
+        ResultC2Itineraire(project_id=PROJECT_ID, id_ligne_num=3, id_ag_num=5, ordre=2),
+    ])
+
     session.commit()
     session.close()
 
     yield
 
     session = Session()
-    for model in (ResultF1CourseLigne, ResultB1Ligne, ResultA1ArretGenerique):
+    for model in (ResultF1CourseLigne, ResultC2Itineraire, ResultB1Ligne, ResultA1ArretGenerique):
         session.query(model).filter(model.project_id == PROJECT_ID).delete(synchronize_session=False)
     session.query(Project).filter(
         Project.id.in_([PROJECT_ID, OTHER_PROJECT_ID])
@@ -284,7 +300,8 @@ def test_resolve_endpoint_returns_distinct_canonical_ids(
     # B_1 fixture: (id_ligne_num=1, route_short_name=L1, route_type=3),
     #              (2, L2, 3), (3, T3, 0).  Filtering on a non-canonical column
     #              (route_short_name) must collapse to canonical ligne_ids /
-    #              route_types of matching rows.
+    #              route_types of matching rows.  ag_ids derives from C_2:
+    #              lignes 1+2 serve AGs {1, 2, 3}.
     r = isolated_client_authed.get(
         f"{BASE_URL}/b1/resolve?filter[route_short_name]=in:L1,L2"
     )
@@ -292,6 +309,7 @@ def test_resolve_endpoint_returns_distinct_canonical_ids(
     body = r.json()
     assert body["ligne_ids"] == [1, 2]
     assert body["route_types"] == ["3"]
+    assert body["ag_ids"] == [1, 2, 3]
 
 
 def test_resolve_endpoint_no_filters_returns_all(isolated_client_authed, result_data):
@@ -300,6 +318,24 @@ def test_resolve_endpoint_no_filters_returns_all(isolated_client_authed, result_
     body = r.json()
     assert body["ligne_ids"] == [1, 2, 3]
     assert body["route_types"] == ["0", "3"]
+    # Union of AGs served by every line via C_2 = {1, 2, 3, 4, 5}.
+    assert body["ag_ids"] == [1, 2, 3, 4, 5]
+
+
+def test_resolve_endpoint_cross_table_ag_to_ligne(
+    isolated_client_authed, result_data
+):
+    # Filter A_1 by stop_name → ag_ids comes from the source table directly,
+    # ligne_ids is cross-derived from C_2 (which lines pass through that AG).
+    # AG 2 is served by lignes 1 and 2; route_types of {1, 2} = {3}.
+    r = isolated_client_authed.get(
+        f"{BASE_URL}/a1/resolve?filter[stop_name]=in:Stop B"
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ag_ids"] == [2]
+    assert body["ligne_ids"] == [1, 2]
+    assert body["route_types"] == ["3"]
 
 
 def test_resolve_endpoint_404_for_unknown_table(isolated_client_authed, result_data):
@@ -315,10 +351,11 @@ def test_resolve_endpoint_400_for_unknown_column(isolated_client_authed, result_
 def test_resolve_endpoint_empty_when_table_lacks_canonical_columns(
     isolated_client_authed, result_data
 ):
-    # A_1 has neither id_ligne_num nor route_type — both lists must be empty.
-    r = isolated_client_authed.get(f"{BASE_URL}/a1/resolve")
+    # D_1 has neither id_ligne_num nor id_ag_num nor route_type — every list
+    # must be empty (no source projection, no C_2 derivation possible).
+    r = isolated_client_authed.get(f"{BASE_URL}/d1/resolve")
     assert r.status_code == 200
-    assert r.json() == {"ligne_ids": [], "route_types": []}
+    assert r.json() == {"ligne_ids": [], "route_types": [], "ag_ids": []}
 
 
 def test_resolve_endpoint_wrong_project(isolated_client_authed, result_data):
