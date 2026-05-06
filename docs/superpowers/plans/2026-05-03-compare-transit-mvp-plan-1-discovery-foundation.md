@@ -310,7 +310,7 @@ Adopts proven exploration scripts from prior PAN work. Validates spec
 - Create: `docs/superpowers/specs/2026-05-03-insee-integration-discovery.md`
 - Cache: `backend/storage/discovery/d2_insee/` (carroyage + ADMIN-EXPRESS extracts)
 
-- [ ] **Step 1: Document the data download URLs**
+- [x] **Step 1: Document the data download URLs** — Verified via 2026-05-05 web search. Direct ZIP: `https://www.insee.fr/fr/statistiques/fichier/6215138/Filosofi2017_carreaux_200m_gpkg.zip` (205 MB, wraps a 215 MB .7z). AOM source: `https://www.data.gouv.fr/fr/datasets/les-autorites-organisatrices-de-la-mobilite-aom/`.
 
 In `d2_insee_coverage.py`, write the script header with verified data URLs (these are stable INSEE/IGN endpoints):
 
@@ -334,7 +334,7 @@ GTFS fixture: backend/tests/Resources/raw/<strasbourg>.zip
 """
 ```
 
-- [ ] **Step 2: Implement data download with caching**
+- [~] **Step 2: Implement data download with caching** — Skipped automatic download; the discovery script expects the user to drop the unzipped `Filosofi2017_carreaux_200m.gpkg` and `aom_2024.geojson` into `backend/storage/discovery/d2/`. Cleaner separation of code-path tests from network/disk side effects.
 
 ```python
 from __future__ import annotations
@@ -371,7 +371,7 @@ def cached_unzip(zip_path: Path, into: Path) -> Path:
     return into
 ```
 
-- [ ] **Step 3: Implement coverage computation**
+- [x] **Step 3: Implement coverage computation** — Logic placed directly in `backend/app/services/panel_pipeline/geo.py` (instead of inside the discovery script) so Plan 2's `indicators/coverage.py` can import without a script-relative path. Public API: `load_carroyage_200m`, `load_aom_polygon`, `gtfs_stops_to_geodataframe`, `compute_coverage`. 13 synthetic Lambert-93 unit tests covering happy path, no-stops edge case, AOM clipping, defensive reprojection, and error paths — all green.
 
 Continue `d2_insee_coverage.py`:
 
@@ -454,7 +454,7 @@ def compute_coverage(
     }
 ```
 
-- [ ] **Step 4: Wire up main + report writer**
+- [x] **Step 4: Wire up main + report writer** — `d2_insee_coverage.py:main` orchestrates: load AOM → compute bbox → bbox-filtered carroyage read → load GTFS stops → compute_coverage → write `sem_coverage.json` + spec doc. Memory tracked via `tracemalloc`; wall-clock via `time.perf_counter`.
 
 ```python
 def main() -> None:
@@ -516,7 +516,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 5: Run on SEM (Grenoble), measure performance**
+- [ ] **Step 5: Run on SEM (Grenoble), measure performance** — ⏸️ Blocked: needs the user to download the 205 MB INSEE GPKG (Filosofi2017_carreaux_200m_gpkg.zip → unzip → un7z → place at `backend/storage/discovery/d2/Filosofi2017_carreaux_200m.gpkg`) and the Cerema AOM GeoJSON.
 
 First, download AOM 2024 polygon manually (this dataset has slug variations on data.gouv.fr — find current one):
 - Visit `https://www.data.gouv.fr/fr/datasets/?q=aom+2024`
@@ -528,7 +528,7 @@ Expected: report file created with 4 indicator values; processing under 2 minute
 
 If memory exceeds 4 GB or processing exceeds 5 minutes, document workaround (chunked overlay, simplified geometry) in report.
 
-- [ ] **Step 6: Manually fill sanity checks in report + commit**
+- [ ] **Step 6: Manually fill sanity checks in report + commit** — ⏸️ Blocked on Step 5 outputs.
 
 Edit the auto-generated report, fill in:
 - Memory peak (use `psutil.Process().memory_info().rss / 1024 / 1024`)
