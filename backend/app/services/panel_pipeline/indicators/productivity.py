@@ -213,34 +213,38 @@ def _kcc_year(chain: _Chain) -> float:
 
 
 def _courses_day_avg(chain: _Chain) -> float | None:
-    """Spec §5.1 A: average daily trip executions across the service window.
+    """Spec §5.1 A + §11 contract clause: Σ F_1_Nombre_Courses_Lignes.courses / total_days.
 
-    Each (course, date) pair where the course's service is active on that
-    date counts as one trip execution. Total executions / number of distinct
-    calendar dates in the window = average trips per day.
+    Returns the F_1 pivot grand total (representative-day trip counts across all
+    lines × jour-types) divided by total distinct dates in the service window.
 
-    This is a network-wide measure, not per-line, so it does not use the
-    representative-day pivot from `service_jour_type` (which would
-    under-count days where multiple jour-types coexist). It uses the raw
-    `service_dates` cross-product instead.
+    Note: this is NOT the average number of trip executions per calendar day.
+    The spec contract defines `total_days` as the analysis window span and
+    counts trips via the representative-day pivot, so the result reflects
+    average trips weighted by jour-type composition rather than literal
+    daily executions. The cross-product semantics ("trips executed per day")
+    is a defensible alternative but would require a spec amendment.
 
     Input Schema (via chain):
-        courses:       [id_course_num, id_service_num, ...]
-        service_dates: [id_service_num, Date_GTFS, ...]
-    Output: float (avg trips per day) or None if no service dates.
+        sjt, courses_export, type_vac, lignes_export — passed through to
+            `nb_course_ligne` (canonical F_1 worker).
+        service_dates: [id_service_num, Date_GTFS, ...] — for total_days count.
+    Output: float (Σ F_1 / total_days) or None if no service dates / no F_1 data.
     """
-    sd = chain.service_dates
-    if sd.empty:
+    from app.services.gtfs_core.gtfs_generator import nb_course_ligne
+
+    nb_df = nb_course_ligne(
+        chain.sjt, chain.courses_export, chain.type_vac, chain.lignes_export,
+    )
+    id_cols = {"id_ligne_num", "route_short_name", "route_long_name"}
+    val_cols = [c for c in nb_df.columns if c not in id_cols]
+    if not val_cols:
         return None
-    total_days = sd["Date_GTFS"].nunique()
+    grand_total_trips = float(nb_df[val_cols].sum().sum())
+    total_days = int(chain.service_dates["Date_GTFS"].nunique())
     if total_days == 0:
         return None
-    # Each row of merged frame = one (course, date) execution.
-    merged = chain.courses[["id_course_num", "id_service_num"]].merge(
-        sd[["id_service_num", "Date_GTFS"]], on="id_service_num"
-    )
-    total_executions = float(len(merged))
-    return total_executions / float(total_days) if total_days > 0 else None
+    return grand_total_trips / total_days
 
 
 def _peak_hour_courses(chain: _Chain) -> float | None:
@@ -253,10 +257,13 @@ def _peak_hour_courses(chain: _Chain) -> float | None:
     ending boundary). The indicator is the average of those daily peaks
     across all dates that have at least one peak-hour trip.
 
-    Returning a per-date average rather than a representative-day value
-    averages over weekly cycles (Sundays drag the mean down vs weekdays);
-    that's the spec intent — it's a network-typical peak, not a rush-hour
-    maximum on the busiest weekday.
+    Plan 2 Assumption A11 (derived design): per-date averaging is a defensible
+    interpretation of the spec text but is not literally specified. The spec
+    gives no explicit aggregation rule across calendar days, so we average
+    daily peaks rather than report a single "max-peak-on-busiest-day" value.
+    This produces a network-typical peak that absorbs weekly cycles
+    (Sundays drag the mean down vs weekdays) — it's not a rush-hour maximum
+    on the busiest weekday. Documented as an Assumption rather than spec-amended.
 
     Design choice: takes `chain` only (no separate `stop_times` arg) because
     `h_dep_num` on `courses_export` already contains the first-stop departure
@@ -311,6 +318,15 @@ def _service_amplitude(chain: _Chain) -> float | None:
     h_arr_num can exceed 1.0 for after-midnight services — that's fine,
     the subtraction still produces the correct duration since h_dep_num
     of the same trip is anchored on the same day boundary.
+
+    Plan 2 Assumption A10 (derived design): the literal spec wording is
+    "max(stop_time) − min(stop_time)" (singular), which would suggest a
+    single network-wide amplitude over the entire window. We instead
+    compute per-date amplitudes and average them, which yields a "typical
+    service day" amplitude rather than a window-spanning max. This avoids
+    inflating amplitude when the window contains heterogeneous days
+    (e.g. weekday late-night + weekend early-morning). Documented as an
+    Assumption rather than spec-amended.
 
     Input Schema (via chain):
         courses_export: [id_course_num, id_service_num, h_dep_num, h_arr_num, ...]
