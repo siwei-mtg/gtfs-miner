@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 
 def run_panel_pipeline(feed_id: str) -> None:
     """
@@ -33,15 +35,36 @@ _FIXTURE_PATHS: dict[str, Path] = {
     "ginko": _FIXTURES_ROOT / "gtfs-20240704-090655.zip",
 }
 
+_AOM_FIXTURES_YAML = (
+    Path(__file__).resolve().parents[3]
+    / "tests" / "panel_pipeline" / "data" / "aom_meta_fixtures.yaml"
+)
+
+
+def _load_aom_fixture(fixture: str) -> dict:
+    """Load AOM population/area for one of the 3 packaged GTFS fixtures.
+
+    Falls back to a stub (population=1, area_km2=1.0) if the YAML file is
+    absent (e.g. production-only deploys without test data). Density tests
+    run only when the YAML is present, so this fallback keeps the helper
+    safe for non-test contexts.
+    """
+    if not _AOM_FIXTURES_YAML.exists():
+        return {"population": 1, "area_km2": 1.0, "display_name": fixture}
+    return yaml.safe_load(_AOM_FIXTURES_YAML.read_text(encoding="utf-8"))[fixture]
+
 
 def run_panel_pipeline_for_fixture(fixture: str) -> dict[str, float]:
-    """Test helper: run pure compute() on a packaged test fixture with stub AomMeta.
+    """Test helper: run pure compute() on a packaged test fixture with real AomMeta.
 
     Used by `test_kcc_equivalence_contract.py` to verify the panel KCC matches
-    the full pipeline KCC within 0.1% (spec §11). The AomMeta is stubbed
-    because the fixtures don't have AOM polygons available in the test
-    environment — coverage indicators will populate as None, which is fine
-    for this contract test.
+    the full pipeline KCC within 0.1% (spec §11), and by Task 2.4 density
+    tests which need real population/area to verify the ratio arithmetic.
+
+    AomMeta values come from `tests/panel_pipeline/data/aom_meta_fixtures.yaml`.
+    The polygon is still stubbed (1×1 box at origin in L93) — coverage
+    indicators populate as None for these fixtures, which is fine for the
+    contract / productivity / density tests that consume this helper.
 
     Args:
         fixture: One of "sem", "solea", "ginko" (matches d4_kcc/baselines.json keys).
@@ -54,11 +77,12 @@ def run_panel_pipeline_for_fixture(fixture: str) -> dict[str, float]:
 
     from app.services.panel_pipeline.compute import AomMeta, compute
 
+    aom = _load_aom_fixture(fixture)
     meta = AomMeta(
         slug=fixture,
-        population=1,
-        area_km2=1.0,
-        polygon_l93=box(0, 0, 1, 1),
+        population=int(aom["population"]),
+        area_km2=float(aom["area_km2"]),
+        polygon_l93=box(0, 0, 1, 1),  # stub — coverage indicators degrade None
         methodology_commit="test",
     )
     bundle = compute(_FIXTURE_PATHS[fixture], meta)

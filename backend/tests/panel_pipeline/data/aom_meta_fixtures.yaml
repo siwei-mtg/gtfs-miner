@@ -1,0 +1,15 @@
+# AOM population + area for the 3 test fixtures.
+# Sources: Cerema MOBI / INSEE (population), data.gouv.fr AOM polygons (area).
+# Used by test_indicators_density.py to compute expected density values.
+sem:
+  display_name: "Métropole de Grenoble (SMTC)"
+  population: 445_000
+  area_km2: 541.0
+solea:
+  display_name: "Mulhouse Alsace Agglomération"
+  population: 220_000
+  area_km2: 380.0
+ginko:
+  display_name: "Grand Besançon"
+  population: 192_000
+  area_km2: 213.0
