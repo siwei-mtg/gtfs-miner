@@ -1001,11 +1001,11 @@ def test_kcc_equivalence(fixture):
 |---|------|---------|
 | Q1 | PAN 历史数据可追溯到哪一年？每网络平均多少版本？ | D1（已完成） |
 | Q2 | 月度 cron 是否合适？还是需要更频繁？ | D1（已完成） |
-| Q3 | INSEE 200m carroyage 数据量级与处理性能 | D2 |
-| Q4 | MobilityData validator Java vs Python 端口选择 | D3 |
+| Q3 | INSEE 200m carroyage 数据量级与处理性能 | D2（部分）→ `geo.py` + 13 单元测试就绪；e2e SEM 测量待用户重新下载 Filosofi zip（当前 zip 38MB，应为 205MB） |
+| Q4 | MobilityData validator Java vs Python 端口选择 | D3（已完成）→ subprocess + Java CLI（v7.1.0），3 fixtures 平均 <3.5s；详见 `2026-05-03-validator-integration-discovery.md` |
 | Q5 | 双管线 KCC 误差实际值是否 < 0.1%？ | D4（已完成） |
 | Q6 | Pro 套餐定价（V1 引入时再确定，参考"Pro 通知我"角色分布） | V1 阶段 |
-| Q7 | 法国特定 GTFS 质量补充规则清单 | D3 |
+| Q7 | 法国特定 GTFS 质量补充规则清单 | D3（部分）→ MobilityData v7.1.0 默认规则覆盖结构性问题（`expired_calendar`、`stop_too_far_from_shape`、`fast_travel_between_consecutive_stops` 等）；FR 特定规则（feed_info contact email/url 强制、SIRI conformance、tarif 可达性）待 Plan 2 W4 收集 AOM 反馈后补 |
 | **🆕 Q8** | DSP timeline 自动化（BOAMP 爬虫）何时引入？人工 curate 边际成本何时超过自动化收益？ | D5 + V1 阶段 |
 | **🆕 Q9** | Reorg detector 阈值最优值？是否需要按 tier 区分阈值？ | D6 |
 | **🆕 Q10** | 第一个 anchor paying customer 是谁？通过什么渠道接触？（私下访谈 Transamo / Transdev 等比 launch 后 cold outreach 高效 10×） | W4 邮件接洽阶段 |

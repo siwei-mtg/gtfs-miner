@@ -107,7 +107,7 @@ backend/app/services/panel_pipeline/data/
 - Create: `docs/superpowers/specs/2026-05-03-pan-history-discovery.md`
 - Cache: `backend/storage/discovery/d1_pan/` (gitignored — outputs reusable across plans)
 
-- [ ] **Step 1: Add discovery storage to .gitignore + add deps**
+- [x] **Step 1: Add discovery storage to .gitignore + add deps** — Done in commit `df8a6f1` (gitignore) + `3a972b9` (deps).
 
 Append to `backend/.gitignore`:
 
@@ -124,7 +124,7 @@ requests==2.32.3
 
 Run: `..\venv\Scripts\pip install remotezip==0.12.3 requests==2.32.3`
 
-- [ ] **Step 2: Copy + adapt the inventory + dedup scripts**
+- [x] **Step 2: Copy + adapt the inventory + dedup scripts** — `d1a_pan_inventory.py` + `d1b_dedup_per_network.py` committed.
 
 Copy `C:\Users\wei.si\Projets\GTFS\verify_transport_gouv_api.py` → `backend/scripts/discovery/d1a_pan_inventory.py`. Apply only these edits:
 
@@ -138,7 +138,7 @@ Copy `C:\Users\wei.si\Projets\GTFS\fetch_dataset_dedup.py` → `backend/scripts/
 
 Both scripts can otherwise be copied verbatim — the API endpoints and dedup logic are validated.
 
-- [ ] **Step 3: Run inventory (Step A — fast)**
+- [x] **Step 3: Run inventory (Step A — fast)** — Output cached at `backend/storage/discovery/d1_pan/datasets_gtfs_inventory.csv`.
 
 ```powershell
 cd backend
@@ -147,7 +147,7 @@ cd backend
 
 Expected: `storage/discovery/d1_pan/datasets_gtfs_inventory.csv` with **463 rows**. Time: ~30s.
 
-- [ ] **Step 4: Run history depth scan (Step B — concurrent, ~10–15 min)**
+- [x] **Step 4: Run history depth scan (Step B — concurrent, ~10–15 min)** — Output cached at `history_depth_by_dataset.csv`.
 
 ```powershell
 ..\venv\Scripts\python scripts\discovery\d1a_pan_inventory.py b
@@ -155,11 +155,11 @@ Expected: `storage/discovery/d1_pan/datasets_gtfs_inventory.csv` with **463 rows
 
 Expected: `history_depth_by_dataset.csv`. Logs progress every 25 datasets. Expect ~455 datasets with non-empty history. Total raw rows ~122,558.
 
-- [ ] **Step 5: Skip Step C (cellar sampling) — already done historically**
+- [x] **Step 5: Skip Step C (cellar sampling) — already done historically** — `cellar_sampling_results.csv` + `gtfs_size_ratios.csv` copied into discovery cache.
 
 Wei has `cellar_sampling_results.csv` from previous run. Optionally re-run if PAN performance characteristics may have changed; otherwise copy the existing CSV from `C:\Users\wei.si\Projets\GTFS\cellar_sampling_results.csv` into `backend/storage/discovery/d1_pan/`.
 
-- [ ] **Step 6: Test dedup on 1 sample network — Strasbourg CTS**
+- [x] **Step 6: Test dedup on 1 sample network — Strasbourg CTS** — Strasbourg CTS + Transilien dedup tests both produced `manifest_dedup.parquet` outputs.
 
 Pick a small-medium network from inventory to validate the dedup flow end-to-end:
 
@@ -180,7 +180,7 @@ Expected: produces `backend/storage/discovery/d1_pan/strasbourg_archive/manifest
 
 **Skip the `download` step** — that's Plan 2 backfill territory. We only want to confirm dedup works.
 
-- [ ] **Step 7: Generate the discovery report**
+- [x] **Step 7: Generate the discovery report** — `docs/superpowers/specs/2026-05-03-pan-history-discovery.md` produced.
 
 Create `backend/scripts/discovery/d1_report.py`:
 
@@ -274,7 +274,7 @@ if __name__ == "__main__":
 Run: `..\venv\Scripts\python scripts\discovery\d1_report.py`
 Expected: report file created at `docs/superpowers/specs/2026-05-03-pan-history-discovery.md`.
 
-- [ ] **Step 8: Manually verify dedup ratio assumption + commit**
+- [x] **Step 8: Manually verify dedup ratio assumption + commit** — Committed in `3a972b9 feat(panel): D1 discovery + panel_pipeline skeleton + peer groups`.
 
 Open the generated report. Verify:
 - Total datasets ≈ 463
@@ -516,7 +516,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 5: Run on SEM (Grenoble), measure performance** — ⏸️ Blocked: needs the user to download the 205 MB INSEE GPKG (Filosofi2017_carreaux_200m_gpkg.zip → unzip → un7z → place at `backend/storage/discovery/d2/Filosofi2017_carreaux_200m.gpkg`) and the Cerema AOM GeoJSON.
+- [ ] **Step 5: Run on SEM (Grenoble), measure performance** — ⏸️ Blocked. **2026-05-08 update**: AOM 2024 GeoJSON (6.7 MB) is in place, but the Filosofi zip in `backend/storage/discovery/d2/` is **truncated to 38 MB (expected ~205 MB)** — `7z l` reports "Unexpected end of archive". User must redownload `Filosofi2017_carreaux_200m_gpkg.zip` from `https://www.insee.fr/fr/statistiques/fichier/6215138/Filosofi2017_carreaux_200m_gpkg.zip`, then unzip → un7z → place at `Filosofi2017_carreaux_200m.gpkg`.
 
 First, download AOM 2024 polygon manually (this dataset has slug variations on data.gouv.fr — find current one):
 - Visit `https://www.data.gouv.fr/fr/datasets/?q=aom+2024`
@@ -746,7 +746,7 @@ Validates spec §12 D3. Confirms subprocess-Java approach; locks output parsing.
 - Create: `docs/superpowers/specs/2026-05-03-kcc-equivalence-discovery.md`
 - Create: `backend/tests/panel_pipeline/test_kcc_equivalence_contract.py` (skipped placeholder, activated in Plan 2)
 
-- [ ] **Step 1: Implement KCC extraction from current pipeline output**
+- [x] **Step 1: Implement KCC extraction from current pipeline output** — `backend/scripts/discovery/d4_kcc_equivalence.py` committed in `ac9e9f9`.
 
 Create `d4_kcc_equivalence.py`:
 
@@ -852,13 +852,13 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 2: Verify the import path for full pipeline**
+- [x] **Step 2: Verify the import path for full pipeline** — Resolved during D4 implementation (script imports validated at runtime).
 
 Run: `venv/Scripts/python -c "from app.services.gtfs_core.pipeline import run_pipeline_full; print('OK')"`
 If import fails, fix the import in the script to match the actual public API.
 If `pipeline.py` exposes a different function name (e.g., `run_full`, `process_gtfs`), update the import + call accordingly.
 
-- [ ] **Step 3: Run baseline extraction**
+- [x] **Step 3: Run baseline extraction** — `backend/storage/discovery/d4_kcc/baselines.json` populated with 3 fixtures.
 
 Run from `backend/` directory:
 ```powershell
@@ -868,7 +868,7 @@ cd backend
 Expected: 3 baseline KCC values logged + JSON file at `storage/discovery/d4_kcc/baselines.json` + report file.
 Time: ~30s for SEM, ~1min for SOLEA, ~30s for ginko.
 
-- [ ] **Step 4: Create the placeholder contract test**
+- [x] **Step 4: Create the placeholder contract test** — `backend/tests/panel_pipeline/test_kcc_equivalence_contract.py` (3 skipped cases: sem/solea/ginko).
 
 Create `backend/tests/panel_pipeline/__init__.py` (empty) and `backend/tests/panel_pipeline/test_kcc_equivalence_contract.py`:
 
@@ -905,12 +905,12 @@ def test_kcc_equivalence(fixture: str) -> None:
     )
 ```
 
-- [ ] **Step 5: Verify test discovery (skip status)**
+- [x] **Step 5: Verify test discovery (skip status)** — Confirmed: 3 SKIPPED in panel_pipeline/ test run.
 
 Run: `cd backend && ..\venv\Scripts\python -m pytest tests/panel_pipeline/test_kcc_equivalence_contract.py -v`
 Expected: 3 tests, all reported as SKIPPED.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit** — Committed in `ac9e9f9 feat(panel): D4 KCC equivalence baseline (Plan 1 Task 4)`.
 
 ```powershell
 git add backend/scripts/discovery/d4_kcc_equivalence.py
@@ -924,7 +924,7 @@ Validates spec §12 D4 + §11. Captures 3 fixture baselines for Plan 2
 to verify panel_pipeline KCC equivalence within 0.1%."
 ```
 
-- [ ] **Step 7: Decide baselines.json git policy**
+- [x] **Step 7: Decide baselines.json git policy** — Chose **ignore**: `backend/storage/discovery/` is gitignored end-to-end (commit `df8a6f1`), Plan 2 contributors regenerate from fixtures.
 
 Open `.gitignore`. Choose:
 - **Commit baselines** (recommended): they are reproducibility artifacts, small, deterministic given fixture + pipeline version. Comment in `.gitignore`: `# d4_kcc/baselines.json — committed, do not ignore`.
@@ -951,7 +951,7 @@ Document choice in the D4 report.
 - Create: `backend/app/services/panel_pipeline/indicators/{productivity,density,structure,coverage,frequency,accessibility,environment}.py` (stubs)
 - Create: `backend/tests/panel_pipeline/test_skeleton.py`
 
-- [ ] **Step 1: Write the failing skeleton test**
+- [x] **Step 1: Write the failing skeleton test** — `test_skeleton.py` committed.
 
 Create `backend/tests/panel_pipeline/test_skeleton.py`:
 
@@ -981,12 +981,12 @@ def test_indicator_result_typed_dict_shape() -> None:
     assert val["unit"] == "km"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails** — Confirmed RED stage at TDD time.
 
 Run: `cd backend && ..\venv\Scripts\python -m pytest tests/panel_pipeline/test_skeleton.py -v`
 Expected: FAIL on import error (module does not exist).
 
-- [ ] **Step 3: Create types.py**
+- [x] **Step 3: Create types.py** — `INDICATOR_IDS` frozenset of 38 IDs in place.
 
 Create `backend/app/services/panel_pipeline/types.py`:
 
@@ -1032,7 +1032,7 @@ INDICATOR_IDS: frozenset[str] = frozenset({
 assert len(INDICATOR_IDS) == 38, f"INDICATOR_IDS count mismatch: {len(INDICATOR_IDS)}"
 ```
 
-- [ ] **Step 4: Create stub modules**
+- [x] **Step 4: Create stub modules** — All 7 indicator stubs + run/quality/geo/aggregator stubs in place.
 
 Create `backend/app/services/panel_pipeline/__init__.py`:
 
@@ -1083,12 +1083,12 @@ from __future__ import annotations
 # Stubs — implemented in Plan 2.
 ```
 
-- [ ] **Step 5: Run skeleton test to verify it passes**
+- [x] **Step 5: Run skeleton test to verify it passes** — 3/3 PASS.
 
 Run: `cd backend && ..\venv\Scripts\python -m pytest tests/panel_pipeline/test_skeleton.py -v`
 Expected: 3 tests PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit** — Included in commit `3a972b9 feat(panel): D1 discovery + panel_pipeline skeleton + peer groups`.
 
 ```powershell
 git add backend/app/services/panel_pipeline/
@@ -1109,7 +1109,7 @@ to be filled in Plan 2."
 - Modify: `backend/app/db/models.py` (append at end)
 - Create: `backend/tests/panel_pipeline/test_models.py`
 
-- [ ] **Step 1: Write failing model test**
+- [x] **Step 1: Write failing model test** — `test_models.py` committed.
 
 Create `backend/tests/panel_pipeline/test_models.py`:
 
@@ -1221,12 +1221,12 @@ def test_panel_quality_jsonb(session) -> None:
     assert "notices" in fetched.validator_errors
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails** — Confirmed RED stage at TDD time.
 
 Run: `cd backend && ..\venv\Scripts\python -m pytest tests/panel_pipeline/test_models.py -v`
 Expected: FAIL on import error (models do not exist).
 
-- [ ] **Step 3: Add models to backend/app/db/models.py**
+- [x] **Step 3: Add models to backend/app/db/models.py** — 6 panel_* models appended.
 
 Append at end of `backend/app/db/models.py`:
 
@@ -1322,12 +1322,12 @@ class PanelPeerGroup(Base):
     member_count = Column(Integer, default=0)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && ..\venv\Scripts\python -m pytest tests/panel_pipeline/test_models.py -v`
 Expected: 3 tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit** — Included in commit `886206c feat(panel): SQLAlchemy models + Alembic migration + PAN client (Plan 1 Tasks 6/7/8/10)`.
 
 ```powershell
 git add backend/app/db/models.py
@@ -1346,7 +1346,7 @@ Spec §6.3 storage schema. SQLite round-trip tests verify shape."
 **Files:**
 - Create: `backend/alembic/versions/<auto>_add_panel_tables.py`
 
-- [ ] **Step 1: Generate migration**
+- [x] **Step 1: Generate migration** — `f1a2b3c4d5e6_add_panel_tables.py` produced.
 
 Run from `backend/` directory:
 ```powershell
@@ -1355,7 +1355,7 @@ cd backend
 ```
 Expected: a new file in `backend/alembic/versions/<hash>_add_panel_tables.py` with `op.create_table("panel_networks", ...)` for each of the 6 tables.
 
-- [ ] **Step 2: Inspect and clean the migration**
+- [x] **Step 2: Inspect and clean the migration** — Reviewed; all 6 tables + FKs + indexes present.
 
 Open the new migration file. Verify:
 - All 6 `op.create_table(...)` calls present (panel_networks, panel_feeds, panel_indicators, panel_indicators_derived, panel_quality, panel_peer_groups)
@@ -1365,7 +1365,7 @@ Open the new migration file. Verify:
 
 If the autogenerate produces noise (like recreating existing tables), manually trim those.
 
-- [ ] **Step 3: Apply migration to dev DB**
+- [x] **Step 3: Apply migration to dev DB** — Applied to local SQLite dev DB.
 
 ```powershell
 cd backend
@@ -1373,7 +1373,7 @@ cd backend
 ```
 Expected: log lines `INFO  [alembic.runtime.migration] Running upgrade <prev> -> <new>, add_panel_tables`. No errors.
 
-- [ ] **Step 4: Verify schema in DB**
+- [x] **Step 4: Verify schema in DB** — All 6 tables present.
 
 ```powershell
 ..\venv\Scripts\python -c "
@@ -1386,7 +1386,7 @@ for t in ['panel_networks','panel_feeds','panel_indicators','panel_indicators_de
 ```
 Expected: all 6 tables print `True`.
 
-- [ ] **Step 5: Test rollback (sanity)**
+- [x] **Step 5: Test rollback (sanity)** — Down then up clean.
 
 ```powershell
 ..\venv\Scripts\python -m alembic downgrade -1
@@ -1394,7 +1394,7 @@ Expected: all 6 tables print `True`.
 ```
 Expected: down then up clean. All 6 tables present after re-upgrade.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit** — Included in commit `886206c`.
 
 ```powershell
 git add backend/alembic/versions/*_add_panel_tables.py
@@ -1413,7 +1413,7 @@ git commit -m "feat(panel): alembic migration for 6 panel_* tables"
 - Create: `backend/app/services/panel_pipeline/pan_client.py`
 - Create: `backend/tests/panel_pipeline/test_pan_client.py`
 
-- [ ] **Step 1: Write failing PAN client tests**
+- [x] **Step 1: Write failing PAN client tests** — `test_pan_client.py` committed.
 
 Create `backend/tests/panel_pipeline/test_pan_client.py`:
 
@@ -1517,12 +1517,12 @@ def test_fetch_history_csv_parses_payload():
     assert rows[0]["payload"]["zip_metadata"][0]["file_name"] == "feed_info.txt"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails** — Confirmed RED stage at TDD time.
 
 Run: `cd backend && ..\venv\Scripts\python -m pytest tests/panel_pipeline/test_pan_client.py -v`
 Expected: FAIL on import error.
 
-- [ ] **Step 3: Implement pan_client.py**
+- [x] **Step 3: Implement pan_client.py** — `PANClient` + `PANDataset/PANResource` dataclasses + `fetch_history_csv` parser.
 
 Create `backend/app/services/panel_pipeline/pan_client.py`:
 
@@ -1695,12 +1695,12 @@ class PANClient:
         self._client.close()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && ..\venv\Scripts\python -m pytest tests/panel_pipeline/test_pan_client.py -v`
 Expected: 4 tests PASS (fetch_dataset_parses_resources, resource_dataclass_normalizes_dates, resolve_short_id, fetch_history_csv_parses_payload).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit** — Included in commit `886206c`.
 
 ```powershell
 git add backend/app/services/panel_pipeline/pan_client.py
@@ -1723,7 +1723,7 @@ and resources_history_csv endpoints (the latter feeds Plan 2 dedup workflow)."
 - Create: `backend/tests/panel_pipeline/test_peer_groups.py`
 - Modify: `backend/requirements.txt` (add `pyyaml`)
 
-- [ ] **Step 1: Add pyyaml dep**
+- [x] **Step 1: Add pyyaml dep** — `pyyaml` in requirements.
 
 Append to `backend/requirements.txt`:
 ```text
@@ -1731,7 +1731,7 @@ pyyaml==6.0.2
 ```
 Run: `..\venv\Scripts\pip install pyyaml==6.0.2`
 
-- [ ] **Step 2: Create peer_groups.yaml**
+- [x] **Step 2: Create peer_groups.yaml** — 7 tiers (T1–T5 + R + I) + exemplars.
 
 Create `backend/app/services/panel_pipeline/data/peer_groups.yaml`:
 
@@ -1779,7 +1779,7 @@ tiers:
     examples: []
 ```
 
-- [ ] **Step 3: Write failing peer_groups test**
+- [x] **Step 3: Write failing peer_groups test** — `test_peer_groups.py` committed.
 
 Create `backend/tests/panel_pipeline/test_peer_groups.py`:
 
@@ -1818,12 +1818,12 @@ def test_classify_tier(pop, has_metro, dominant_mode, cross_commune, expected):
     ) == expected
 ```
 
-- [ ] **Step 4: Run test to verify it fails**
+- [x] **Step 4: Run test to verify it fails** — Confirmed RED stage at TDD time.
 
 Run: `cd backend && ..\venv\Scripts\python -m pytest tests/panel_pipeline/test_peer_groups.py -v`
 Expected: FAIL on import.
 
-- [ ] **Step 5: Implement peer_groups.py**
+- [x] **Step 5: Implement peer_groups.py** — `classify_tier()` + `load_peer_groups()` in place.
 
 Create `backend/app/services/panel_pipeline/peer_groups.py`:
 
@@ -1882,12 +1882,12 @@ def classify_tier(
     return "T5"
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes** — 9/9 PASS (1 load + 8 parametrize).
 
 Run: `cd backend && ..\venv\Scripts\python -m pytest tests/panel_pipeline/test_peer_groups.py -v`
 Expected: 9 tests PASS (1 load test + 8 parametrize cases).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit** — Included in commit `3a972b9`.
 
 ```powershell
 git add backend/requirements.txt
@@ -1908,7 +1908,7 @@ Spec §5.3 MVP simplified version. PCA clustering deferred to V2."
 **Files:**
 - Create: `backend/tests/panel_pipeline/test_foundation_smoke.py`
 
-- [ ] **Step 1: Write the smoke test**
+- [x] **Step 1: Write the smoke test** — `test_foundation_smoke.py` committed.
 
 Create `backend/tests/panel_pipeline/test_foundation_smoke.py`:
 
@@ -1953,7 +1953,7 @@ def test_peer_group_yaml_loads():
     assert set(groups.keys()) == {"T1", "T2", "T3", "T4", "T5", "R", "I"}
 ```
 
-- [ ] **Step 2: Run full panel_pipeline test suite**
+- [x] **Step 2: Run full panel_pipeline test suite** — Verified 2026-05-08: **44 passed, 3 skipped, 0 failed**.
 
 Run: `cd backend && ..\venv\Scripts\python -m pytest tests/panel_pipeline/ -v`
 Expected output (counts may vary by exact parametrize structure):
@@ -1965,26 +1965,26 @@ Expected output (counts may vary by exact parametrize structure):
 - `test_foundation_smoke.py` — 4 PASSED
 - **Total: ~23 PASSED + 3 SKIPPED, 0 FAILED**
 
-- [ ] **Step 3: Run the existing test suite to confirm no regression**
+- [x] **Step 3: Run the existing test suite to confirm no regression** — Verified 2026-05-08: **218 passed, 3 skipped, 0 failed** in 346s (excluding 5 infra-heavy tests: api_pipeline_integration, celery, worker_celery, websocket, progress_replay).
 
 Run: `cd backend && ..\venv\Scripts\python -m pytest -v`
 Expected: previous suite still green; only addition is the new panel tests.
 
-- [ ] **Step 4: Tag the foundation milestone**
+- [x] **Step 4: Tag the foundation milestone** — Tagged 2026-05-08 (`plan1-foundation-complete`, local-only).
 
 ```powershell
 git tag -a plan1-foundation-complete -m "compare-transit.fr Plan 1 complete: discovery + foundation"
 ```
 (do NOT push the tag yet — user controls remote pushes)
 
-- [ ] **Step 5: Commit smoke test**
+- [x] **Step 5: Commit smoke test** — Included in commit `886206c` (smoke test bundled with Tasks 6/7/8/10).
 
 ```powershell
 git add backend/tests/panel_pipeline/test_foundation_smoke.py
 git commit -m "test(panel): end-of-Plan-1 foundation smoke test"
 ```
 
-- [ ] **Step 6: Update spec §17 open questions with discovery findings**
+- [~] **Step 6: Update spec §17 open questions with discovery findings** — Q1/Q2/Q5 backfilled (D1+D4 done); Q4 backfilled 2026-05-08 (D3 = subprocess+Java v7.1.0, <3.5s/feed); Q7 partial (default MobilityData rules listed, FR-specific deferred to W4 AOM feedback). **Q3 (D2 INSEE perf) still pending** — blocked on D2 e2e SEM run.
 
 Open `docs/superpowers/specs/2026-05-03-compare-transit-mvp-design.md` §17. For each Q1–Q5, append answer based on the 4 discovery reports (cross-reference the discovery doc paths).
 
