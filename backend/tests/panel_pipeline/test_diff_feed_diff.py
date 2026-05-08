@@ -44,3 +44,40 @@ def test_feed_diff_identical_full_jaccard():
     assert d.stop_jaccard == 1.0
     assert d.route_jaccard == 1.0
     assert d.stops_added == [] and d.stops_removed == [] and d.stops_modified == {}
+
+
+def test_feed_diff_duplicate_stop_id_raises():
+    """C1 regression: duplicate stop_id in input raises a clear ValueError."""
+    dup = _stops([("S1", "A", 0.0, 0.0), ("S1", "A2", 0.5, 0.0)])
+    clean = _stops([("S1", "A", 0.0, 0.0)])
+    a = {"stops": dup, "routes": _routes([])}
+    b = {"stops": clean, "routes": _routes([])}
+    with pytest.raises(ValueError, match="duplicate stop_id"):
+        feed_diff(a, b)
+
+
+def test_feed_diff_duplicate_route_id_raises():
+    """C1 regression: duplicate route_id raises ValueError."""
+    a = {"stops": _stops([]), "routes": _routes([("R1", "1", 3), ("R1", "1bis", 3)])}
+    b = {"stops": _stops([]), "routes": _routes([("R1", "1", 3)])}
+    with pytest.raises(ValueError, match="duplicate route_id"):
+        feed_diff(a, b)
+
+
+def test_feed_diff_nan_both_sides_not_modified():
+    """C2 regression: NaN on both sides is not a modification."""
+    import math
+    a = {"stops": _stops([("S1", "A", 0.0, math.nan)]), "routes": _routes([])}
+    b = {"stops": _stops([("S1", "A", 0.0, math.nan)]), "routes": _routes([])}
+    d = feed_diff(a, b)
+    assert d.stops_modified == {}
+
+
+def test_feed_diff_nan_to_value_is_modified():
+    """C2 regression: NaN -> value (or value -> NaN) IS a modification."""
+    import math
+    a = {"stops": _stops([("S1", "A", 0.0, math.nan)]), "routes": _routes([])}
+    b = {"stops": _stops([("S1", "A", 0.0, 1.5)]), "routes": _routes([])}
+    d = feed_diff(a, b)
+    assert "S1" in d.stops_modified
+    assert d.stops_modified["S1"]["stop_lon"][0] != d.stops_modified["S1"]["stop_lon"][1]

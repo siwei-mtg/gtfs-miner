@@ -925,9 +925,22 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b)
 
 
+def _ne(x: object, y: object) -> bool:
+    """Compare two scalars, treating NaN-on-both-sides as equal."""
+    if pd.isna(x) and pd.isna(y):
+        return False
+    return x != y
+
+
 def _diff_records(
     a: pd.DataFrame, b: pd.DataFrame, key: str, tracked: Sequence[str],
 ) -> tuple[list[str], list[str], dict[str, dict[str, list]]]:
+    if a[key].duplicated().any():
+        dup_ids = a.loc[a[key].duplicated(), key].astype(str).head().tolist()
+        raise ValueError(f"duplicate {key} in feed a: {dup_ids}")
+    if b[key].duplicated().any():
+        dup_ids = b.loc[b[key].duplicated(), key].astype(str).head().tolist()
+        raise ValueError(f"duplicate {key} in feed b: {dup_ids}")
     a_ids = set(a[key].astype(str))
     b_ids = set(b[key].astype(str))
     added = sorted(b_ids - a_ids)
@@ -942,7 +955,7 @@ def _diff_records(
             field_diffs = {
                 f: [ra.get(f), rb.get(f)]
                 for f in tracked
-                if f in a.columns and f in b.columns and ra.get(f) != rb.get(f)
+                if f in a.columns and f in b.columns and _ne(ra.get(f), rb.get(f))
             }
             if field_diffs:
                 modified[cid] = field_diffs
