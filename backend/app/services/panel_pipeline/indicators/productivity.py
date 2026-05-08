@@ -62,6 +62,11 @@ def compute_all(
             "prod_service_amplitude":    float (hours, max(arr) − min(dep), avg across days),
             "prod_network_length_km":    float (km, Σ Haversine across unique undirected segments),
             "prod_peak_vehicles_needed": float (Σ_route ⌈round_trip_min / peak_headway_min⌉),
+            "_kcc_by_route_type":        dict[int, float] — sentinel side-output
+                                         consumed by environment.compute_all
+                                         (Task 5.5). Leading underscore marks it
+                                         as non-published — `compute()` does not
+                                         surface it in the IndicatorBundle.
         }
         Missing/unavailable values resolve to None.
     """
@@ -84,6 +89,15 @@ def compute_all(
     out["prod_service_amplitude"] = _service_amplitude(chain)
     out["prod_network_length_km"] = _network_length_km(chain)
     out["prod_peak_vehicles_needed"] = _peak_vehicles_needed(chain)
+
+    # Sentinel side-output for environment.env_co2_year_estimated (Task 5.5).
+    # Leading underscore key — NOT a published indicator (filtered out by
+    # `compute()` when iterating INDICATOR_IDS to build the IndicatorBundle).
+    # Carries KCC (km) grouped by GTFS route_type so environment can apply
+    # ADEME emission factors. The sentinel is a `dict[int, float]`, not a
+    # scalar — safe because downstream consumers (density, env) use keyed
+    # access on raw_values, never iterate values blindly.
+    out["_kcc_by_route_type"] = _kcc_by_route_type(chain)
 
     return out
 
@@ -226,6 +240,55 @@ def _kcc_year(chain: _Chain) -> float:
     id_cols = {"id_ligne_num", "route_short_name", "route_long_name"}
     jt_cols = [c for c in kcc_df.columns if c not in id_cols]
     return float(kcc_df[jt_cols].sum().sum())
+
+
+def _kcc_by_route_type(chain: _Chain) -> dict[int, float]:
+    """KCC (km) grouped by GTFS `route_type`. Sentinel for environment indicator.
+
+    Recomputes the F_3_KCC_Lignes pivot via `kcc_course_ligne` (same call as
+    `_kcc_year`), then joins per-route totals to `chain.lignes` on
+    `id_ligne_num` to attach `route_type`, and finally groups by route_type.
+
+    Note: this function intentionally re-runs `kcc_course_ligne` rather than
+    sharing the pivot with `_kcc_year`. The duplication is cheap (one extra
+    pivot per pipeline run, milliseconds on test fixtures) and keeps the
+    `_kcc_year` contract bit-identical — a critical guarantee per the spec
+    §11 KCC equivalence contract test.
+
+    Input Schema (via chain):
+        sjt, courses_export, type_vac, lignes_export — passed to
+            `kcc_course_ligne` (canonical F_3 worker).
+        lignes: [id_ligne_num, route_id, route_type, ...] — produced by
+            `ligne_generate(normed["routes"])`. `route_type` is preserved
+            from `routes_norm` (int8, defaults to 3=bus on missing).
+
+    Output: dict mapping `route_type` (int) → KCC (km, float). Empty dict
+    if no jour-type columns or no route_type column. NaN route_types are
+    dropped silently.
+    """
+    from app.services.gtfs_core.gtfs_generator import kcc_course_ligne
+
+    kcc_df = kcc_course_ligne(
+        chain.sjt, chain.courses_export, chain.type_vac, chain.lignes_export, False
+    )
+    id_cols = {"id_ligne_num", "route_short_name", "route_long_name"}
+    jt_cols = [c for c in kcc_df.columns if c not in id_cols]
+    if not jt_cols:
+        return {}
+
+    if "route_type" not in chain.lignes.columns:
+        return {}
+
+    per_route_km = kcc_df[["id_ligne_num"] + jt_cols].copy()
+    per_route_km["_total_km"] = per_route_km[jt_cols].sum(axis=1)
+
+    typed = per_route_km[["id_ligne_num", "_total_km"]].merge(
+        chain.lignes[["id_ligne_num", "route_type"]],
+        on="id_ligne_num",
+        how="left",
+    )
+    grouped = typed.groupby("route_type")["_total_km"].sum()
+    return {int(k): float(v) for k, v in grouped.items() if pd.notna(k)}
 
 
 def _courses_day_avg(chain: _Chain) -> float | None:

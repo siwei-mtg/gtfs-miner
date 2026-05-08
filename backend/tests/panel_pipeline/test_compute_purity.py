@@ -80,3 +80,24 @@ def test_compute_unit_set_for_every_indicator(sem_meta):
 def test_compute_missing_zip_raises(sem_meta):
     with pytest.raises(FileNotFoundError):
         compute(Path("/tmp/does-not-exist.zip"), sem_meta)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Plan 2 Task 5.6: end-to-end 38-indicator smoke
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("fixture", ["sem", "solea", "ginko"])
+def test_full_38_indicators_populated_or_documented(fixture: str) -> None:
+    """End-to-end Task 5.6: all 38 indicators populate, or fall through to errors[].
+
+    Net floor: 38 - 6 (carroyage cov_*) - 2 (validator-dependent dq_*) = 30.
+    Carroyage GeoPackage is absent in the test environment, so the 6 cov_*
+    indicators degrade to None (compute() routes them to the errors[] map
+    via the FileNotFoundError branch in `_try`). The Java GTFS Validator
+    may also be unavailable, knocking out up to 2 dq_validator_* values.
+    """
+    from app.services.panel_pipeline.run import run_panel_pipeline_for_fixture
+
+    out = run_panel_pipeline_for_fixture(fixture)
+    assert len(out) >= 30, f"{fixture}: only {len(out)}/38 indicators populated"
