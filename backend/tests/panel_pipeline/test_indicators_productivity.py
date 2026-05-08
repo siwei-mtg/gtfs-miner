@@ -91,3 +91,30 @@ def test_productivity_counts_in_plausible_range(fixture: str) -> None:
 
     amp = out["prod_service_amplitude"]
     assert 4 < amp < 24, f"{fixture}: prod_service_amplitude = {amp}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Task 2.3 — advanced indicators (network length + peak vehicles needed)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("fixture", ["sem", "solea", "ginko"])
+def test_productivity_advanced_present_and_positive(fixture: str) -> None:
+    """prod_network_length_km + prod_peak_vehicles_needed populate with positive values."""
+    out = run_panel_pipeline_for_fixture(fixture)
+    for ind_id in ("prod_network_length_km", "prod_peak_vehicles_needed"):
+        assert ind_id in out, f"{fixture}: {ind_id} missing"
+        assert out[ind_id] is not None, f"{fixture}: {ind_id} is None"
+        assert out[ind_id] > 0, f"{fixture}: {ind_id} = {out[ind_id]}"
+
+
+@pytest.mark.parametrize("fixture", ["sem", "solea", "ginko"])
+def test_productivity_advanced_in_plausible_range(fixture: str) -> None:
+    """Sanity bounds on output magnitudes."""
+    out = run_panel_pipeline_for_fixture(fixture)
+    # network_length_km: typical urban networks 50-2000 km
+    assert 30 < out["prod_network_length_km"] < 5_000, \
+        f"{fixture}: prod_network_length_km = {out['prod_network_length_km']}"
+    # peak_vehicles_needed: typical urban networks 20-2000 vehicles
+    assert 3 < out["prod_peak_vehicles_needed"] < 5_000, \
+        f"{fixture}: prod_peak_vehicles_needed = {out['prod_peak_vehicles_needed']}"
