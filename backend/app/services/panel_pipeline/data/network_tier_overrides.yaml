@@ -1,0 +1,7 @@
+# Manual tier assignments for the 30 head networks per spec §22.4.
+# T3-T5 fall through to peer_groups.classify_tier() (rule-based).
+T1: [paris-idfm, lyon, marseille, lille, toulouse]
+T2: [bordeaux, nantes, nice, strasbourg, montpellier, rennes, grenoble, tours, reims, brest]
+R: [ter-grand-est, ter-paca, ter-aura, ter-occitanie, ter-na, ter-hdf, ter-normandie,
+    ter-bfc, ter-cvl, ter-pdl, ter-bretagne, transilien, rer-bd]
+I: []  # 2 conseils départementaux added during Task 4.3 expansion (spec §22.4 unspecified)

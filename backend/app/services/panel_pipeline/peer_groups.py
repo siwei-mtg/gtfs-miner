@@ -13,6 +13,7 @@ import yaml
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 PEER_GROUPS_YAML = DATA_DIR / "peer_groups.yaml"
+TIER_OVERRIDES_YAML = DATA_DIR / "network_tier_overrides.yaml"
 
 
 @lru_cache(maxsize=1)
@@ -50,3 +51,34 @@ def classify_tier(
     if population >= 100_000:
         return "T4"
     return "T5"
+
+
+def apply_tier_overrides(session, yaml_path: Path | None = None) -> int:
+    """Apply tier overrides from network_tier_overrides.yaml to PanelNetwork rows.
+
+    Spec §22.4 — head-network manual tier assignments. Only updates networks whose
+    current tier differs from the YAML-mapped tier.
+
+    Args:
+        session: SQLAlchemy session.
+        yaml_path: optional override; defaults to bundled
+            ``data/network_tier_overrides.yaml``.
+
+    Returns:
+        Number of PanelNetwork rows whose tier was changed.
+    """
+    # Lazy import to avoid pulling in the ORM at module load
+    from app.db.models import PanelNetwork
+
+    path = yaml_path if yaml_path is not None else TIER_OVERRIDES_YAML
+    cfg = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+
+    n_updated = 0
+    for tier, slugs in cfg.items():
+        for slug in slugs or []:
+            n = session.query(PanelNetwork).filter_by(slug=slug).one_or_none()
+            if n is not None and n.tier != tier:
+                n.tier = tier
+                n_updated += 1
+    session.commit()
+    return n_updated
