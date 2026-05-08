@@ -59,3 +59,40 @@ def test_modal_mix_zero_when_mode_absent() -> None:
     assert out["struct_modal_mix_tram"] == 0.0
     assert out["struct_modal_mix_metro"] == 0.0
     assert out["struct_modal_mix_train"] == 0.0
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Task 2.6 — peak amplification, multi-route stops %, route directness
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+ADVANCED_INDICATORS = (
+    "struct_peak_amplification",
+    "struct_multi_route_stops_pct",
+    "struct_route_directness",
+)
+
+
+@pytest.mark.parametrize("fixture", ["sem", "solea", "ginko"])
+def test_structure_advanced_present_and_positive(fixture: str) -> None:
+    """The 3 advanced structure indicators populate with positive non-None values."""
+    out = run_panel_pipeline_for_fixture(fixture)
+    for ind in ADVANCED_INDICATORS:
+        assert ind in out, f"{fixture}: {ind} missing"
+        assert out[ind] is not None, f"{fixture}: {ind} is None"
+        assert out[ind] > 0, f"{fixture}: {ind} = {out[ind]} (expected > 0)"
+
+
+@pytest.mark.parametrize("fixture", ["sem", "solea", "ginko"])
+def test_structure_advanced_in_plausible_range(fixture: str) -> None:
+    """Sanity bounds on the 3 advanced structure indicators."""
+    out = run_panel_pipeline_for_fixture(fixture)
+    # peak_amplification: typical urban networks have peak/offpeak ratio 1.0-5.0
+    assert 0.5 < out["struct_peak_amplification"] < 10.0, \
+        f"{fixture}: peak_amp = {out['struct_peak_amplification']}"
+    # multi_route_stops_pct: typical 5-50% of stops serve multiple routes
+    assert 0.0 <= out["struct_multi_route_stops_pct"] <= 100.0, \
+        f"{fixture}: multi_route = {out['struct_multi_route_stops_pct']}"
+    # route_directness: typical 1.1-2.5 (perfectly straight = 1.0; very meandering = 3+)
+    assert 0.9 < out["struct_route_directness"] < 5.0, \
+        f"{fixture}: directness = {out['struct_route_directness']}"
