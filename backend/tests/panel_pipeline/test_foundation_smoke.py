@@ -31,10 +31,10 @@ def test_all_modules_imported():
         assert mod.__name__.startswith("app.services.panel_pipeline")
 
 
-def test_run_pipeline_raises_until_plan2():
-    """run_panel_pipeline is a stub; Plan 2 implements."""
-    with pytest.raises(NotImplementedError):
-        run.run_panel_pipeline("any-feed-id")
+def test_run_pipeline_rejects_unknown_feed_id():
+    """Plan 2 Task 7.1 implemented run_panel_pipeline. Unknown feed_id → ValueError."""
+    with pytest.raises(ValueError, match="not found"):
+        run.run_panel_pipeline("nonexistent-feed-id")
 
 
 def test_indicator_count_matches_spec():
