@@ -1,0 +1,19 @@
+# Per-indicator scale_factor for the provisional v0 error-margin propagation
+# (Plan 2 Assumption A1). Spec §5.1 H notes the env_co2_year_estimated estimate
+# carries ±30% on diesel-dominant networks and ±50% on mixed-electric.
+#
+# The canonical formula and weights will land in
+# `compare-transit/methodology/methodology/error_propagation.md` before the
+# Plan 4 launch (W16). Until then, this provisional scale_factor controls the
+# final ×scale on top of sqrt(weighted dq deviations).
+default: 1.0
+overrides:
+  cov_pop_300m: 5.0
+  cov_pop_freq_300m: 5.0
+  cov_surface_300m: 5.0
+  cov_median_walk: 5.0
+  cov_pop_weighted_walk: 5.0
+  cov_equity_gini: 5.0
+  env_co2_year_estimated: 30.0
+  # All dq_* indicators implicitly carry margin = 0
+  # (registered with empty dq_dependencies in _registry.py).

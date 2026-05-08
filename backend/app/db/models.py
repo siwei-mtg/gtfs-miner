@@ -111,6 +111,7 @@ class PanelNetwork(Base):
     first_feed_date      = Column(DateTime)
     last_feed_date       = Column(DateTime)
     history_depth_months = Column(Integer)
+    has_metro            = Column(Boolean, default=False, nullable=False)        # v0.2: derived from route_type=1 presence
     created_at           = Column(DateTime, default=datetime.utcnow)
     updated_at           = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -146,24 +147,28 @@ class PanelIndicator(Base):
     """Computed indicator value per (feed, indicator_id) — spec §6.3."""
     __tablename__ = "panel_indicators"
 
-    feed_id      = Column(String, ForeignKey("panel_feeds.feed_id"), primary_key=True)
-    indicator_id = Column(String, primary_key=True, index=True)
-    value        = Column(Float)
-    unit         = Column(String, nullable=False)
-    computed_at  = Column(DateTime, default=datetime.utcnow)
+    feed_id            = Column(String, ForeignKey("panel_feeds.feed_id"), primary_key=True)
+    indicator_id       = Column(String, primary_key=True, index=True)
+    value              = Column(Float)
+    unit               = Column(String, nullable=False)
+    error_margin_pct   = Column(Float)                                       # v0.2: dq propagation
+    methodology_commit = Column(String)                                      # v0.2: methodology repo HEAD at compute time
+    computed_at        = Column(DateTime, default=datetime.utcnow)
 
 
 class PanelIndicatorDerived(Base):
     """Z-score, percentile, YoY delta per (feed, indicator_id) — spec §5.2."""
     __tablename__ = "panel_indicators_derived"
 
-    feed_id          = Column(String, ForeignKey("panel_feeds.feed_id"), primary_key=True)
-    indicator_id     = Column(String, primary_key=True, index=True)
-    zscore           = Column(Float)
-    percentile       = Column(Float)
-    yoy_delta_pct    = Column(Float)
-    peer_group_size  = Column(Integer)
-    computed_at      = Column(DateTime, default=datetime.utcnow)
+    feed_id              = Column(String, ForeignKey("panel_feeds.feed_id"), primary_key=True)
+    indicator_id         = Column(String, primary_key=True, index=True)
+    zscore               = Column(Float)
+    percentile           = Column(Float)
+    yoy_delta_pct        = Column(Float)
+    post_reorg_delta_pct = Column(Float)                                     # v0.2: % change after reorg event
+    peer_group_size      = Column(Integer)
+    methodology_commit   = Column(String)                                    # v0.2
+    computed_at          = Column(DateTime, default=datetime.utcnow)
 
 
 class PanelQuality(Base):
@@ -185,3 +190,74 @@ class PanelPeerGroup(Base):
     display_name = Column(String, nullable=False)
     definition   = Column(JSON)
     member_count = Column(Integer, default=0)
+
+
+# ────────────────────────────────────────────────────────
+# v0.2 additions — spec §6.3.2
+# ────────────────────────────────────────────────────────
+
+
+class PanelFeedDiff(Base):
+    """Stop/route diff between two adjacent feeds — spec §6.3.2.
+
+    Lineage hook for V1 fuzzy matching. MVP records the diff but does not surface
+    it in the UI; reorg detector consumes the Jaccard scores.
+    """
+    __tablename__ = "panel_feed_diffs"
+
+    diff_id         = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    network_id      = Column(String, ForeignKey("panel_networks.network_id"), index=True, nullable=False)
+    feed_from_id    = Column(String, ForeignKey("panel_feeds.feed_id"), nullable=False)   # t
+    feed_to_id      = Column(String, ForeignKey("panel_feeds.feed_id"), nullable=False)   # t+1
+    stops_added     = Column(JSON)
+    stops_removed   = Column(JSON)
+    stops_modified  = Column(JSON)
+    routes_added    = Column(JSON)
+    routes_removed  = Column(JSON)
+    routes_modified = Column(JSON)
+    stop_jaccard    = Column(Float)
+    route_jaccard   = Column(Float)
+    computed_at     = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ux_panel_feed_diffs_pair", "feed_from_id", "feed_to_id", unique=True),
+    )
+
+
+class PanelReorgFlag(Base):
+    """Reorg detection flag per (network, feed_to) — spec §6.3.2."""
+    __tablename__ = "panel_reorg_flags"
+
+    network_id        = Column(String, ForeignKey("panel_networks.network_id"), primary_key=True)
+    feed_to_id        = Column(String, ForeignKey("panel_feeds.feed_id"), primary_key=True)
+    reorg_detected    = Column(Boolean, default=False, nullable=False)
+    reorg_severity    = Column(String)            # 'minor' | 'major' | 'massive' | None
+    stop_jaccard      = Column(Float)
+    route_jaccard     = Column(Float)
+    threshold_version = Column(String)            # detector algorithm version
+    notes             = Column(String)            # AOM context, V1 申诉 mechanism
+    detected_at       = Column(DateTime, default=datetime.utcnow)
+
+
+class PanelDspEvent(Base):
+    """DSP contract timeline events from methodology repo dsp_timeline.csv — spec §6.3.2.
+
+    Audit trail preserved (Assumption A2): contributor edits to a row produce a new
+    csv_row_hash and insert a new event row. UI reads latest by (network, type, date).
+    """
+    __tablename__ = "panel_dsp_events"
+
+    event_id           = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    network_id         = Column(String, ForeignKey("panel_networks.network_id"), index=True, nullable=False)
+    event_type         = Column(String, nullable=False, index=True)   # tender_published / awarded / contract_started / ended / amendment
+    event_date         = Column(DateTime, nullable=False, index=True)
+    operator_before    = Column(String)
+    operator_after     = Column(String)
+    contract_id        = Column(String)
+    contract_value_eur = Column(Float)
+    boamp_url          = Column(String)
+    notes              = Column(String)
+    source             = Column(String, nullable=False)               # BOAMP / GART / press / AOM_publication / manual
+    contributor        = Column(String, nullable=False)               # GitHub username or email hash
+    csv_row_hash       = Column(String, unique=True, index=True, nullable=False)
+    imported_at        = Column(DateTime, default=datetime.utcnow)
