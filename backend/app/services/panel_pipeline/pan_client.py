@@ -11,12 +11,33 @@ panel_pipeline/history_resolver.py in Plan 2.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
+
+
+def archive_to_r2(zip_bytes: bytes, sha256: str) -> str | None:
+    """Idempotent R2 PUT keyed by sha256. No-op if R2 not configured.
+
+    Plan 2 Task 7.5 — light-touch stub. The MVP backfill writes feeds to
+    a local cache; real R2 archival is deferred until the bucket and IAM
+    are provisioned. The env-var gate keeps this safe to call from the
+    pipeline today.
+
+    Returns the would-be R2 path (so the caller can record it on the
+    PanelFeed row) when ``R2_ENDPOINT`` is set, else ``None``.
+    """
+    if not os.environ.get("R2_ENDPOINT"):
+        return None
+    # Real implementation: boto3 with custom endpoint URL pointing at
+    # https://<account>.r2.cloudflarestorage.com/<bucket>. For MVP we
+    # only return the path so the caller can persist r2_path; the upload
+    # itself is deferred infra (V1).
+    return f"r2://feeds/{sha256[:2]}/{sha256}.zip"
 
 PAN_BASE = "https://transport.data.gouv.fr/api"
 DEFAULT_TIMEOUT = 60.0

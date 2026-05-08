@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
-from .api.endpoints import auth, projects
+from .api.endpoints import auth, panel, projects
 from .api.websockets import progress
 
 app = FastAPI(
@@ -31,6 +31,13 @@ app.include_router(
     projects.router,
     prefix=f"{settings.API_V1_STR}/projects",
     tags=["Projects"]
+)
+
+# Mount compare-transit panel router (public, no auth — Plan 2 §8)
+app.include_router(
+    panel.router,
+    prefix=f"{settings.API_V1_STR}/panel",
+    tags=["Panel"],
 )
 
 # Mount WebSocket Router

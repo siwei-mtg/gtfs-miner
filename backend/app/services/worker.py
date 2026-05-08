@@ -365,3 +365,22 @@ from app.celery_app import celery  # noqa: E402 — imported after module-level 
 def process_project_task(self, project_id: str, zip_path: str, parameters: dict):
     """Celery-dispatched version of the pipeline (no event loop — uses Redis publish)."""
     run_project_task_sync(project_id, zip_path, parameters, loop=None)
+
+
+# ── Panel pipeline Celery task (Plan 2 Task 7.2) ───────────────────────────────
+@celery.task(name="panel.run", bind=True, max_retries=2)
+def panel_run_task(self, feed_id: str) -> None:
+    """Process one PAN feed end-to-end. Per-feed try/except prevents one bad
+    feed from halting the queue (compare-transit spec §13 risk #6).
+
+    On compute crash, ``run_panel_pipeline`` itself sets the feed's
+    ``process_status='failed'``; this wrapper only handles transient errors
+    via Celery's exponential retry.
+    """
+    from app.services.panel_pipeline.run import run_panel_pipeline
+    try:
+        run_panel_pipeline(feed_id)
+    except Exception as e:  # noqa: BLE001 — must catch all to emit retry
+        # Feed status already marked 'failed' inside run_panel_pipeline on
+        # compute crash; here we propagate so Celery handles retries.
+        raise self.retry(exc=e, countdown=60, max_retries=2)
