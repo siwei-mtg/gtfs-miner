@@ -78,7 +78,7 @@ def compute(zip_path: Path, meta: AomMeta) -> IndicatorBundle:
     from app.services.gtfs_core.gtfs_reader import read_gtfs_zip
     from app.services.panel_pipeline.indicators import (
         accessibility, coverage, density, environment, frequency,
-        productivity, structure,
+        productivity, quality_indicators, structure,
     )
 
     raw_values: dict[str, float | None] = {}
@@ -115,11 +115,7 @@ def compute(zip_path: Path, meta: AomMeta) -> IndicatorBundle:
     _try("coverage",     lambda: coverage.compute_all(raw, normed, meta))
     _try("frequency",    lambda: frequency.compute_all(raw, normed))
     _try("accessibility",lambda: accessibility.compute_all(raw))
-    # Quality indicators are computed via panel_pipeline.indicators.quality_indicators
-    # in Phase 5 Task 5.2. Until then we register all 6 dq_* as not_implemented_yet.
-    for ind_id in _none_for_category("quality"):
-        raw_values.setdefault(ind_id, None)
-        errors[ind_id] = "not_implemented_yet"
+    _try("quality",      lambda: quality_indicators.compute_all(zip_path, raw))
     _try("environment",  lambda: environment.compute_all(raw_values))
 
     # 3. Wrap each indicator in audit-grade IndicatorValue.
