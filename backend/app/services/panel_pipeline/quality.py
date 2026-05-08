@@ -245,3 +245,82 @@ def _parse_outputs(output_dir: Path, feed_zip: Path, country_code: str) -> Valid
         notices=notices,
         system_errors=system_errors,
     )
+
+
+# ---------------------------------------------------------------------------
+# Overall quality score + letter grade (Spec §5.1 G — Plan 2 Task 5.3).
+# ---------------------------------------------------------------------------
+
+# Letter grade bands (lower bound inclusive)
+_GRADE_BANDS: tuple[tuple[float, str], ...] = (
+    (90.0, "A+"),
+    (85.0, "A"),
+    (80.0, "A-"),
+    (75.0, "B+"),
+    (70.0, "B"),
+    (65.0, "B-"),
+    (60.0, "C+"),
+    (55.0, "C"),
+    (50.0, "C-"),
+    (40.0, "D"),
+    (0.0, "F"),
+)
+
+
+def _score_to_grade(score: float) -> str:
+    """Map 0-100 score to letter grade. Spec §5.1 G."""
+    for lower_bound, grade in _GRADE_BANDS:
+        if score >= lower_bound:
+            return grade
+    return "F"
+
+
+# Component weights for overall score (Spec §5.1 G).
+_OVERALL_WEIGHTS: dict[str, float] = {
+    "dq_validator_errors": 0.25,
+    "dq_field_completeness": 0.20,
+    "dq_coord_quality": 0.15,
+    "dq_route_type_completeness": 0.15,
+    "dq_freshness": 0.15,
+    "dq_validator_warnings": 0.10,
+}
+
+
+def _normalize_component(key: str, value: float | None) -> float | None:
+    """Convert a raw dq value to a 0-100 score component."""
+    if value is None:
+        return None
+    if key == "dq_validator_errors":
+        return max(0.0, min(100.0, 100.0 - float(value)))
+    if key == "dq_validator_warnings":
+        return max(0.0, min(100.0, 100.0 - float(value) * 2.0))
+    if key == "dq_freshness":
+        return max(0.0, min(100.0, 100.0 - float(value) * 0.3))
+    # field_completeness, coord_quality, route_type_completeness are already 0-100
+    return max(0.0, min(100.0, float(value)))
+
+
+def compute_overall(dq_values: dict[str, float | None]) -> tuple[float, str]:
+    """Spec §5.1 G: weighted overall data quality score + letter grade.
+
+    Args:
+        dq_values: dict of all 6 dq_* indicator values. None values (e.g.,
+                   validator unavailable) are skipped and the remaining
+                   weights re-normalized to sum to 1.0.
+
+    Returns:
+        (score in [0, 100], letter_grade in {A+, A, A-, B+, B, B-, C+, C, C-, D, F}).
+    """
+    weighted_total = 0.0
+    weight_used = 0.0
+    for key, weight in _OVERALL_WEIGHTS.items():
+        component = _normalize_component(key, dq_values.get(key))
+        if component is None:
+            continue
+        weighted_total += weight * component
+        weight_used += weight
+
+    if weight_used <= 0:
+        return 0.0, "F"
+    score = weighted_total / weight_used
+    return float(score), _score_to_grade(score)
