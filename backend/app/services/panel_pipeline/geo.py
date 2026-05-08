@@ -227,3 +227,95 @@ def compute_coverage(
         stop_count=int(len(stops_l93)),
         cell_count=int(len(carroyage_in_aom)),
     )
+
+
+def compute_freq_coverage(
+    stops_freq: gpd.GeoDataFrame,
+    carroyage: gpd.GeoDataFrame,
+    aom_polygon: gpd.GeoDataFrame,
+    *,
+    buffer_m: int = DEFAULT_BUFFER_M,
+) -> dict[str, float]:
+    """Spec §5.1 D + Plan 2 Assumption A7: cov_pop_freq_300m.
+
+    Population covered by the buffer of high-frequency stops only. Caller is
+    responsible for filtering stops to those served by routes with median peak
+    headway <= 10 min (Task 3.3 / frequency module). Task 3.1 just provides the
+    math; the "high-frequency" filter happens upstream.
+
+    Args:
+        stops_freq: Subset of stops with high-frequency service. EPSG:2154.
+        carroyage: INSEE 200m carreaux (clip is done internally). EPSG:2154.
+        aom_polygon: AOM boundary. EPSG:2154.
+        buffer_m: Buffer radius around stops in meters. Default 300.
+
+    Returns:
+        {"cov_pop_freq_300m": float} -- percentage in [0, 100].
+
+    Empty stops_freq -> 0.0 (not None -- meaningful "no high-freq service").
+    """
+    if len(stops_freq) == 0:
+        return {"cov_pop_freq_300m": 0.0}
+    res = compute_coverage(stops_freq, carroyage, aom_polygon, buffer_m=buffer_m)
+    # `compute_coverage` returns cov_pop_300m using the supplied stops; we treat
+    # that value as the "freq" coverage when the caller has pre-filtered.
+    return {"cov_pop_freq_300m": res["cov_pop_300m"]}
+
+
+def compute_equity_gini(
+    carroyage_in_aom_with_coverage: gpd.GeoDataFrame,
+) -> dict[str, float]:
+    """Spec §5.1 D: Gini coefficient over per-cell coverage rate.
+
+    Args:
+        carroyage_in_aom_with_coverage: GeoDataFrame of AOM-clipped cells with a
+            ``coverage_rate`` column (float in [0, 1]) and a population column
+            (``CARROYAGE_POP_COLUMN``). Each row = one INSEE 200m cell.
+
+    Returns:
+        {"cov_equity_gini": float} -- Gini in [0, 1]. 0 = perfectly equitable
+        (all cells same rate), close to 1 = max inequality (one cell holds
+        everything). Returns 0.0 on empty input.
+
+    Formula: standard Gini on the discrete (rate x pop_weight) distribution,
+    computed via the Lorenz curve trapezoidal-area approach (O(n)). Population
+    weighting matters because high-pop cells should count more for "equity"
+    -- covering 1000 vs 1 person at the same rate isn't equivalent.
+
+    For unweighted equity (treat each cell equally), pass ``Ind=1`` for every
+    row.
+    """
+    if len(carroyage_in_aom_with_coverage) == 0:
+        return {"cov_equity_gini": 0.0}
+
+    df = carroyage_in_aom_with_coverage[[CARROYAGE_POP_COLUMN, "coverage_rate"]].copy()
+    df = df.dropna()
+    if len(df) == 0:
+        return {"cov_equity_gini": 0.0}
+
+    # Sort ascending by rate (mergesort keeps ties in input order -- stable).
+    df = df.sort_values("coverage_rate", kind="mergesort").reset_index(drop=True)
+    pops = df[CARROYAGE_POP_COLUMN].to_numpy(dtype=float)
+    rates = df["coverage_rate"].to_numpy(dtype=float)
+    total_pop = pops.sum()
+    weighted_sum = (rates * pops).sum()
+    if total_pop <= 0 or weighted_sum <= 0:
+        return {"cov_equity_gini": 0.0}
+
+    mean_rate = weighted_sum / total_pop
+    if mean_rate <= 0:
+        return {"cov_equity_gini": 0.0}
+
+    # Lorenz curve area approach for population-weighted Gini.
+    # See https://en.wikipedia.org/wiki/Gini_coefficient#Discrete_probability_distribution
+    cum_pop = pops.cumsum()
+    cum_rate_pop = (rates * pops).cumsum()
+    L_x = cum_pop / total_pop
+    L_y = cum_rate_pop / weighted_sum
+    # Trapezoidal area under Lorenz curve, prepended with (0,0).
+    L_x_full = pd.concat([pd.Series([0.0]), pd.Series(L_x)], ignore_index=True)
+    L_y_full = pd.concat([pd.Series([0.0]), pd.Series(L_y)], ignore_index=True)
+    dx = L_x_full.diff().fillna(0).to_numpy()
+    avg_y = ((L_y_full.shift(1).fillna(0) + L_y_full) / 2).to_numpy()
+    lorenz_area = float((dx * avg_y).sum())
+    return {"cov_equity_gini": float(1.0 - 2.0 * lorenz_area)}

@@ -237,3 +237,114 @@ def test_load_aom_polygon_unknown_field_raises(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="no 'siren_aom' column"):
         load_aom_polygon(p, field="siren_aom", value="123")
+
+
+# ---------- compute_freq_coverage ----------
+
+
+def test_compute_freq_coverage_subset_of_full():
+    """If high-freq stops are a subset of all stops, freq coverage <= full coverage."""
+    import geopandas as gpd
+    from shapely.geometry import Point, box
+
+    from app.services.panel_pipeline.geo import (
+        LAMBERT_93, compute_coverage, compute_freq_coverage,
+    )
+
+    # Tiny synthetic AOM: 800m x 800m square at L93 origin
+    aom = gpd.GeoDataFrame(geometry=[box(0, 0, 800, 800)], crs=LAMBERT_93)
+    # 4-cell carroyage (200m x 200m each), 50 residents per cell
+    cells = []
+    for x in (0, 200, 400, 600):
+        for y in (0, 200, 400, 600):
+            cells.append({"geometry": box(x, y, x + 200, y + 200), "Ind": 50})
+    carroyage = gpd.GeoDataFrame(cells, crs=LAMBERT_93)
+
+    # 3 stops (one in each of 3 corners). All "high freq" -> reduces to compute_coverage
+    stops_all = gpd.GeoDataFrame(
+        geometry=[Point(100, 100), Point(700, 100), Point(700, 700)],
+        crs=LAMBERT_93,
+    )
+    stops_freq_subset = stops_all.iloc[:1]  # only the 100,100 stop
+
+    full = compute_coverage(stops_all, carroyage, aom)
+    freq = compute_freq_coverage(stops_freq_subset, carroyage, aom)
+
+    # Subset has <= full
+    assert freq["cov_pop_freq_300m"] <= full["cov_pop_300m"]
+    # Subset is non-zero (the corner stop covers ~1 cell)
+    assert freq["cov_pop_freq_300m"] > 0
+
+
+def test_compute_freq_coverage_empty_stops():
+    """Empty high-freq stops -> cov_pop_freq_300m = 0.0."""
+    import geopandas as gpd
+    from shapely.geometry import box
+
+    from app.services.panel_pipeline.geo import (
+        LAMBERT_93, compute_freq_coverage,
+    )
+
+    aom = gpd.GeoDataFrame(geometry=[box(0, 0, 400, 400)], crs=LAMBERT_93)
+    carroyage = gpd.GeoDataFrame(
+        [{"geometry": box(0, 0, 200, 200), "Ind": 100}],
+        crs=LAMBERT_93,
+    )
+    stops = gpd.GeoDataFrame(geometry=[], crs=LAMBERT_93)
+
+    out = compute_freq_coverage(stops, carroyage, aom)
+    assert out["cov_pop_freq_300m"] == 0.0
+
+
+# ---------- compute_equity_gini ----------
+
+
+def test_compute_equity_gini_uniform():
+    """All cells equally covered -> Gini = 0."""
+    import geopandas as gpd
+    from shapely.geometry import box
+
+    from app.services.panel_pipeline.geo import LAMBERT_93, compute_equity_gini
+
+    cells = gpd.GeoDataFrame(
+        [
+            {"geometry": box(0, 0, 200, 200), "Ind": 100, "coverage_rate": 0.5},
+            {"geometry": box(200, 0, 400, 200), "Ind": 100, "coverage_rate": 0.5},
+            {"geometry": box(0, 200, 200, 400), "Ind": 100, "coverage_rate": 0.5},
+            {"geometry": box(200, 200, 400, 400), "Ind": 100, "coverage_rate": 0.5},
+        ],
+        crs=LAMBERT_93,
+    )
+    out = compute_equity_gini(cells)
+    assert out["cov_equity_gini"] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_compute_equity_gini_total_inequality():
+    """One cell fully covered, rest fully uncovered -> Gini close to (n-1)/n."""
+    import geopandas as gpd
+    from shapely.geometry import box
+
+    from app.services.panel_pipeline.geo import LAMBERT_93, compute_equity_gini
+
+    cells = gpd.GeoDataFrame(
+        [
+            {"geometry": box(0, 0, 200, 200), "Ind": 100, "coverage_rate": 1.0},
+            {"geometry": box(200, 0, 400, 200), "Ind": 100, "coverage_rate": 0.0},
+            {"geometry": box(0, 200, 200, 400), "Ind": 100, "coverage_rate": 0.0},
+            {"geometry": box(200, 200, 400, 400), "Ind": 100, "coverage_rate": 0.0},
+        ],
+        crs=LAMBERT_93,
+    )
+    out = compute_equity_gini(cells)
+    # 4 equal-weight cells, 1 has rate=1, rest=0 -> Gini = 0.75 (3/4 inequality)
+    assert out["cov_equity_gini"] == pytest.approx(0.75, abs=0.01)
+
+
+def test_compute_equity_gini_handles_empty_input():
+    """Empty input -> Gini = 0.0 (no inequality to measure)."""
+    import geopandas as gpd
+    from app.services.panel_pipeline.geo import LAMBERT_93, compute_equity_gini
+
+    empty = gpd.GeoDataFrame(columns=["Ind", "coverage_rate"], geometry=[], crs=LAMBERT_93)
+    out = compute_equity_gini(empty)
+    assert out["cov_equity_gini"] == 0.0
